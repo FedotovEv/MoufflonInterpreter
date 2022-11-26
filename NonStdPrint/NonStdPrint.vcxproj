@@ -127,14 +127,18 @@
     <ClCompile Include="..\lexer.cpp" />
     <ClCompile Include="..\parse.cpp" />
     <ClCompile Include="..\runtime.cpp" />
+    <ClCompile Include="..\special_objects.cpp" />
     <ClCompile Include="..\statement.cpp" />
+    <ClCompile Include="..\throw_messages.cpp" />
     <ClCompile Include="NonStdPrint.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\declares.h" />
     <ClInclude Include="..\lexer.h" />
     <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\runtime.h" />
     <ClInclude Include="..\statement.h" />
+    <ClInclude Include="..\throw_messages.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

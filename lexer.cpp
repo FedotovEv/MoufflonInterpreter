@@ -13,8 +13,12 @@ namespace parse
     static const unordered_map<std::string, Token> keyword_tokens
         {{"class"s, token_type::Class{}},
          {"return"s, token_type::Return{}},
+         {"return_ptr"s, token_type::ReturnPtr{}},
          {"if"s, token_type::If{}},
          {"else"s, token_type::Else{}},
+         {"while"s, token_type::While{}},
+         {"break"s, token_type::Break{}},
+         {"continue"s, token_type::Continue{}},
          {"def"s, token_type::Def{}},
          {"print"s, token_type::Print{}},
          {"and"s, token_type::And{}},
@@ -266,6 +270,7 @@ namespace parse
         UNVALUED_OUTPUT(Return);
         UNVALUED_OUTPUT(If);
         UNVALUED_OUTPUT(Else);
+        UNVALUED_OUTPUT(While);
         UNVALUED_OUTPUT(Def);
         UNVALUED_OUTPUT(Newline);
         UNVALUED_OUTPUT(Print);
@@ -310,6 +315,7 @@ namespace parse
             { // Первая лексема на новой строке
                 while (true)
                 { // Пропускаем все пустые строки, не содержащие никаких лексем, кроме NewLine
+                    ++current_command_desc_.module_string_number;
                     char peek_chr = input_.peek();
                     if (!input_)
                     {

@@ -1,6 +1,13 @@
 ﻿
 // Макетная программа для демонстрации техники применения объекта __external
 
+#include "..\declares.h"
+#include "..\throw_messages.h"
+#include "..\lexer.h"
+#include "..\parse.h"
+#include "..\runtime.h"
+#include "..\statement.h"
+
 #include <iostream>
 #include <streambuf>
 #include <string>
@@ -8,11 +15,6 @@
 #include <map>
 #include <algorithm>
 #include <cctype>
-
-#include "..\lexer.h"
-#include "..\parse.h"
-#include "..\runtime.h"
-#include "..\statement.h"
 
 using namespace std;
 
@@ -29,6 +31,7 @@ runtime::LinkageReturn DemoLinkFunction(runtime::LinkCallReason what_reason, con
 
     static int command_code = 0;
     static string command_argument;
+    string new_string;
 
     switch (what_reason)
     {
@@ -39,7 +42,6 @@ runtime::LinkageReturn DemoLinkFunction(runtime::LinkCallReason what_reason, con
             command_argument = argument_value[0];
         return {};
     case runtime::LinkCallReason::CALL_REASON_READ_FIELD:
-        string new_string;
         if (field_name == "command_result")
             switch (command_code)
             {
@@ -66,6 +68,11 @@ runtime::LinkageReturn DemoLinkFunction(runtime::LinkCallReason what_reason, con
             return command_argument;
         else
             return "bad field"s;
+    case runtime::LinkCallReason::CALL_REASON_CALL_METHOD:
+        if (field_name == "external_method")
+            return "external return"s;
+        else
+            return "something"s;
     }
     return {};
 }
@@ -89,6 +96,9 @@ class __external:
     self.command_argument = 0
     self.command_result = 0
 
+  def external_method():
+    print "In external method"
+
 exts = __external()
 exts.command_argument = "ArGuMeNt"
 exts.command_code = 1
@@ -99,6 +109,7 @@ exts.command_code = 3
 print exts.command_result
 exts.command_code = 4
 print exts.command_result
+print exts.external_method()
 )--");
 
     RunMythonProgram(input, cout, DemoLinkFunction);

@@ -26,15 +26,22 @@
     <ClCompile Include="parse_test.cpp" />
     <ClCompile Include="runtime.cpp" />
     <ClCompile Include="runtime_test.cpp" />
+    <ClCompile Include="special_objects.cpp" />
     <ClCompile Include="statement.cpp" />
     <ClCompile Include="statement_test.cpp" />
+    <ClCompile Include="throw_messages.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="declares.h" />
     <ClInclude Include="lexer.h" />
     <ClInclude Include="parse.h" />
     <ClInclude Include="runtime.h" />
+    <ClInclude Include="special_objects.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="statement.h" />
     <ClInclude Include="test_runner_p.h" />
+    <ClInclude Include="throw_messages.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

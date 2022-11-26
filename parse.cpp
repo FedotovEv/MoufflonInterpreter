@@ -2,34 +2,71 @@
 
 #include "lexer.h"
 #include "statement.h"
+#include "throw_messages.h"
 
 using namespace std;
+using runtime::ThrowMessageNumber;
+using runtime::ThrowMessages;
 
 namespace TokenType = parse::token_type;
 
 namespace {
-bool operator==(const parse::Token& token, char c) {
+bool operator==(const parse::Token& token, char c)
+{
     const auto* p = token.TryAs<TokenType::Char>();
     return p != nullptr && p->value == c;
 }
 
-bool operator!=(const parse::Token& token, char c) {
+bool operator!=(const parse::Token& token, char c)
+{
     return !(token == c);
 }
 
-class Parser {
+class StatementFactory
+{
 public:
-    explicit Parser(parse::Lexer& lexer)
-        : lexer_(lexer) {
+    StatementFactory(const parse::Lexer& lexer) : lexer_(lexer)
+    {}
+
+    template <typename T>
+    [[nodiscard]] unique_ptr<T> Create(T&& object)
+    {
+        auto result = make_unique<T>(forward<T>(object));
+        result->SetCommandDesc(lexer_.GetCurrentCommandDesc());
+        return result;
     }
+
+    [[noreturn]] void ThrowParseError(const string& except_text)
+    {
+        string command_desc = to_string(lexer_.GetCurrentCommandDesc().module_id) + "("s +
+                              to_string(lexer_.GetCurrentCommandDesc().module_string_number) + "):"s;
+        throw ParseError(command_desc + except_text);
+    }
+
+    [[noreturn]] void ThrowParseError(runtime::ThrowMessageNumber msg_num)
+    {
+        string command_desc = to_string(lexer_.GetCurrentCommandDesc().module_id) + "("s +
+            to_string(lexer_.GetCurrentCommandDesc().module_string_number) + "):"s;
+        throw ParseError(command_desc + runtime::ThrowMessages::GetThrowText(msg_num));
+    }
+
+private:
+    const parse::Lexer& lexer_;
+};
+
+class Parser
+{
+public:
+    explicit Parser(parse::Lexer& lexer) : lexer_(lexer), exec_factory_(lexer_)
+    {}
 
     // Program -> eps
     //          | Statement \n Program
-    unique_ptr<ast::Statement> ParseProgram() {
-        auto result = make_unique<ast::Compound>();
-        while (!lexer_.CurrentToken().Is<TokenType::Eof>()) {
+    unique_ptr<ast::Statement> ParseProgram()
+    {
+        auto result = exec_factory_.Create(ast::Compound());
+        while (!lexer_.CurrentToken().Is<TokenType::Eof>())
             result->AddStatement(ParseStatement());
-        }
 
         return result;
     }
@@ -43,10 +80,9 @@ private:
 
         lexer_.NextToken();
 
-        auto result = make_unique<ast::Compound>();
-        while (!lexer_.CurrentToken().Is<TokenType::Dedent>()) {
+        auto result = exec_factory_.Create(ast::Compound());
+        while (!lexer_.CurrentToken().Is<TokenType::Dedent>())
             result->AddStatement(ParseStatement());  // NOLINT
-        }
 
         lexer_.Expect<TokenType::Dedent>();
         lexer_.NextToken();
@@ -59,24 +95,25 @@ private:
     {
         vector<runtime::Method> result;
 
-        while (lexer_.CurrentToken().Is<TokenType::Def>()) {
+        while (lexer_.CurrentToken().Is<TokenType::Def>())
+        {
             runtime::Method m;
 
             m.name = lexer_.ExpectNext<TokenType::Id>().value;
             lexer_.ExpectNext<TokenType::Char>('(');
 
-            if (lexer_.NextToken().Is<TokenType::Id>()) {
+            if (lexer_.NextToken().Is<TokenType::Id>())
+            {
                 m.formal_params.push_back(lexer_.Expect<TokenType::Id>().value);
-                while (lexer_.NextToken() == ',') {
+                while (lexer_.NextToken() == ',')
                     m.formal_params.push_back(lexer_.ExpectNext<TokenType::Id>().value);
-                }
             }
 
             lexer_.Expect<TokenType::Char>(')');
             lexer_.ExpectNext<TokenType::Char>(':');
             lexer_.NextToken();
 
-            m.body = std::make_unique<ast::MethodBody>(ParseSuite());  // NOLINT
+            m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()));  // NOLINT
 
             result.push_back(std::move(m));
         }
@@ -91,15 +128,19 @@ private:
         lexer_.NextToken();
 
         const runtime::Class* base_class = nullptr;
-        if (lexer_.CurrentToken() == '(') {
+        if (lexer_.CurrentToken() == '(')
+        {
             auto name = lexer_.ExpectNext<TokenType::Id>().value;
             lexer_.ExpectNext<TokenType::Char>(')');
             lexer_.NextToken();
 
             auto it = declared_classes_.find(name);
-            if (it == declared_classes_.end()) {
-                throw ParseError("Base class "s + name + " not found for class "s + class_name);
-            }
+            if (it == declared_classes_.end())
+                exec_factory_.ThrowParseError(
+                    ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_BASE_CLASS) +
+                    name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS)
+                    + class_name);
+
             base_class = static_cast<const runtime::Class*>(it->second.Get());  // NOLINT
         }
 
@@ -117,11 +158,12 @@ private:
             runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class)),
         });
 
-        if (!inserted) {
-            throw ParseError("Class "s + class_name + " already exists"s);
-        }
+        if (!inserted)
+            exec_factory_.ThrowParseError(
+                ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_CLASS) + class_name
+                + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ALREADY_EXISTS));
 
-        return make_unique<ast::ClassDefinition>(it->second);
+        return exec_factory_.Create(ast::ClassDefinition(it->second));
     }
 
     vector<string> ParseDottedIds() {
@@ -136,53 +178,67 @@ private:
 
     //  AssgnOrCall -> DottedIds = Expr
     //               | DottedIds '(' ExprList ')'
-    unique_ptr<ast::Statement> ParseAssignmentOrCall() {
+    //               | DottedIds '(' ExprList ')' = Expr
+    unique_ptr<ast::Statement> ParseAssignmentOrCall()
+    {
         lexer_.Expect<TokenType::Id>();
 
         vector<string> id_list = ParseDottedIds();
         string last_name = id_list.back();
         id_list.pop_back();
 
-        if (lexer_.CurrentToken() == '=') {
+        if (lexer_.CurrentToken() == '=')
+        {
             lexer_.NextToken();
+            if (id_list.empty())
+                return exec_factory_.Create(ast::Assignment(std::move(last_name), ParseTest()));
 
-            if (id_list.empty()) {
-                return make_unique<ast::Assignment>(std::move(last_name), ParseTest());
-            }
-            return make_unique<ast::FieldAssignment>(ast::VariableValue{std::move(id_list)},
-                                                     std::move(last_name), ParseTest());
+            return exec_factory_.Create(ast::FieldAssignment(ast::VariableValue{std::move(id_list)},
+                                                             std::move(last_name), ParseTest()));
         }
         lexer_.Expect<TokenType::Char>('(');
         lexer_.NextToken();
 
-        if (id_list.empty()) {
-            throw ParseError("Mython doesn't support functions, only methods: "s + last_name);
-        }
+        if (id_list.empty())
+            exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(
+                ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
 
         vector<unique_ptr<ast::Statement>> args;
-        if (lexer_.CurrentToken() != ')') {
+        if (lexer_.CurrentToken() != ')')
             args = ParseTestList();
-        }
+
         lexer_.Expect<TokenType::Char>(')');
         lexer_.NextToken();
 
-        return make_unique<ast::MethodCall>(make_unique<ast::VariableValue>(std::move(id_list)),
-                                            std::move(last_name), std::move(args));
+        // Далее разбираются два варианта - вызов метода либо косвенное присваивание
+        // (присваивание указателю, содержащемуся в возвращенном методом результате).
+        if (lexer_.CurrentToken() == '=')
+        { // После вызова метода следует лексема '=' - это косвенное присваивание
+            lexer_.NextToken();
+            return exec_factory_.Create(ast::IndirectAssignment(exec_factory_.Create(
+                    ast::VariableValue(std::move(id_list))),
+                    std::move(last_name), std::move(args), ParseTest()));
+        }
+        else
+        { // Вызов метода последняя лексема строки - имеем дело с простым вызовом метода
+            return exec_factory_.Create(ast::MethodCall(exec_factory_.Create(ast::VariableValue(std::move(id_list))),
+                std::move(last_name), std::move(args)));
+        }
     }
 
     // Expr -> Adder ['+'/'-' Adder]*
     unique_ptr<ast::Statement> ParseExpression()  // NOLINT
     {
         unique_ptr<ast::Statement> result = ParseAdder();
-        while (lexer_.CurrentToken() == '+' || lexer_.CurrentToken() == '-') {
+        while (lexer_.CurrentToken() == '+' || lexer_.CurrentToken() == '-')
+        {
             char op = lexer_.CurrentToken().As<TokenType::Char>().value;
             lexer_.NextToken();
 
-            if (op == '+') {
-                result = make_unique<ast::Add>(std::move(result), ParseAdder());
-            } else {
-                result = make_unique<ast::Sub>(std::move(result), ParseAdder());
-            }
+            if (op == '+')
+                result = exec_factory_.Create(ast::Add(std::move(result), ParseAdder()));
+            else
+                result = exec_factory_.Create(ast::Sub(std::move(result), ParseAdder()));
         }
         return result;
     }
@@ -191,14 +247,23 @@ private:
     unique_ptr<ast::Statement> ParseAdder()  // NOLINT
     {
         unique_ptr<ast::Statement> result = ParseMult();
-        while (lexer_.CurrentToken() == '*' || lexer_.CurrentToken() == '/') {
+        while (lexer_.CurrentToken() == '*' || lexer_.CurrentToken() == '/' ||
+               lexer_.CurrentToken() == '%')
+        {
             char op = lexer_.CurrentToken().As<TokenType::Char>().value;
             lexer_.NextToken();
 
-            if (op == '*') {
-                result = make_unique<ast::Mult>(std::move(result), ParseMult());
-            } else {
-                result = make_unique<ast::Div>(std::move(result), ParseMult());
+            if (op == '*')
+            {
+                result = exec_factory_.Create(ast::Mult(std::move(result), ParseMult()));
+            }
+            else if (op == '/')
+            {
+                result = exec_factory_.Create(ast::Div(std::move(result), ParseMult()));
+            }
+            else
+            {
+                result = exec_factory_.Create(ast::ModuloDiv(std::move(result), ParseMult()));
             }
         }
         return result;
@@ -215,76 +280,113 @@ private:
     //       | DottedIds
     unique_ptr<ast::Statement> ParseMult()  // NOLINT
     {
-        if (lexer_.CurrentToken() == '(') {
+        if (lexer_.CurrentToken() == '(')
+        {
             lexer_.NextToken();
             auto result = ParseTest();
             lexer_.Expect<TokenType::Char>(')');
             lexer_.NextToken();
             return result;
         }
-        if (lexer_.CurrentToken() == '-') {
+
+        if (lexer_.CurrentToken() == '-')
+        {
             lexer_.NextToken();
-            return make_unique<ast::Mult>(ParseMult(), make_unique<ast::NumericConst>(-1));
+            return exec_factory_.Create(ast::Mult(ParseMult(), exec_factory_.Create(ast::NumericConst(-1))));
         }
-        if (const auto* num = lexer_.CurrentToken().TryAs<TokenType::Number>()) {
+
+        if (const auto* num = lexer_.CurrentToken().TryAs<TokenType::Number>())
+        {
             int result = num->value;
             lexer_.NextToken();
-            return make_unique<ast::NumericConst>(result);
+            return exec_factory_.Create(ast::NumericConst(result));
         }
-        if (const auto* str = lexer_.CurrentToken().TryAs<TokenType::String>()) {
+
+        if (const auto* str = lexer_.CurrentToken().TryAs<TokenType::String>())
+        {
             string result = str->value;
             lexer_.NextToken();
-            return make_unique<ast::StringConst>(std::move(result));
+            return exec_factory_.Create(ast::StringConst(std::move(result)));
         }
-        if (lexer_.CurrentToken().Is<TokenType::True>()) {
+
+        if (lexer_.CurrentToken().Is<TokenType::True>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::BoolConst>(runtime::Bool(true));
+            return exec_factory_.Create(ast::BoolConst(runtime::Bool(true)));
         }
-        if (lexer_.CurrentToken().Is<TokenType::False>()) {
+
+        if (lexer_.CurrentToken().Is<TokenType::False>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::BoolConst>(runtime::Bool(false));
+            return exec_factory_.Create(ast::BoolConst(runtime::Bool(false)));
         }
-        if (lexer_.CurrentToken().Is<TokenType::None>()) {
+
+        if (lexer_.CurrentToken().Is<TokenType::None>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::None>();
+            return exec_factory_.Create(ast::None());
         }
 
         return ParseDottedIdsInMultExpr();
     }
 
-    std::unique_ptr<ast::Statement> ParseDottedIdsInMultExpr() {
+    std::unique_ptr<ast::Statement> ParseDottedIdsInMultExpr()
+    {
         vector<string> names = ParseDottedIds();
 
-        if (lexer_.CurrentToken() == '(') {
+        if (lexer_.CurrentToken() == '(')
+        {
             // various calls
             vector<unique_ptr<ast::Statement>> args;
-            if (lexer_.NextToken() != ')') {
+            if (lexer_.NextToken() != ')')
                 args = ParseTestList();
-            }
+
             lexer_.Expect<TokenType::Char>(')');
             lexer_.NextToken();
 
             auto method_name = names.back();
             names.pop_back();
 
-            if (!names.empty()) {
-                return make_unique<ast::MethodCall>(
-                    make_unique<ast::VariableValue>(std::move(names)), std::move(method_name),
-                    std::move(args));
+            if (!names.empty())
+            {
+                return exec_factory_.Create(ast::MethodCall(
+                    exec_factory_.Create(ast::VariableValue(std::move(names))), std::move(method_name),
+                    std::move(args)));
             }
-            if (auto it = declared_classes_.find(method_name); it != declared_classes_.end()) {
-                return make_unique<ast::NewInstance>(
-                    static_cast<const runtime::Class&>(*it->second), std::move(args));  // NOLINT
+            
+            if (method_name == "array"sv)
+            { // Здесь создается новый экземпляр массива
+                if (args.size())
+                    return exec_factory_.Create(ast::NewArray(std::move(args)));
+                else
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_ARRAY_MUST_HAVE_DIMS);
             }
-            if (method_name == "str"sv) {
-                if (args.size() != 1) {
-                    throw ParseError("Function str takes exactly one argument"s);
-                }
-                return make_unique<ast::Stringify>(std::move(args.front()));
+
+            if (method_name == "map"sv)
+            { // Здесь создается новый экземпляр словаря
+                if (!args.size())
+                    return exec_factory_.Create(ast::NewMap());
+                else
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_MAP_CTOR_HAS_NO_PARAMS);
             }
-            throw ParseError("Unknown call to "s + method_name + "()"s);
+
+            if (auto it = declared_classes_.find(method_name); it != declared_classes_.end())
+            {
+                return exec_factory_.Create(ast::NewInstance(
+                    static_cast<const runtime::Class&>(*it->second), std::move(args)));  // NOLINT
+            }
+            
+            if (method_name == "str"sv)
+            {
+                if (args.size() != 1)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM);
+                
+                return exec_factory_.Create(ast::Stringify(std::move(args.front())));
+            }
+            exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(
+                ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL) + method_name + "()"s);
         }
-        return make_unique<ast::VariableValue>(std::move(names));
+        return exec_factory_.Create(ast::VariableValue(std::move(names)));
     }
 
     vector<unique_ptr<ast::Statement>> ParseTestList()  // NOLINT
@@ -292,7 +394,8 @@ private:
         vector<unique_ptr<ast::Statement>> result;
         result.push_back(ParseTest());
 
-        while (lexer_.CurrentToken() == ',') {
+        while (lexer_.CurrentToken() == ',')
+        {
             lexer_.NextToken();
             result.push_back(ParseTest());
         }
@@ -313,14 +416,31 @@ private:
         auto if_body = ParseSuite();
 
         unique_ptr<ast::Statement> else_body;
-        if (lexer_.CurrentToken().Is<TokenType::Else>()) {
+        if (lexer_.CurrentToken().Is<TokenType::Else>())
+        {
             lexer_.ExpectNext<TokenType::Char>(':');
             lexer_.NextToken();
             else_body = ParseSuite();
         }
 
-        return make_unique<ast::IfElse>(std::move(condition), std::move(if_body),
-                                        std::move(else_body));
+        return exec_factory_.Create(ast::IfElse(std::move(condition), std::move(if_body),
+                                        std::move(else_body)));
+    }
+
+    // Condition -> while LogicalExpr: Suite
+    unique_ptr<ast::Statement> ParseWhileCondition()  // NOLINT
+    {
+        lexer_.Expect<TokenType::While>();
+        lexer_.NextToken();
+
+        auto condition = ParseTest();
+
+        lexer_.Expect<TokenType::Char>(':');
+        lexer_.NextToken();
+
+        auto while_body = ParseSuite();
+
+        return exec_factory_.Create(ast::While(std::move(condition), std::move(while_body)));
     }
 
     // LogicalExpr -> AndTest [OR AndTest]
@@ -330,9 +450,10 @@ private:
     unique_ptr<ast::Statement> ParseTest()  // NOLINT
     {
         auto result = ParseAndTest();
-        while (lexer_.CurrentToken().Is<TokenType::Or>()) {
+        while (lexer_.CurrentToken().Is<TokenType::Or>())
+        {
             lexer_.NextToken();
-            result = make_unique<ast::Or>(std::move(result), ParseAndTest());
+            result = exec_factory_.Create(ast::Or(std::move(result), ParseAndTest()));
         }
         return result;
     }
@@ -340,18 +461,20 @@ private:
     unique_ptr<ast::Statement> ParseAndTest()  // NOLINT
     {
         auto result = ParseNotTest();
-        while (lexer_.CurrentToken().Is<TokenType::And>()) {
+        while (lexer_.CurrentToken().Is<TokenType::And>())
+        {
             lexer_.NextToken();
-            result = make_unique<ast::And>(std::move(result), ParseNotTest());
+            result = exec_factory_.Create(ast::And(std::move(result), ParseNotTest()));
         }
         return result;
     }
 
     unique_ptr<ast::Statement> ParseNotTest()  // NOLINT
     {
-        if (lexer_.CurrentToken().Is<TokenType::Not>()) {
+        if (lexer_.CurrentToken().Is<TokenType::Not>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Not>(ParseNotTest());  // NOLINT
+            return exec_factory_.Create(ast::Not(ParseNotTest()));  // NOLINT
         }
         return ParseComparison();
     }
@@ -363,35 +486,41 @@ private:
 
         const auto tok = lexer_.CurrentToken();
 
-        if (tok == '<') {
+        if (tok == '<')
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::Less, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::Less, std::move(result),
+                                                ParseExpression()));
         }
-        if (tok == '>') {
+        if (tok == '>')
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::Greater, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::Greater, std::move(result),
+                                                ParseExpression()));
         }
-        if (tok.Is<TokenType::Eq>()) {
+        if (tok.Is<TokenType::Eq>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::Equal, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::Equal, std::move(result),
+                                                ParseExpression()));
         }
-        if (tok.Is<TokenType::NotEq>()) {
+        if (tok.Is<TokenType::NotEq>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::NotEqual, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::NotEqual, std::move(result),
+                                                ParseExpression()));
         }
-        if (tok.Is<TokenType::LessOrEq>()) {
+        if (tok.Is<TokenType::LessOrEq>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::LessOrEqual, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::LessOrEqual, std::move(result),
+                                                ParseExpression()));
         }
-        if (tok.Is<TokenType::GreaterOrEq>()) {
+        if (tok.Is<TokenType::GreaterOrEq>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Comparison>(runtime::GreaterOrEqual, std::move(result),
-                                                ParseExpression());
+            return exec_factory_.Create(ast::Comparison(runtime::GreaterOrEqual, std::move(result),
+                                                ParseExpression()));
         }
         return result;
     }
@@ -399,17 +528,25 @@ private:
     // Statement -> SimpleStatement Newline
     //           | class ClassDefinition
     //           | if Condition
+    //           | while Condition
     unique_ptr<ast::Statement> ParseStatement()  // NOLINT
     {
         const auto& tok = lexer_.CurrentToken();
 
-        if (tok.Is<TokenType::Class>()) {
+        if (tok.Is<TokenType::Class>())
+        {
             lexer_.NextToken();
             return ParseClassDefinition();  // NOLINT
         }
-        if (tok.Is<TokenType::If>()) {
+        else if (tok.Is<TokenType::If>())
+        {
             return ParseCondition();
         }
+        else if (tok.Is<TokenType::While>())
+        {
+            return ParseWhileCondition();
+        }
+
         auto result = ParseSimpleStatement();
         lexer_.Expect<TokenType::Newline>();
         lexer_.NextToken();
@@ -418,31 +555,73 @@ private:
 
     // StatementBody -> return Expression
     //               | print ExpressionList
+    //               | break
+    //               | continue
     //               | AssignmentOrCall
-    unique_ptr<ast::Statement> ParseSimpleStatement() {
+    unique_ptr<ast::Statement> ParseSimpleStatement()
+    {
         const auto& tok = lexer_.CurrentToken();
 
-        if (tok.Is<TokenType::Return>()) {
+        if (tok.Is<TokenType::Return>())
+        {
             lexer_.NextToken();
-            return make_unique<ast::Return>(ParseTest());
+            return exec_factory_.Create(ast::Return(ParseTest()));
         }
-        if (tok.Is<TokenType::Print>()) {
+
+        if (tok.Is<TokenType::ReturnPtr>())
+        {
+            lexer_.NextToken();
+            auto test_result = ParseTest();
+            if (typeid(*test_result) != typeid(ast::VariableValue))
+            {
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED);
+            }
+            else
+            {
+                ast::VariableValue& result_ref = static_cast<ast::VariableValue&>(*test_result);
+                std::vector<std::string> dotted_ids = result_ref.GetDottedIds();
+                if (!dotted_ids.size() || dotted_ids[0] != "self"sv)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED);
+                else
+                    return exec_factory_.Create(ast::ReturnPtr(move(dotted_ids)));
+            }
+        }
+
+        if (tok.Is<TokenType::Print>())
+        {
             lexer_.NextToken();
             vector<unique_ptr<ast::Statement>> args;
-            if (!lexer_.CurrentToken().Is<TokenType::Newline>()) {
+            if (!lexer_.CurrentToken().Is<TokenType::Newline>())
                 args = ParseTestList();
-            }
-            return make_unique<ast::Print>(std::move(args));
+
+            return exec_factory_.Create(ast::Print(std::move(args)));
         }
+
+
+        if (tok.Is<TokenType::Break>())
+        {
+            lexer_.NextToken();
+            return exec_factory_.Create(ast::Break());
+        }        
+        
+
+        if (tok.Is<TokenType::Continue>())
+        {
+            lexer_.NextToken();
+            return exec_factory_.Create(ast::Continue());
+        }
+        
         return ParseAssignmentOrCall();
     }
 
     parse::Lexer& lexer_;
+    StatementFactory exec_factory_;
     runtime::Closure declared_classes_;
 };
 
 }  // namespace
 
-unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer) {
+unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
+{
     return Parser{lexer}.ParseProgram();
 }
