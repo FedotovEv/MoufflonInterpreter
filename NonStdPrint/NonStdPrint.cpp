@@ -1,16 +1,18 @@
 
 // Демонстрация взаимодействия с интерпретатором Муфлона с использованием пользовательского выходного потока.
 
+#include "..\declares.h"
+#include "..\throw_messages.h"
+#include "..\lexer.h"
+#include "..\parse.h"
+#include "..\runtime.h"
+#include "..\statement.h"
+
 #include <iostream>
 #include <streambuf>
 #include <string>
 #include <variant>
 #include <map>
-
-#include "..\lexer.h"
-#include "..\parse.h"
-#include "..\runtime.h"
-#include "..\statement.h"
 
 using namespace std;
 
@@ -39,7 +41,6 @@ class my_streambuf : public streambuf
 
 private:
     string command_accumulator;
-
 };
 
 void RunMythonProgram(istream & input, ostream & output)

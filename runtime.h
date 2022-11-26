@@ -1,5 +1,7 @@
 #pragma once
 
+#include "declares.h"
+#include "throw_messages.h"
 #include <memory>
 #include <sstream>
 #include <string>
@@ -11,31 +13,69 @@
 
 namespace runtime
 {
-    enum class LinkCallReason
+    enum MethodParamCheckMode
     {
-        CALL_REASON_UNKNOWN = 0,
-        CALL_REASON_READ_FIELD,
-        CALL_REASON_WRITE_FIELD,
-        CALL_REASON_CALL_METHOD
+        PARAM_CHECK_NONE = 0,
+        PARAM_CHECK_QUANTITY_EQUAL = 1,
+        PARAM_CHECK_QUANTITY_LESS_EQ = 2,
+        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,
+        PARAM_CHECK_TYPE = 4,
+        PARAM_CHECK_TYPE_QUANTITY_EQUAL = 5,
+        PARAM_CHECK_TYPE_QUANTITY_LESS_EQ = 6,
+        PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ = 7
     };
 
-    using LinkageReturn = std::variant<int, std::string>;
-    using LinkageFunction = std::function<LinkageReturn(LinkCallReason, const std::string&,
-                                                        const std::vector<std::string>&)>;
+    enum MethodParamType
+    {
+        PARAM_TYPE_ANY = 0,
+        PARAM_TYPE_NUMERIC = 1,
+        PARAM_TYPE_STRING = 2,
+        PARAM_TYPE_LOGICAL = 4,
+        PARAM_TYPE_NONE = 8,
+        PARAM_TYPE_NUMERIC_STRING = 3,
+        PARAM_TYPE_NUMERIC_LOGICAL = 5,
+        PARAM_TYPE_STRING_LOGICAL = 6,
+        PARAM_TYPE_NUMERIC_NONE = 9,
+        PARAM_TYPE_STRING_NONE = 10,
+        PARAM_TYPE_LOGICAL_NONE = 12,
+        PARAM_TYPE_NUMERIC_STRING_NONE = 11,
+        PARAM_TYPE_NUMERIC_LOGICAL_NONE = 13,
+        PARAM_TYPE_STRING_LOGICAL_NONE = 14,
+        PARAM_TYPE_NUMERIC_STRING_LOGICAL = 7,
+        PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = 15
+    };
 
     // Контекст исполнения инструкций Mython
-    class Context {
+    class Context
+    {
     public:
         // Возвращает поток вывода для команд print
         virtual std::ostream& GetOutputStream() = 0;
         virtual LinkageFunction GetExternalLinkage() = 0;
+        virtual bool IsTraceMode() = 0;
+        virtual void TraceOn() = 0;
+        virtual void TraceOff() = 0;
+
+        ProgramCommandDescriptor GetLastCommandDesc()
+        {
+            return last_command_desc_;
+        }
+
+        void SetLastCommandDesc(ProgramCommandDescriptor last_command_desc)
+        {
+            last_command_desc_ = last_command_desc;
+        }
 
     protected:
         ~Context() = default;
+
+    private:
+        ProgramCommandDescriptor last_command_desc_;
     };
 
     // Базовый класс для всех объектов языка Mython
-    class Object {
+    class Object
+    {
     public:
         virtual ~Object() = default;
         // выводит в os своё представление в виде строки
@@ -43,7 +83,8 @@ namespace runtime
     };
 
     // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе
-    class ObjectHolder {
+    class ObjectHolder
+    {
     public:
         // Создаёт пустое значение
         ObjectHolder() = default;
@@ -52,7 +93,8 @@ namespace runtime
         // Тип T - конкретный класс-наследник Object.
         // object копируется или перемещается в кучу
         template <typename T>
-        [[nodiscard]] static ObjectHolder Own(T&& object) {
+        [[nodiscard]] static ObjectHolder Own(T&& object)
+        {
             return ObjectHolder(std::make_shared<T>(std::forward<T>(object)));
         }
 
@@ -72,12 +114,17 @@ namespace runtime
         // Возвращает указатель на объект типа T либо nullptr, если внутри ObjectHolder не хранится
         // объект данного типа
         template <typename T>
-        [[nodiscard]] T* TryAs() const {
+        [[nodiscard]] T* TryAs() const
+        {
             return dynamic_cast<T*>(this->Get());
         }
 
         // Возвращает true, если ObjectHolder не пуст
         explicit operator bool() const;
+        
+        // Модифицирует содержимое объекта, перенацеливая указатель data_ на тот объект,
+        //на который указывает data_ внутри аргумента object_holder.
+        void ModifyData(const ObjectHolder& object_holder);
 
     private:
         explicit ObjectHolder(std::shared_ptr<Object> data);
@@ -88,7 +135,8 @@ namespace runtime
 
     // Объект-значение, хранящий значение типа T
     template <typename T>
-    class ValueObject : public Object {
+    class ValueObject : public Object
+    {
     public:
         ValueObject(T v)  // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)
             : value_(v) {
@@ -106,6 +154,29 @@ namespace runtime
         T value_;
     };
 
+    class PointerObject : public Object
+    {
+    public:
+        PointerObject() : object_ptr_(nullptr)
+        {}
+
+        PointerObject(ObjectHolder* object_ptr) : object_ptr_(object_ptr)
+        {}
+
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
+        {
+            os << object_ptr_;
+        }
+
+        [[nodiscard]] ObjectHolder* GetPointer() const
+        {
+            return object_ptr_;
+        }
+
+    private:
+        ObjectHolder* object_ptr_;
+    };
+
     // Таблица символов, связывающая имя объекта с его значением
     using Closure = std::unordered_map<std::string, ObjectHolder>;
 
@@ -114,12 +185,26 @@ namespace runtime
     bool IsTrue(const ObjectHolder& object);
 
     // Интерфейс для выполнения действий над объектами Mython
-    class Executable {
+    class Executable
+    {
     public:
+        Executable() = default;
         virtual ~Executable() = default;
         // Выполняет действие над объектами внутри closure, используя context
         // Возвращает результирующее значение либо None
         virtual ObjectHolder Execute(Closure& closure, Context& context) = 0;
+        ProgramCommandDescriptor GetCommandDesc()
+        {
+            return command_desc_;
+        }
+
+        void SetCommandDesc(ProgramCommandDescriptor command_desc)
+        {
+            command_desc_ = command_desc;
+        }
+
+    private:
+        ProgramCommandDescriptor command_desc_;
     };
 
     // Строковое значение
@@ -169,8 +254,16 @@ namespace runtime
         std::unordered_map<std::string, Method> virtual_method_table_;
     };
 
+    class CommonClassInstance : public Object
+    {
+    public:
+        void Print(std::ostream& os, Context& context) override = 0;
+        virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                  Context& context) = 0;
+    };
+
     // Экземпляр класса
-    class ClassInstance : public Object
+    class ClassInstance : public CommonClassInstance
     {
     public:
         explicit ClassInstance(const Class& cls);
@@ -188,7 +281,7 @@ namespace runtime
          * runtime_error
          */
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                          Context& context);
+                          Context& context) override;
 
         // Возвращает true, если объект имеет метод method, принимающий argument_count параметров
         [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count) const;
@@ -199,10 +292,13 @@ namespace runtime
         [[nodiscard]] const Closure& Fields() const;
         // Возвращает имя хранимого внутри класса
         [[nodiscard]] std::string GetClassName() const;
+
     private:
         const Class& my_class_;
         Closure closure_;
     };
+
+#include "special_objects.h"
 
     /*
      * Возвращает true, если lhs и rhs содержат одинаковые числа, строки или значения типа Bool.
@@ -234,7 +330,8 @@ namespace runtime
 
     // Контекст-заглушка, применяется в тестах.
     // В этом контексте весь вывод перенаправляется в строковый поток вывода output
-    struct DummyContext : Context {
+    struct DummyContext : public Context
+    {
         std::ostream& GetOutputStream() override
         {
             return output;
@@ -245,13 +342,27 @@ namespace runtime
             return {};
         }
 
+        bool IsTraceMode() override
+        {
+            return false;
+        }
+
+        void TraceOn() override
+        {}
+
+        void TraceOff() override
+        {}
+
         std::ostringstream output;
     };
 
-    // Простой контекст, в нём вывод происходит в поток output, переданный в конструктор,
-    // также тут будет храниться список-словарь объектов внешних связей, через которые осуществляется связь
+    // Простой контекст, в нём хранится ссылка на поток, который будет использовать команда print.
+    // Также тут будет храниться указатель на звонковую функцию, через которую осуществляется связь
     // с внешним программным комплексом. в который встроен этот скриптовый язык.
-    class SimpleContext : public runtime::Context {
+    // Вдобавок поместим сюда ещё данные и методы, обеспечивающие поддержку отладки программ с
+    // помощью внешнего отладчика.
+    class SimpleContext : public Context
+    {
     public:
         explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
             : output_(output), external_link_(external_link)
@@ -267,9 +378,32 @@ namespace runtime
             return external_link_;
         }
 
+        bool IsTraceMode() override
+        {
+            return is_trace_mode_;
+        }
+
+        void TraceOn() override
+        {
+            is_trace_mode_ = true;
+        }
+
+        void TraceOff() override
+        {
+            is_trace_mode_ = false;
+        }
+
     private:
         std::ostream& output_;
         LinkageFunction external_link_;
+        bool is_trace_mode_ = false;
+        std::vector<ProgramCommandDescriptor> breakpoints_;
     };
 
+    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const std::string& except_text);
+    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num);
+    [[noreturn]] void RethrowRuntimeError(runtime::Executable* exec_obj_ptr, std::runtime_error& orig_runtime_error);
+    [[noreturn]] void ThrowRuntimeError(Context& context, const std::string& except_text);
+    [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num);
+    [[noreturn]] void RethrowRuntimeError(Context& context, std::runtime_error& orig_runtime_error);
 }  // namespace runtime

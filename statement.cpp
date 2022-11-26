@@ -1,10 +1,13 @@
 ﻿#include "statement.h"
+#include "throw_messages.h"
 
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 
 using namespace std;
+using runtime::ThrowMessageNumber;
+using runtime::ThrowMessages;
 
 namespace ast
 {
@@ -19,13 +22,60 @@ namespace
     const string EXTERNAL_LINK_CLASS_NAME = "__external"s;
 }  // namespace
 
+ObjectHolder DereferencePointerObject(const ObjectHolder& pointer_obj)
+{
+    runtime::PointerObject* pointer_ptr = pointer_obj.TryAs<runtime::PointerObject>();
+    if (pointer_ptr)
+        if (ObjectHolder* deref_pointer = pointer_ptr->GetPointer())
+            return *deref_pointer;
+        else
+            return ObjectHolder::None();
+    else
+        return pointer_obj;
+}
+
+void PrepareExecute(Statement* exec_obj_ptr, Context& context)
+{
+    context.SetLastCommandDesc(exec_obj_ptr->GetCommandDesc());
+}
+
 ObjectHolder Assignment::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     return closure[var_] = rv_->Execute(closure, context);
 }
 
 Assignment::Assignment(std::string var, std::unique_ptr<Statement> rv) : var_(move(var)), rv_(move(rv))
 {}
+
+IndirectAssignment::IndirectAssignment(std::unique_ptr<Statement> object, std::string method,
+    std::vector<std::unique_ptr<Statement>> args, std::unique_ptr<Statement> rv) :
+    object_(move(object)), method_(move(method)), args_(move(args)), rv_(move(rv))
+{}
+
+ObjectHolder IndirectAssignment::Execute(Closure& closure, Context& context)
+{
+    PrepareExecute(this, context);
+    ObjectHolder real_object = object_->Execute(closure, context);
+    vector<ObjectHolder> real_args;
+    for (auto& cur_arg_ptr : args_) // Вычисляем истинные значения аргументов метода
+        real_args.push_back(cur_arg_ptr->Execute(closure, context));
+
+    ObjectHolder target_field = real_object.TryAs<runtime::CommonClassInstance>()->
+                                Call(method_, real_args, context);
+    runtime::PointerObject* target_ptr = target_field.TryAs<runtime::PointerObject>();
+    if (target_ptr)
+    {
+        if (ObjectHolder * deref_ptr = target_ptr->GetPointer())
+            deref_ptr->ModifyData(DereferencePointerObject(rv_->Execute(closure, context)));
+    }
+    else
+    {
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR);
+    }
+
+    return target_field;
+}
 
 VariableValue::VariableValue(const std::string& var_name)
 {
@@ -37,15 +87,15 @@ VariableValue::VariableValue(std::vector<std::string> dotted_ids) : dotted_ids_(
 
 ObjectHolder VariableValue::Execute(Closure& closure, [[maybe_unused]] Context& context)
 {
+    PrepareExecute(this, context);
     size_t i = 1;
     Closure* cur_closure_ptr = &closure;
     runtime::ClassInstance* cur_class_instance_ptr = nullptr;
     for (const string id_name : dotted_ids_)
     {
         if (!cur_closure_ptr->count(id_name))
-        {
-            throw runtime_error("Переменная не найдена");
-        }
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+
         if (i++ < dotted_ids_.size())
         {
             cur_class_instance_ptr = cur_closure_ptr->at(id_name).TryAs<runtime::ClassInstance>();
@@ -89,6 +139,7 @@ Print::Print(vector<unique_ptr<Statement>> args) : args_(move(args))
 
 ObjectHolder Print::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder result;
     if (name_.size())
     {
@@ -124,17 +175,54 @@ MethodCall::MethodCall(unique_ptr<Statement> object, string method,
 
 ObjectHolder MethodCall::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder real_object = object_->Execute(closure, context);
     vector<ObjectHolder> real_args;
     for (auto& cur_arg_ptr : args_)
     { // Вычисляем истинные значения аргументов метода
         real_args.push_back(cur_arg_ptr->Execute(closure, context));
     }
-    return real_object.TryAs<runtime::ClassInstance>()->Call(method_, real_args, context);
+
+    runtime::CommonClassInstance* common_class_ptr = real_object.TryAs<runtime::CommonClassInstance>();
+    if (!common_class_ptr)
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+
+    ObjectHolder result = DereferencePointerObject(common_class_ptr->Call(method_, real_args, context));
+
+    runtime::ClassInstance* real_class_ptr = dynamic_cast<runtime::ClassInstance*>(common_class_ptr);
+    if (real_class_ptr)
+    {  // Требуется вызвать метод объекта общего типа (определенного программно)
+        if (real_class_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME && context.GetExternalLinkage())
+        {  // Вызов звонковой функции при вызове метода объекта "__external"
+            vector<string> real_args_str;
+            ostringstream set_value_stream;
+            for (auto& cur_real_arg : real_args)
+            {
+                set_value_stream.clear();
+                cur_real_arg.Get()->Print(set_value_stream, context);
+                real_args_str.push_back(set_value_stream.str());
+            }
+            variant<int, string> external_result = context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_CALL_METHOD,
+                method_, real_args_str);
+            if (holds_alternative<int>(external_result))
+                return runtime::ObjectHolder::Own(runtime::ValueObject(get<int>(external_result)));
+            else if (holds_alternative<string>(external_result))
+                return runtime::ObjectHolder::Own(runtime::ValueObject(get<string>(external_result)));
+        }
+        else
+        {
+            return result;
+        }
+    }
+    else
+    {
+        return result;
+    }
 }
 
 ObjectHolder Stringify::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder object_hold = argument_->Execute(closure, context);
     ostringstream ostr;
     if (object_hold)
@@ -151,6 +239,7 @@ ObjectHolder Stringify::Execute(Closure& closure, Context& context)
  // В противном случае при вычислении выбрасывается runtime_error
 ObjectHolder Add::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
     runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -168,13 +257,13 @@ ObjectHolder Add::Execute(Closure& closure, Context& context)
     {
         runtime::ClassInstance *lhs_class_ptr = real_lhs.TryAs<runtime::ClassInstance>();
         if (lhs_class_ptr->HasMethod(ADD_METHOD, 1))
-            return lhs_class_ptr->Call(ADD_METHOD, { real_rhs }, context);
+            return lhs_class_ptr->Call(ADD_METHOD, {real_rhs}, context);
         else
-            throw runtime_error("Невозможно выполнить сложение");
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_ADDITION);
     }
     else
     {
-        throw runtime_error("Невозможно выполнить сложение");
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_ADDITION);
     }
 }
 
@@ -183,6 +272,7 @@ ObjectHolder Add::Execute(Closure& closure, Context& context)
 // Если lhs и rhs - не числа, выбрасывается исключение runtime_error
 ObjectHolder Sub::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
     runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -193,12 +283,13 @@ ObjectHolder Sub::Execute(Closure& closure, Context& context)
     }
     else
     {
-        throw runtime_error("Невозможно выполнить вычитание");
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION);
     }
 }
 
 ObjectHolder Mult::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
     runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -209,12 +300,13 @@ ObjectHolder Mult::Execute(Closure& closure, Context& context)
     }
     else
     {
-        throw runtime_error("Невозможно выполнить умножение");
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_MULTIPLICATION);
     }
 }
 
 ObjectHolder Div::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
     runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -222,18 +314,39 @@ ObjectHolder Div::Execute(Closure& closure, Context& context)
     {
         int rhs_value = real_rhs.TryAs<runtime::Number>()->GetValue();
         if (!rhs_value)
-            throw runtime_error("Деление на нуль");
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_DIVISION_BY_ZERO);
         int result = real_lhs.TryAs<runtime::Number>()->GetValue() / rhs_value;
         return ObjectHolder::Own<runtime::Number>(result);
     }
     else
     {
-        throw runtime_error("Невозможно выполнить деление");
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION);
+    }
+}
+
+ObjectHolder ModuloDiv::Execute(Closure& closure, Context& context)
+{
+    PrepareExecute(this, context);
+    runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
+    runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+
+    if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+    {
+        int rhs_value = real_rhs.TryAs<runtime::Number>()->GetValue();
+        if (!rhs_value)
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_MODULO_DIVISION_BY_ZERO);
+        int result = real_lhs.TryAs<runtime::Number>()->GetValue() % rhs_value;
+        return ObjectHolder::Own<runtime::Number>(result);
+    }
+    else
+    {
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_MODULO_DIVISION);
     }
 }
 
 ObjectHolder Compound::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     for (auto& cur_statement_ptr : comp_body_)
         cur_statement_ptr->Execute(closure, context);
     return {};
@@ -241,7 +354,45 @@ ObjectHolder Compound::Execute(Closure& closure, Context& context)
 
 ObjectHolder Return::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     throw ReturnResult(statement_->Execute(closure, context));
+}
+
+ObjectHolder ReturnPtr::Execute(Closure& closure, [[maybe_unused]] Context& context)
+{
+    PrepareExecute(this, context);
+    size_t i = 1;
+    Closure* cur_closure_ptr = &closure;
+    runtime::ClassInstance* cur_class_instance_ptr = nullptr;
+    for (const string id_name : dotted_ids_)
+    {
+        if (!cur_closure_ptr->count(id_name))
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+
+        if (i++ < dotted_ids_.size())
+        {
+            cur_class_instance_ptr = cur_closure_ptr->at(id_name).TryAs<runtime::ClassInstance>();
+            cur_closure_ptr = &(cur_class_instance_ptr->Fields());
+        }
+        else
+        {
+            throw ReturnResult(runtime::ObjectHolder::Own(
+                               runtime::PointerObject(&cur_closure_ptr->at(id_name))));
+        }
+    }
+    return {};
+}
+
+ObjectHolder Break::Execute(Closure& closure, Context& context)
+{
+    PrepareExecute(this, context);
+    throw TerminateLoop(TerminateLoopReason::TERMINATE_LOOP_BREAK);
+}
+
+ObjectHolder Continue::Execute(Closure& closure, Context& context)
+{
+    PrepareExecute(this, context);
+    throw TerminateLoop(TerminateLoopReason::TERMINATE_LOOP_CONTINUE);
 }
 
 ClassDefinition::ClassDefinition(ObjectHolder cls) : cls_(move(cls))
@@ -249,6 +400,7 @@ ClassDefinition::ClassDefinition(ObjectHolder cls) : cls_(move(cls))
 
 ObjectHolder ClassDefinition::Execute(Closure& closure, [[maybe_unused]] Context& context)
 {
+    PrepareExecute(this, context);
     closure[cls_.TryAs<runtime::Class>()->GetName()] = cls_;
     return cls_;
 }
@@ -261,6 +413,7 @@ FieldAssignment::FieldAssignment(VariableValue object, std::string field_name,
 
 ObjectHolder FieldAssignment::Execute(Closure& closure, Context& context)
 { // Присваивает полю object.field_name значение выражения rv
+    PrepareExecute(this, context);
     runtime::ClassInstance* target_object_ptr = nullptr;
     ObjectHolder target_object_holder(object_.Execute(closure, context));
     if (target_object_holder)
@@ -287,6 +440,7 @@ IfElse::IfElse(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> 
 
 ObjectHolder IfElse::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     if (runtime::IsTrue(condition_->Execute(closure, context)))
         return if_body_->Execute(closure, context);
     else
@@ -296,8 +450,37 @@ ObjectHolder IfElse::Execute(Closure& closure, Context& context)
             return {};
 }
 
+While::While(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> while_body) :
+    condition_(move(condition)), while_body_(move(while_body))
+{}
+
+ObjectHolder While::Execute(Closure& closure, Context& context)
+{
+    PrepareExecute(this, context);
+    ObjectHolder result;
+    while (runtime::IsTrue(condition_->Execute(closure, context)))
+    {
+        try
+        {
+            result = while_body_->Execute(closure, context);
+        }
+        catch (TerminateLoop& ter_loop)
+        {
+            if (ter_loop.terminate_loop_reason_ == TerminateLoopReason::TERMINATE_LOOP_BREAK)
+                break;            
+            else if (ter_loop.terminate_loop_reason_ == TerminateLoopReason::TERMINATE_LOOP_CONTINUE)
+                continue;
+            else
+                throw;
+        }
+    }
+
+    return result;
+}
+
 ObjectHolder Or::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder real_lhs = lhs_->Execute(closure, context);
     // Значение аргумента rhs вычисляется, только если значение lhs
     // после приведения к Bool равно False
@@ -311,6 +494,7 @@ ObjectHolder Or::Execute(Closure& closure, Context& context)
 
 ObjectHolder And::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder real_lhs = lhs_->Execute(closure, context);
     // Значение аргумента rhs вычисляется, только если значение lhs
     // после приведения к Bool равно True
@@ -324,6 +508,7 @@ ObjectHolder And::Execute(Closure& closure, Context& context)
 
 ObjectHolder Not::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     ObjectHolder real_arg = argument_->Execute(closure, context);
     return ObjectHolder::Own(runtime::Bool(!runtime::IsTrue(real_arg)));
 }
@@ -334,6 +519,7 @@ Comparison::Comparison(Comparator cmp, unique_ptr<Statement> lhs, unique_ptr<Sta
 
 ObjectHolder Comparison::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     runtime::ObjectHolder real_lhs = lhs_->Execute(closure, context);
     runtime::ObjectHolder real_rhs = rhs_->Execute(closure, context);
     return ObjectHolder::Own(runtime::Bool(cmp_(real_lhs, real_rhs, context)));
@@ -348,6 +534,7 @@ NewInstance::NewInstance(const runtime::Class& class_) : new_class_instance_(cla
 
 ObjectHolder NewInstance::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     if (new_class_instance_.HasMethod(INIT_METHOD, args_.size()))
     {
         vector<ObjectHolder> actual_args;
@@ -358,11 +545,38 @@ ObjectHolder NewInstance::Execute(Closure& closure, Context& context)
     return ObjectHolder::Share(new_class_instance_);
 }
 
+NewArray::NewArray(std::vector<std::unique_ptr<Statement>> args) : args_(move(args))
+{}
+
+runtime::ObjectHolder NewArray::Execute(runtime::Closure& closure, runtime::Context& context)
+{
+    PrepareExecute(this, context);
+    std::vector<int> elements_count;
+    for (auto& cur_param_ptr : args_)
+    {
+        ObjectHolder cur_count_object = cur_param_ptr->Execute(closure, context);
+        runtime::Number* cur_element_count_ptr = cur_count_object.TryAs<runtime::Number>();
+        if (cur_element_count_ptr)
+            elements_count.push_back(cur_element_count_ptr->GetValue());
+        else
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_NOT_DIGIT_SIZES);
+    }
+
+    return ObjectHolder::Own(runtime::ArrayInstance(move(elements_count)));
+}
+
+runtime::ObjectHolder NewMap::Execute(runtime::Closure& closure, runtime::Context& context)
+{
+    PrepareExecute(this, context);
+    return ObjectHolder::Own(runtime::MapInstance());
+}
+
 MethodBody::MethodBody(std::unique_ptr<Statement>&& body) : body_(move(body))
 {}
 
 ObjectHolder MethodBody::Execute(Closure& closure, Context& context)
 {
+    PrepareExecute(this, context);
     try
     {
         body_->Execute(closure, context);

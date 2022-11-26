@@ -1,27 +1,76 @@
+
 #include "runtime.h"
 
 #include <cassert>
 #include <optional>
 #include <sstream>
+#include <stdarg.h>
 
 using namespace std;
 
 namespace runtime
 {
-    ObjectHolder::ObjectHolder(std::shared_ptr<Object> data)
-        : data_(std::move(data)) {
+    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const string& except_text)
+    {
+        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
+            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + except_text);
     }
 
-    void ObjectHolder::AssertIsValid() const {
+    [[noreturn]] void ThrowRuntimeError(runtime::Executable * exec_obj_ptr, ThrowMessageNumber msg_num)
+    {
+        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
+            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + ThrowMessages::GetThrowText(msg_num));
+    }
+
+    [[noreturn]] void RethrowRuntimeError(runtime::Executable * exec_obj_ptr, runtime_error & orig_runtime_error)
+    {
+        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
+            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + orig_runtime_error.what());
+    }
+
+    [[noreturn]] void ThrowRuntimeError(Context& context, const string& except_text)
+    {
+        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
+            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + except_text);
+    }
+
+    [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num)
+    {
+        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
+            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + ThrowMessages::GetThrowText(msg_num));
+    }
+
+    [[noreturn]] void RethrowRuntimeError(Context& context, runtime_error& orig_runtime_error)
+    {
+        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
+            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
+        throw runtime_error(command_desc + orig_runtime_error.what());
+    }
+
+    ObjectHolder::ObjectHolder(std::shared_ptr<Object> data) : data_(std::move(data))
+    {}
+
+    void ObjectHolder::AssertIsValid() const
+    {
         assert(data_ != nullptr);
     }
 
-    ObjectHolder ObjectHolder::Share(Object& object) {
+    ObjectHolder ObjectHolder::Share(Object& object)
+    {
         // Возвращаем невладеющий shared_ptr (его удалитель ничего не делает)
-        return ObjectHolder(std::shared_ptr<Object>(&object, [](auto* /*p*/) { /* Не делает ничего. Абсолютно ничего */ }));
+        return ObjectHolder(std::shared_ptr<Object>(&object, [](auto* /*p*/)
+                                                               {
+                                                                    /* Не делает ничего. Абсолютно ничего */
+                                                               }));
     }
 
-    ObjectHolder ObjectHolder::None() {
+    ObjectHolder ObjectHolder::None()
+    {
         return ObjectHolder();
     }
 
@@ -40,6 +89,11 @@ namespace runtime
     Object* ObjectHolder::Get() const
     {
         return data_.get();
+    }
+
+    void ObjectHolder::ModifyData(const ObjectHolder& object_holder)
+    {
+        data_ = object_holder.data_;
     }
 
     ObjectHolder::operator bool() const
@@ -100,7 +154,7 @@ namespace runtime
         const Method* method_ptr = my_class_.GetMethod(method_name);
         if (!method_ptr ||
             method_ptr->formal_params.size() != actual_args.size())
-            throw std::runtime_error("Метод не найден"s);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     
         Closure method_closure;
         method_closure["self"s] = ObjectHolder::Share(*this);
@@ -169,7 +223,7 @@ namespace runtime
             if (lhs_inst_ptr->HasMethod("__eq__", 1))
                 return IsTrue(lhs_inst_ptr->Call("__eq__", {rhs}, context));
 
-        throw std::runtime_error("Невозможно сравнить объекты на равенство"s);
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_EQUAL);
     }
 
     bool Less(const ObjectHolder& lhs, const ObjectHolder& rhs, Context& context)
@@ -187,7 +241,7 @@ namespace runtime
             if (lhs_inst_ptr->HasMethod("__lt__", 1))
                 return IsTrue(lhs_inst_ptr->Call("__lt__", {rhs}, context));
 
-        throw std::runtime_error("Невозможно сравнить объекты на \"меньше\""s);
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_LESS);
     }
 
     bool NotEqual(const ObjectHolder& lhs, const ObjectHolder& rhs, Context& context)
