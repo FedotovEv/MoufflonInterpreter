@@ -46,7 +46,7 @@ namespace runtime
     };
 
     // Контекст исполнения инструкций Mython
-    class Context
+    class MYTHLON_INTERPRETER_PUBLIC Context
     {
     public:
         // Возвращает поток вывода для команд print
@@ -74,7 +74,7 @@ namespace runtime
     };
 
     // Базовый класс для всех объектов языка Mython
-    class Object
+    class MYTHLON_INTERPRETER_PUBLIC Object
     {
     public:
         virtual ~Object() = default;
@@ -83,7 +83,7 @@ namespace runtime
     };
 
     // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе
-    class ObjectHolder
+    class MYTHLON_INTERPRETER_PUBLIC ObjectHolder
     {
     public:
         // Создаёт пустое значение
@@ -135,18 +135,19 @@ namespace runtime
 
     // Объект-значение, хранящий значение типа T
     template <typename T>
-    class ValueObject : public Object
+    class MYTHLON_INTERPRETER_PUBLIC ValueObject : public Object
     {
     public:
-        ValueObject(T v)  // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)
-            : value_(v) {
-        }
+        ValueObject(T v) : value_(v) // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)            
+        {}
 
-        void Print(std::ostream& os, [[maybe_unused]] Context& context) override {
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
+        {
             os << value_;
         }
 
-        [[nodiscard]] const T& GetValue() const {
+        [[nodiscard]] const T& GetValue() const
+        {
             return value_;
         }
 
@@ -154,7 +155,7 @@ namespace runtime
         T value_;
     };
 
-    class PointerObject : public Object
+    class MYTHLON_INTERPRETER_PUBLIC PointerObject : public Object
     {
     public:
         PointerObject() : object_ptr_(nullptr)
@@ -209,11 +210,81 @@ namespace runtime
 
     // Строковое значение
     using String = ValueObject<std::string>;
-    // Числовое значение
-    using Number = ValueObject<int>;
+
+    // Далее описываются структуры, необходимые для работы с числовыми значениями
+    class MYTHLON_INTERPRETER_PUBLIC Number : public Object
+    {
+    public:
+        Number(NumberValue v) : value_(v)
+        {}
+
+        Number(int v) : value_(v)
+        {}
+
+        Number(double v) : value_(v)
+        {}
+
+        Number(const Number&) = default;
+        Number(Number&&) = default;
+
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
+        {
+            if (IsInt())
+                os << GetIntValue();
+            else if (IsDouble())
+                os << GetDoubleValue();
+        }
+
+        bool IsInt() const noexcept
+        {
+            return std::holds_alternative<int>(value_);
+        }
+
+        bool IsDouble() const noexcept
+        {
+            return std::holds_alternative<double>(value_);
+        }
+
+        [[nodiscard]] const NumberValue& GetValue() const
+        {
+            return value_;
+        }
+
+        [[nodiscard]] int GetIntValue() const
+        {
+            return ImplGetValue<int>();
+        }
+
+        [[nodiscard]] double GetDoubleValue() const
+        {
+            return ImplGetValue<double>();
+        }
+
+    private:
+        template <typename T>
+        T ImplGetValue() const
+        {
+            if (std::holds_alternative<int>(value_))
+                return std::get<int>(value_);
+            else if (std::holds_alternative<double>(value_))
+                return std::get<double>(value_);
+            else
+                return T(0);
+        }
+
+        NumberValue value_;
+    };
+
+    Number operator+(const Number& first_op, const Number& second_op);
+    Number operator-(const Number& first_op, const Number& second_op);
+    Number operator*(const Number& first_op, const Number& second_op);
+    Number operator/(const Number& first_op, const Number& second_op);
+    Number operator%(const Number& first_op, const Number& second_op);
+    bool operator<(const Number& first_op, const Number& second_op);
+    bool operator==(const Number& first_op, const Number& second_op);
 
     // Логическое значение
-    class Bool : public ValueObject<bool>
+    class MYTHLON_INTERPRETER_PUBLIC Bool : public ValueObject<bool>
     {
     public:
         using ValueObject<bool>::ValueObject;
@@ -298,7 +369,13 @@ namespace runtime
         Closure closure_;
     };
 
+    void MYTHLON_INTERPRETER_PUBLIC CheckMethodParams(Context& context, const std::string& method_name,
+                           MethodParamCheckMode check_mode,
+                           MethodParamType param_type, size_t required_params,
+                           const std::vector<ObjectHolder>& actual_args);
+
 #include "special_objects.h"
+#include "math_object.h"
 
     /*
      * Возвращает true, если lhs и rhs содержат одинаковые числа, строки или значения типа Bool.

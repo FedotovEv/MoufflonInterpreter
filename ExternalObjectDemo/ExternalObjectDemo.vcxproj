@@ -153,6 +153,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\lexer.cpp" />
+    <ClCompile Include="..\math_object.cpp" />
     <ClCompile Include="..\parse.cpp" />
     <ClCompile Include="..\runtime.cpp" />
     <ClCompile Include="..\special_objects.cpp" />

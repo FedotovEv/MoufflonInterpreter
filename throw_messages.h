@@ -1,5 +1,6 @@
 #pragma once
 
+#include "declares.h"
 #include <string>
 #include <unordered_map>
 
@@ -51,7 +52,9 @@ namespace runtime
         THRM_FIRST_PARAM_OF_METHOD,
         THRM_MUST_BE_ITERATOR,
         THRM_IN_METHOD,
-        THRM_ITERATOR_INVALID
+        THRM_ITERATOR_INVALID,
+        THRM_MATH_CTOR_HAS_NO_PARAMS,
+        THRM_INCORRECT_TOKEN_LIST
     };
 
     class ThrowMessages

@@ -21,6 +21,7 @@ namespace parse
          {"continue"s, token_type::Continue{}},
          {"def"s, token_type::Def{}},
          {"print"s, token_type::Print{}},
+         {"import"s, token_type::Import{}},
          {"and"s, token_type::And{}},
          {"or"s, token_type::Or{}},
          {"not"s, token_type::Not{}},
@@ -46,10 +47,11 @@ namespace parse
         TOKEN_UNDEFINED = 0,
         TOKEN_STRING,
         TOKEN_ID,
-        TOKEN_NUMBER,
+        TOKEN_NUMBER_INT,
         TOKEN_CHAR,
         TOKEN_NEWLINE,
-        TOKEN_EOF
+        TOKEN_EOF,
+        TOKEN_NUMBER_DOUBLE
     };
     
     void SkipToEndLine(istream& input)
@@ -128,23 +130,55 @@ namespace parse
         return result;
     }
 
-    string GetNumberString(istream& input)
+    pair<string, TokenTypeId> GetNumberString(istream& input)
     {
-        string result;
-        while (input)
+        string result_str;
+        TokenTypeId result_token_id = TokenTypeId::TOKEN_NUMBER_INT;
+        bool is_continue_loop = true, is_exponent = false;
+
+        while (input && is_continue_loop)
         {
             char ch = input.get();
             if (input)
             {
                 if (!isdigit(ch))
                 {
-                    input.unget();
-                    break;
+                    switch (ch)
+                    {
+                    case '.':
+                        if (result_token_id == TokenTypeId::TOKEN_NUMBER_INT && !is_exponent)
+                            result_token_id = TokenTypeId::TOKEN_NUMBER_DOUBLE;
+                        else
+                            is_continue_loop = false;
+                        break;
+                    case 'E':
+                    case 'e':
+                        if (result_token_id == TokenTypeId::TOKEN_NUMBER_INT)
+                        {
+                            result_token_id = TokenTypeId::TOKEN_NUMBER_DOUBLE;
+                            is_exponent = true;
+                        }
+                        else
+                        {
+                            if (!is_exponent)
+                                is_exponent = true;
+                            else
+                                is_continue_loop = false;
+                        }
+                        break;
+                    default:
+                        is_continue_loop = false;
+                        break;
+                    }
                 }
-                result += ch;
+
+                if (is_continue_loop)
+                    result_str += ch;
+                else
+                    input.unget();
             }
         }
-        return result;
+        return {result_str, result_token_id};
     }
     
     string GetChardSequence(istream& input)
@@ -215,7 +249,7 @@ namespace parse
             return {GetIdentString(input), TokenTypeId::TOKEN_ID};  // Это идентификатор
  
         if (isdigit(ch))
-            return {GetNumberString(input), TokenTypeId::TOKEN_NUMBER};  // Это число
+            return GetNumberString(input);  // Это число, целое или с плавающей точкой
     
         if (special_symb.find(ch) != string::npos)
         {  // Это специальная символьная группа
@@ -235,8 +269,8 @@ namespace parse
             return false;    
         if (lhs.Is<Char>())
             return lhs.As<Char>().value == rhs.As<Char>().value;
-        if (lhs.Is<Number>())
-            return lhs.As<Number>().value == rhs.As<Number>().value;
+        if (lhs.Is<NumberInt>())
+            return lhs.As<NumberInt>().value == rhs.As<NumberInt>().value;
         if (lhs.Is<String>())
             return lhs.As<String>().value == rhs.As<String>().value;
         if (lhs.Is<Id>())
@@ -256,7 +290,7 @@ namespace parse
     #define VALUED_OUTPUT(type) \
         if (auto p = rhs.TryAs<type>()) return os << #type << '{' << p->value << '}';
 
-        VALUED_OUTPUT(Number);
+        VALUED_OUTPUT(NumberInt);
         VALUED_OUTPUT(Id);
         VALUED_OUTPUT(String);
         VALUED_OUTPUT(Char);
@@ -364,8 +398,11 @@ namespace parse
                     // Лексема - идентификатор (имя переменной)
                     current_token_ = token_type::Id{next_token.first};
                 break;
-            case TokenTypeId::TOKEN_NUMBER: // Лексема-число
-                current_token_ = token_type::Number{stoi(next_token.first)};
+            case TokenTypeId::TOKEN_NUMBER_INT: // Лексема-целое число
+                current_token_ = token_type::NumberInt{stoi(next_token.first)};
+                break;
+            case TokenTypeId::TOKEN_NUMBER_DOUBLE:
+                current_token_ = token_type::NumberDouble{stod(next_token.first)};
                 break;
             case TokenTypeId::TOKEN_CHAR: //Лексема - специальная символьная группа
                 if (special_tokens.count(next_token.first))

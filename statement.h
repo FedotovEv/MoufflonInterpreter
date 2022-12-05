@@ -1,5 +1,6 @@
 #pragma once
 
+#include "declares.h"
 #include "runtime.h"
 
 #include <functional>
@@ -30,6 +31,8 @@ namespace ast
     };
 
     using Statement = runtime::Executable;
+
+    void PrepareExecute(Statement* exec_obj_ptr, runtime::Context& context);
 
     // Выражение, возвращающее значение типа T,
     // используется как основа для создания констант
@@ -190,25 +193,8 @@ namespace ast
         std::vector<std::unique_ptr<Statement>> args_;
     };
 
-    class NewArray : public Statement
-    {
-    public:
-        NewArray(std::vector<std::unique_ptr<Statement>> args);
-        // Возвращает объект, содержащий значение типа ArrayInstance,
-        // представляющее собой созданный экземпляр массива.
-        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-    private:
-
-        std::vector<std::unique_ptr<Statement>> args_;
-    };
-
-    class NewMap : public Statement
-    {
-    public:
-        // Возвращает объект, содержащий значение типа MapInstance,
-        // представляющее собой созданный экземпляр ассоциативного массива (словаря).
-        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-    };
+    #include "special_objects_statement.h"
+    #include "math_object_statement.h"
 
     // Базовый класс для унарных операций
     class UnaryOperation : public Statement
@@ -394,14 +380,16 @@ namespace ast
         std::unique_ptr<Statement> statement_;
     };
 
-    // Выполняет инструкцию return_ptr с выражением statement
+    // Выполняет инструкцию return_ptr с переменной dotted_ids, которая должна быть полем
+    // объекта (начинаться с self).
     class ReturnPtr : public Statement
     {
     public:
         explicit ReturnPtr(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
         {}
-        // Останавливает выполнение текущего метода. После выполнения инструкции return метод,
-        // внутри которого она была исполнена, должен вернуть результат вычисления выражения statement.
+        // Останавливает выполнение текущего метода. После выполнения инструкции return_ptr метод,
+        // внутри которого она была исполнена, должен вернуть результат в виде указателя PointerObject
+        // на поле dotted_ids_ текущего объекта.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
         std::vector<std::string> dotted_ids_;

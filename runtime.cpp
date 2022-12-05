@@ -104,7 +104,13 @@ namespace runtime
     bool IsTrue(const ObjectHolder& object)
     {
         if (Number* number_ptr = object.TryAs<Number>())
-            return number_ptr->GetValue();
+        {
+            const NumberValue& number_value = number_ptr->GetValue();
+            if (holds_alternative<int>(number_value))
+                return get<int>(number_value);
+            else if (holds_alternative<double>(number_value))
+                return get<double>(number_value);
+        }
     
         if (String* string_ptr = object.TryAs<String>())
             return string_ptr->GetValue().size();
@@ -113,6 +119,93 @@ namespace runtime
             return bool_ptr->GetValue();
 
         return false;
+    }
+
+    Number operator+(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() + second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double double_result = first_op.GetDoubleValue() + second_op.GetDoubleValue();
+            return Number(double_result);
+        }
+    }
+    
+    Number operator-(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() - second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double double_result = first_op.GetDoubleValue() - second_op.GetDoubleValue();
+            return Number(double_result);
+        }
+    }
+    
+    Number operator*(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() * second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double double_result = first_op.GetDoubleValue() * second_op.GetDoubleValue();
+            return Number(double_result);
+        }
+    }
+    
+    Number operator/(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() / second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double double_result = first_op.GetDoubleValue() / second_op.GetDoubleValue();
+            return Number(double_result);
+        }
+    }
+    
+    Number operator%(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() % second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            int quotient = static_cast<int>(first_op.GetDoubleValue() / second_op.GetDoubleValue());
+            double double_result = first_op.GetDoubleValue() - quotient * second_op.GetDoubleValue();
+            return Number(double_result);
+        }
+    }
+
+    bool operator<(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+            return first_op.GetIntValue() < second_op.GetIntValue();
+        else
+            return first_op.GetDoubleValue() < second_op.GetDoubleValue();
+    }
+    
+    bool operator==(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() && second_op.IsInt())
+            return first_op.GetIntValue() == second_op.GetIntValue();
+        else
+            return first_op.GetDoubleValue() == second_op.GetDoubleValue();
     }
 
     void ClassInstance::Print(std::ostream& os, Context& context)
@@ -208,7 +301,7 @@ namespace runtime
     bool Equal(const ObjectHolder& lhs, const ObjectHolder& rhs, [[maybe_unused]] Context& context)
     {
         if (lhs.TryAs<Number>() && rhs.TryAs<Number>())
-            return lhs.TryAs<Number>()->GetValue() == rhs.TryAs<Number>()->GetValue();
+            return (*lhs.TryAs<Number>()) == (*rhs.TryAs<Number>());
 
         if (lhs.TryAs<String>() && rhs.TryAs<String>())
             return lhs.TryAs<String>()->GetValue() == rhs.TryAs<String>()->GetValue();
@@ -229,7 +322,7 @@ namespace runtime
     bool Less(const ObjectHolder& lhs, const ObjectHolder& rhs, Context& context)
     {
         if (lhs.TryAs<Number>() && rhs.TryAs<Number>())
-            return lhs.TryAs<Number>()->GetValue() < rhs.TryAs<Number>()->GetValue();
+            return (*lhs.TryAs<Number>()) < (*rhs.TryAs<Number>());
 
         if (lhs.TryAs<String>() && rhs.TryAs<String>())
             return lhs.TryAs<String>()->GetValue() < rhs.TryAs<String>()->GetValue();

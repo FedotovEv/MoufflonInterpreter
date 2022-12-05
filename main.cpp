@@ -12,35 +12,39 @@
 
 using namespace std;
 
-namespace parse {
-void RunOpenLexerTests(TestRunner& tr);
+namespace parse
+{
+    void RunOpenLexerTests(TestRunner& tr);
 }  // namespace parse
 
-namespace ast {
-void RunUnitTests(TestRunner& tr);
+namespace ast
+{
+    void RunUnitTests(TestRunner& tr);
 }
 
-namespace runtime {
-void RunObjectHolderTests(TestRunner& tr);
-void RunObjectsTests(TestRunner& tr);
+namespace runtime
+{
+    void RunObjectHolderTests(TestRunner& tr);
+    void RunObjectsTests(TestRunner& tr);
 }  // namespace runtime
 
 void TestParseProgram(TestRunner& tr);
 
-namespace {
-
-void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+namespace
 {
-    parse::Lexer lexer(input);
-    auto program = ParseProgram(lexer);
-
-    runtime::SimpleContext context(output, link_function);
-    runtime::Closure closure;
-    program->Execute(closure, context);
-}
-
-void TestSimplePrints() {
-    istringstream input(R"(
+    void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+    {
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer);
+    
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
+        program->Execute(closure, context);
+    }
+    
+    void TestSimplePrints()
+    {
+        istringstream input(R"(
 print 57
 print 10, 24, -8
 print 'hello'
@@ -50,14 +54,14 @@ print
 print None
 )");
 
-    ostringstream output;
-    RunMythonProgram(input, output);
-
-    ASSERT_EQUAL(output.str(), "57\n10 24 -8\nhello\nworld\nTrue False\n\nNone\n");
-}
-
-void TestAssignments() {
-    istringstream input(R"(
+        ostringstream output;
+        RunMythonProgram(input, output);    
+        ASSERT_EQUAL(output.str(), "57\n10 24 -8\nhello\nworld\nTrue False\n\nNone\n");
+    }
+    
+    void TestAssignments()
+    {
+        istringstream input(R"(
 x = 57
 print x
 x = 'C++ black belt'
@@ -67,25 +71,25 @@ x = y
 print x
 x = None
 print x, y
-)");
+)");    
 
-    ostringstream output;
-    RunMythonProgram(input, output);
-
-    ASSERT_EQUAL(output.str(), "57\nC++ black belt\nFalse\nNone False\n");
-}
-
-void TestArithmetics() {
-    istringstream input("print 1+2+3+4+5, 1*2*3*4*5, 1-2-3-4-5, 36/4/3, 2*5+10/2");
-
-    ostringstream output;
-    RunMythonProgram(input, output);
-
-    ASSERT_EQUAL(output.str(), "15 120 -13 3 15\n");
-}
-
-void TestVariablesArePointers() {
-    istringstream input(R"(
+        ostringstream output;
+        RunMythonProgram(input, output);    
+        ASSERT_EQUAL(output.str(), "57\nC++ black belt\nFalse\nNone False\n");
+    }
+    
+    void TestArithmetics()
+    {
+        istringstream input("print 1+2+3+4+5, 1*2*3*4*5, 1-2-3-4-5, 36/4/3, 2*5+10/2");
+    
+        ostringstream output;
+        RunMythonProgram(input, output);    
+        ASSERT_EQUAL(output.str(), "15 120 -13 3 15\n");
+    }
+    
+    void TestVariablesArePointers()
+    {
+        istringstream input(R"(
 class Counter:
   def __init__():
     self.value = 0
@@ -111,15 +115,14 @@ d.do_add(x)
 print y.value
 )");
 
-    ostringstream output;
-    RunMythonProgram(input, output);
-
-    ASSERT_EQUAL(output.str(), "2\n3\n");
-}
-
-void TestSelfInConstructor()
-{
-    istringstream input(R"--(
+        ostringstream output;
+        RunMythonProgram(input, output);    
+        ASSERT_EQUAL(output.str(), "2\n3\n");
+    }
+    
+    void TestSelfInConstructor()
+    {
+        istringstream input(R"--(
 class X:
   def __init__(p):
     p.x = self
@@ -130,22 +133,21 @@ class XHolder:
 
 xh = XHolder()
 x = X(xh)
-)--");
+)--");        
+
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer);    
+        runtime::DummyContext context;
+        runtime::Closure closure;
+        program->Execute(closure, context);
+        const auto* xh = closure.at("xh"s).TryAs<runtime::ClassInstance>();
+        ASSERT(xh != nullptr);
+        ASSERT_EQUAL(xh->Fields().at("x"s).Get(), closure.at("x"s).Get());
+    }
     
-    parse::Lexer lexer(input);
-    auto program = ParseProgram(lexer);
-
-    runtime::DummyContext context;
-    runtime::Closure closure;
-    program->Execute(closure, context);
-    const auto* xh = closure.at("xh"s).TryAs<runtime::ClassInstance>();
-    ASSERT(xh != nullptr);
-    ASSERT_EQUAL(xh->Fields().at("x"s).Get(), closure.at("x"s).Get());
-}
-
-void TestExternalObject()
-{
-    istringstream input(R"--(
+    void TestExternalObject()
+    {
+        istringstream input(R"--(
 class __external:
   def __init__():
     self.arg1 = 0
@@ -159,33 +161,33 @@ exts.arg1 = 2
 print exts.arg2
 exts.inner_method(4)
 )--");
-
-    ostringstream ostr;
-    auto lambda_link = [&ostr](runtime::LinkCallReason what_reason, const string& field_name,
-                               const vector<string>& argument_value) -> runtime::LinkageReturn
-                        {
-                            switch (what_reason)
+    
+        ostringstream ostr;
+        auto lambda_link = [&ostr](runtime::LinkCallReason what_reason, const string& field_name,
+                                   const vector<string>& argument_value) -> runtime::LinkageReturn
                             {
-                                case runtime::LinkCallReason::CALL_REASON_WRITE_FIELD:
-                                    ostr << field_name << " = " << argument_value[0] << endl;
-                                    return {};
-                                case runtime::LinkCallReason::CALL_REASON_READ_FIELD:
-                                    ostr << "Reading " << field_name << endl;
-                                    return "empty"s;
-                                case runtime::LinkCallReason::CALL_REASON_CALL_METHOD:
-                                    ostr << "Calling " << field_name << endl;
-                                    return "executed"s;
-                            }
-                        };
-
-    RunMythonProgram(input, ostr, lambda_link);
-    ASSERT_EQUAL(ostr.str(), "arg1 = 0\narg2 = 0\narg1 = 2\nReading arg2\nempty\narg1 = 4\nCalling inner_method\n"s);
-}
-
-void TestWhileLoop()
-{
-    { // Проверка цикла while без команд досрочного окончания
-        istringstream input(R"--(
+                                switch (what_reason)
+                                {
+                                    case runtime::LinkCallReason::CALL_REASON_WRITE_FIELD:
+                                        ostr << field_name << " = " << argument_value[0] << endl;
+                                        return {};
+                                    case runtime::LinkCallReason::CALL_REASON_READ_FIELD:
+                                        ostr << "Reading " << field_name << endl;
+                                        return "empty"s;
+                                    case runtime::LinkCallReason::CALL_REASON_CALL_METHOD:
+                                        ostr << "Calling " << field_name << endl;
+                                        return "executed"s;
+                                }
+                            };
+    
+        RunMythonProgram(input, ostr, lambda_link);
+        ASSERT_EQUAL(ostr.str(), "arg1 = 0\narg2 = 0\narg1 = 2\nReading arg2\nempty\narg1 = 4\nCalling inner_method\n"s);
+    }
+    
+    void TestWhileLoop()
+    {
+        { // Проверка цикла while без команд досрочного окончания
+            istringstream input(R"--(
 i = 5
 while i > 0:
   print i
@@ -194,13 +196,13 @@ while i > 0:
 print "End"
 )--");
 
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "5\n4\n3\n2\n1\nEnd\n"s);
-    }
-    
-    { // Проверка цикла while с досрочным завершением по break
-        istringstream input(R"--(
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "5\n4\n3\n2\n1\nEnd\n"s);
+        }
+        
+        { // Проверка цикла while с досрочным завершением по break
+            istringstream input(R"--(
 i = 10
 while i > 0:
   print i
@@ -210,14 +212,14 @@ while i > 0:
 
 print "End"
 )--");
-
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "10\n9\n8\n7\n6\n5\nEnd\n"s);
-    }    
-
-    { // Проверка рвботы while в связке с continue
-        istringstream input(R"--(
+    
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "10\n9\n8\n7\n6\n5\nEnd\n"s);
+        }    
+    
+        { // Проверка рвботы while в связке с continue
+            istringstream input(R"--(
 i = 10
 while i > 0:
   i = i - 1
@@ -228,16 +230,16 @@ while i > 0:
 print "End"
 )--");
 
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "8\n6\n4\n2\n0\nEnd\n"s);
-    }    
-}
-
-void TestArrays()
-{
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "8\n6\n4\n2\n0\nEnd\n"s);
+        }    
+    }
+    
+    void TestArrays()
     {
-        istringstream input(R"--(
+        {
+            istringstream input(R"--(
 # сначала поработаем с одномерным массивом
 x = 2
 arr_1d = array(5)
@@ -252,13 +254,14 @@ print arr_1d.get(3), arr_1d.get(5), arr_1d.back()
 print arr_1d.get(2), arr_1d.get(2) * 2, arr_1d.get(2) * 3
 # ну а тут будет получено такое : 1 2 3
 )--");
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "arr_1d: 1 7\nstr 6 rts\n1 2 3\n"s);
-    }
 
-    {
-        istringstream input(R"--(
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "arr_1d: 1 7\nstr 6 rts\n1 2 3\n"s);
+        }
+    
+        {
+            istringstream input(R"--(
 # далее некоторые эксперименты с многомерным (двумерным) массивом
 x = 3
 y = 2
@@ -275,16 +278,17 @@ print arr_2d.get(x, y), arr_2d.get(2, 3)
 print arr_2d.get(2, 1), arr_2d.get(2, 1) * 2, arr_2d.get(2, 1) * 3
 # ну а тут будет получено такое : 21 42 63
 )--");
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "arr_2d: 2\n6 7\nSTR RTS\n21 42 63\n"s);
-    }
-}
 
-void TestMaps()
-{
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "arr_2d: 2\n6 7\nSTR RTS\n21 42 63\n"s);
+        }
+    }
+    
+    void TestMaps()
     {
-        istringstream input(R"--(
+        {
+            istringstream input(R"--(
 map_var = map()
 keyb = "ququ"
 map_var.insert(keyb, 32)
@@ -296,13 +300,14 @@ if not map_var.contains(keyb):
 else:
   print "Error"
 )--");
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "32\nOK\n"s);
-    }
 
-    {
-        istringstream input(R"--(
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "32\nOK\n"s);
+        }
+    
+        {
+            istringstream input(R"--(
 map_var = map()
 i = 0
 while i < 10:        
@@ -315,15 +320,16 @@ while not map_var.is_iterator_end(map_iter):
   map_var.next(map_iter)
 map_var.release()
 )--");
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        ASSERT_EQUAL(ostr.str(), "0 0\n1 2\n2 4\n3 6\n4 8\n5 10\n6 12\n7 14\n8 16\n9 18\n"s);
-    }
-}
 
-void TestIndirectAssignment()
-{
-    istringstream input(R"--(
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "0 0\n1 2\n2 4\n3 6\n4 8\n5 10\n6 12\n7 14\n8 16\n9 18\n"s);
+        }
+    }
+    
+    void TestIndirectAssignment()
+    {
+        istringstream input(R"--(
 class Rect:
   def __init__(w, h):
     self.w = w
@@ -350,33 +356,67 @@ x_rect.get_h_ptr() = 200
 print x_rect.w, x_rect.h # Эта команда выведет: 100 200
 )--");
 
-    ostringstream ostr;
-    RunMythonProgram(input, ostr);
-    ASSERT_EQUAL(ostr.str(), "10 20\n10 20\n10 20\n100 200\n"s);
-}
+        ostringstream ostr;
+        RunMythonProgram(input, ostr);
+        ASSERT_EQUAL(ostr.str(), "10 20\n10 20\n10 20\n100 200\n"s);
+    }
+    
+    void TestFloatPointEvaluation()
+    {
+        {
+            istringstream input(R"--(
+x = 3.1415925
+print 2 * x, 2.5 * x
+y = 4
+print x * y
+z = 6.2
+print x * z + 6, z * 2 - x * 3 - 6
+)--");
 
-void TestAll()
-{
-    cout << "Запуск тестов"s << endl;
-    TestRunner tr;
-    parse::RunOpenLexerTests(tr);
-    runtime::RunObjectHolderTests(tr);
-    runtime::RunObjectsTests(tr);
-    ast::RunUnitTests(tr);
-    TestParseProgram(tr);
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "6.28318 7.85398\n12.5664\n25.4779 -3.02478\n"s);
+        }
+    
+        {
+            istringstream input(R"--(
+import "ququ", "mumu"
+x = 3.1415925 / 2
+m = math()
+cos0 = m.cos(x)
+print m.sin(x), cos0, m.round(cos0 + 2)
+print m.sin(x / 2), m.cos(x / 4)
+print m.atan(1), m.atan2(1, 1)
+)--");
 
-    RUN_TEST(tr, TestSimplePrints);
-    RUN_TEST(tr, TestAssignments);
-    RUN_TEST(tr, TestArithmetics);
-    RUN_TEST(tr, TestVariablesArePointers);
-    RUN_TEST(tr, TestSelfInConstructor);
-    RUN_TEST(tr, TestExternalObject);
-    RUN_TEST(tr, TestWhileLoop);
-    RUN_TEST(tr, TestIndirectAssignment);
-    RUN_TEST(tr, TestArrays);
-    RUN_TEST(tr, TestMaps);
-}
-
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "1 7.67949e-08 2\n0.707107 0.92388\n0.785398 0.785398\n"s);
+        }
+    }
+    
+    void TestAll()
+    {
+        cout << "Запуск тестов"s << endl;
+        TestRunner tr;
+        parse::RunOpenLexerTests(tr);
+        runtime::RunObjectHolderTests(tr);
+        runtime::RunObjectsTests(tr);
+        ast::RunUnitTests(tr);
+        TestParseProgram(tr);
+    
+        RUN_TEST(tr, TestSimplePrints);
+        RUN_TEST(tr, TestAssignments);
+        RUN_TEST(tr, TestArithmetics);
+        RUN_TEST(tr, TestVariablesArePointers);
+        RUN_TEST(tr, TestSelfInConstructor);
+        RUN_TEST(tr, TestExternalObject);
+        RUN_TEST(tr, TestWhileLoop);
+        RUN_TEST(tr, TestIndirectAssignment);
+        RUN_TEST(tr, TestArrays);
+        RUN_TEST(tr, TestMaps);
+        RUN_TEST(tr, TestFloatPointEvaluation);
+    }
 }  // namespace
 
 int main()
@@ -385,10 +425,12 @@ int main()
     {
         TestAll();
         RunMythonProgram(cin, cout);
+        string white_line; 
+        getline(cin, white_line);
     }
-    catch (const std::exception& e)
+    catch (const exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        cerr << e.what() << endl;
 		return 1;
     }
 

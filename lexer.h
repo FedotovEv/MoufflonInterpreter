@@ -12,13 +12,18 @@ namespace parse
 {
     namespace token_type
     {
-        struct Number
-        {  // Лексема «число»
+        struct NumberInt
+        {  // Лексема «целое число»
             int value;   // число
         };
 
+        struct NumberDouble
+        {  // Лексема «число с плавающей точкой»
+            double value;   // число
+        };
+
         struct Id
-        {             // Лексема «идентификатор»
+        {  // Лексема «идентификатор»
             std::string value;  // Имя идентификатора
         };
 
@@ -43,6 +48,7 @@ namespace parse
         struct Def {};       // Лексема «def»
         struct Newline {};   // Лексема «конец строки»
         struct Print {};     // Лексема «print»
+        struct Import {};    // Лексема «import»
         struct Indent {};    // Лексема «увеличение отступа», соответствует двум пробелам
         struct Dedent {};    // Лексема «уменьшение отступа»
         struct Eof {};       // Лексема «конец файла»
@@ -59,11 +65,11 @@ namespace parse
     }  // namespace token_type
 
     using TokenBase
-        = std::variant<token_type::Number, token_type::Id, token_type::Char,
+        = std::variant<token_type::NumberInt, token_type::NumberDouble, token_type::Id, token_type::Char,
                        token_type::String, token_type::Class,
                        token_type::Return, token_type::ReturnPtr, token_type::If, token_type::Else,
                        token_type::While, token_type::Break, token_type::Continue,
-                       token_type::Def, token_type::Newline, token_type::Print,
+                       token_type::Def, token_type::Newline, token_type::Print, token_type::Import,
                        token_type::Indent, token_type::Dedent, token_type::And, token_type::Or,
                        token_type::Not, token_type::Eq, token_type::NotEq, token_type::LessOrEq,
                        token_type::GreaterOrEq, token_type::None, token_type::True,

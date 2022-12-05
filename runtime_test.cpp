@@ -496,7 +496,7 @@ void TestClass() {
     ASSERT_EQUAL(passed_context, &ctx);
     ASSERT_EQUAL(passed_closure, &closure);
     const Number* returned_number = result.TryAs<Number>();
-    ASSERT(returned_number != nullptr && returned_number->GetValue() == 42);
+    ASSERT(returned_number != nullptr && *returned_number == 42);
 
     ostringstream out;
     cls.Print(out, ctx);

@@ -15,7 +15,7 @@ void TestSimpleAssignment() {
 
     ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Id{"x"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{42}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{42}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
@@ -44,11 +44,11 @@ void TestNumbers() {
     istringstream input("42 15 -53"s);
     Lexer lexer(input);
 
-    ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Number{42}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{15}));
+    ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::NumberInt{42}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{15}));
     // Отрицательные числа формируются на этапе синтаксического анализа
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'-'}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{53}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{53}));
 }
 
 void TestIds() {
@@ -156,18 +156,18 @@ x = 1
 
     ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Id{"x"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{1}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{1}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Indent{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"y"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{2}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{2}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     // Пустая строка, состоящая только из пробельных символов не меняет текущий отступ,
     // поэтому следующая лексема — это Id, а не Dedent
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"z"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{3}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{3}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Dedent{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
@@ -193,7 +193,7 @@ print str(p)
 
     ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Id{"x"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{4}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{4}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"y"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
@@ -256,9 +256,9 @@ print str(p)
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'='}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"Point"s}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'('}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{1}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{1}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{','}));
-    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{2}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{2}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{')'}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Print{}));
@@ -292,7 +292,7 @@ void TestExpectNext() {
     ASSERT_DOESNT_THROW(lex.ExpectNext<token_type::Id>());
     ASSERT_DOESNT_THROW(lex.ExpectNext<token_type::Char>('+'));
     ASSERT_THROWS(lex.ExpectNext<token_type::Newline>(), LexerError);
-    ASSERT_THROWS(lex.ExpectNext<token_type::Number>(57), LexerError);
+    ASSERT_THROWS(lex.ExpectNext<token_type::NumberInt>(57), LexerError);
 }
 
 void TestAlwaysEmitsNewlineAtTheEndOfNonemptyLine() {

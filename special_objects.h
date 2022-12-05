@@ -1,6 +1,6 @@
-#pragma once
+п»ї#pragma once
 
-//Итератор для словаря (ассоциативного массива)
+//РС‚РµСЂР°С‚РѕСЂ РґР»СЏ СЃР»РѕРІР°СЂСЏ (Р°СЃСЃРѕС†РёР°С‚РёРІРЅРѕРіРѕ РјР°СЃСЃРёРІР°)
 class MapInstance;
 class MapIterator : public Object
 {
@@ -25,86 +25,86 @@ private:
 };
 
 class ArrayInstance : public CommonClassInstance
-{ // Экземпляр массива - специального встроенного объекта с предопределенным набором методов.
+{ // Р­РєР·РµРјРїР»СЏСЂ РјР°СЃСЃРёРІР° - СЃРїРµС†РёР°Р»СЊРЅРѕРіРѕ РІСЃС‚СЂРѕРµРЅРЅРѕРіРѕ РѕР±СЉРµРєС‚Р° СЃ РїСЂРµРґРѕРїСЂРµРґРµР»РµРЅРЅС‹Рј РЅР°Р±РѕСЂРѕРј РјРµС‚РѕРґРѕРІ.
 public:
 
     using ArrayCallMethod = ObjectHolder(ArrayInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
-        Context&);
+                                                           Context&);
     ArrayInstance(std::vector<int> elements_count);
     void Print(std::ostream& os, Context& context) override;
     /*
-     * Вызывает у объекта-массива метод method, передавая ему actual_args параметров.
-     * Параметр context задаёт контекст для выполнения метода. Если метод method не относится к тем,
-     * которые поддерживает массив, метод выбрасывает исключение runtime_error.
-     * Набор методов, обеспечиваемых массивом, следующий:
-     * get(... индексы ...) -
-     *      - служит для считывания и установки значения элемента массива, определенного
-     *      набором координат-индексов. Все индексы базируются к нулю (минимальный
-     *      индекс элемента для каждой размерности равен 0).
-     * get_array_dimensions() - получение количества измерений массива.
+     * Р’С‹Р·С‹РІР°РµС‚ Сѓ РѕР±СЉРµРєС‚Р°-РјР°СЃСЃРёРІР° РјРµС‚РѕРґ method, РїРµСЂРµРґР°РІР°СЏ РµРјСѓ actual_args РїР°СЂР°РјРµС‚СЂРѕРІ.
+     * РџР°СЂР°РјРµС‚СЂ context Р·Р°РґР°С‘С‚ РєРѕРЅС‚РµРєСЃС‚ РґР»СЏ РІС‹РїРѕР»РЅРµРЅРёСЏ РјРµС‚РѕРґР°. Р•СЃР»Рё РјРµС‚РѕРґ method РЅРµ РѕС‚РЅРѕСЃРёС‚СЃСЏ Рє С‚РµРј,
+     * РєРѕС‚РѕСЂС‹Рµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ РјР°СЃСЃРёРІ, РјРµС‚РѕРґ РІС‹Р±СЂР°СЃС‹РІР°РµС‚ РёСЃРєР»СЋС‡РµРЅРёРµ runtime_error.
+     * РќР°Р±РѕСЂ РјРµС‚РѕРґРѕРІ, РѕР±РµСЃРїРµС‡РёРІР°РµРјС‹С… РјР°СЃСЃРёРІРѕРј, СЃР»РµРґСѓСЋС‰РёР№:
+     * get(... РёРЅРґРµРєСЃС‹ ...) -
+     *      - СЃР»СѓР¶РёС‚ РґР»СЏ СЃС‡РёС‚С‹РІР°РЅРёСЏ Рё СѓСЃС‚Р°РЅРѕРІРєРё Р·РЅР°С‡РµРЅРёСЏ СЌР»РµРјРµРЅС‚Р° РјР°СЃСЃРёРІР°, РѕРїСЂРµРґРµР»РµРЅРЅРѕРіРѕ
+     *      РЅР°Р±РѕСЂРѕРј РєРѕРѕСЂРґРёРЅР°С‚-РёРЅРґРµРєСЃРѕРІ. Р’СЃРµ РёРЅРґРµРєСЃС‹ Р±Р°Р·РёСЂСѓСЋС‚СЃСЏ Рє РЅСѓР»СЋ (РјРёРЅРёРјР°Р»СЊРЅС‹Р№
+     *      РёРЅРґРµРєСЃ СЌР»РµРјРµРЅС‚Р° РґР»СЏ РєР°Р¶РґРѕР№ СЂР°Р·РјРµСЂРЅРѕСЃС‚Рё СЂР°РІРµРЅ 0).
+     * get_array_dimensions() - РїРѕР»СѓС‡РµРЅРёРµ РєРѕР»РёС‡РµСЃС‚РІР° РёР·РјРµСЂРµРЅРёР№ РјР°СЃСЃРёРІР°.
      * get_dimension_count(dimension_number) -
-     *      - получение количества элементов для размерности dimension_number.
-     *      Номер размерности базируется к 1 (младший индекс и
-     *      соответствующая размерность имеют номер 1).
-     * resize(... количество элементов по размерностям ...) -
-     *      - пересоздание массива с иной размерностью и количеством элементов.
-     * Следующие методы определены только для одномерных массивов. Для многомерных массивов будет выброшено
-     * исключение runtime_error.
-     * push_back(new_element) - добавляет элемент new_element в конец массива.
-     * back() - позволяет считать или установить последний элемент массива.
-     * pop_back() - удаляет из массива последний элемент
+     *      - РїРѕР»СѓС‡РµРЅРёРµ РєРѕР»РёС‡РµСЃС‚РІР° СЌР»РµРјРµРЅС‚РѕРІ РґР»СЏ СЂР°Р·РјРµСЂРЅРѕСЃС‚Рё dimension_number.
+     *      РќРѕРјРµСЂ СЂР°Р·РјРµСЂРЅРѕСЃС‚Рё Р±Р°Р·РёСЂСѓРµС‚СЃСЏ Рє 1 (РјР»Р°РґС€РёР№ РёРЅРґРµРєСЃ Рё
+     *      СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰Р°СЏ СЂР°Р·РјРµСЂРЅРѕСЃС‚СЊ РёРјРµСЋС‚ РЅРѕРјРµСЂ 1).
+     * resize(... РєРѕР»РёС‡РµСЃС‚РІРѕ СЌР»РµРјРµРЅС‚РѕРІ РїРѕ СЂР°Р·РјРµСЂРЅРѕСЃС‚СЏРј ...) -
+     *      - РїРµСЂРµСЃРѕР·РґР°РЅРёРµ РјР°СЃСЃРёРІР° СЃ РёРЅРѕР№ СЂР°Р·РјРµСЂРЅРѕСЃС‚СЊСЋ Рё РєРѕР»РёС‡РµСЃС‚РІРѕРј СЌР»РµРјРµРЅС‚РѕРІ.
+     * РЎР»РµРґСѓСЋС‰РёРµ РјРµС‚РѕРґС‹ РѕРїСЂРµРґРµР»РµРЅС‹ С‚РѕР»СЊРєРѕ РґР»СЏ РѕРґРЅРѕРјРµСЂРЅС‹С… РјР°СЃСЃРёРІРѕРІ. Р”Р»СЏ РјРЅРѕРіРѕРјРµСЂРЅС‹С… РјР°СЃСЃРёРІРѕРІ Р±СѓРґРµС‚ РІС‹Р±СЂРѕС€РµРЅРѕ
+     * РёСЃРєР»СЋС‡РµРЅРёРµ runtime_error.
+     * push_back(new_element) - РґРѕР±Р°РІР»СЏРµС‚ СЌР»РµРјРµРЅС‚ new_element РІ РєРѕРЅРµС† РјР°СЃСЃРёРІР°.
+     * back() - РїРѕР·РІРѕР»СЏРµС‚ СЃС‡РёС‚Р°С‚СЊ РёР»Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РїРѕСЃР»РµРґРЅРёР№ СЌР»РµРјРµРЅС‚ РјР°СЃСЃРёРІР°.
+     * pop_back() - СѓРґР°Р»СЏРµС‚ РёР· РјР°СЃСЃРёРІР° РїРѕСЃР»РµРґРЅРёР№ СЌР»РµРјРµРЅС‚
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context) override;
+                      Context& context) override;
 
 private:
     static const std::unordered_map<std::string_view, ArrayCallMethod> array_method_table_;
 
-    // Обработчики методов класса "массив"
+    // РћР±СЂР°Р±РѕС‚С‡РёРєРё РјРµС‚РѕРґРѕРІ РєР»Р°СЃСЃР° "РјР°СЃСЃРёРІ"
     ObjectHolder MethodGet(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                           Context& context);
     ObjectHolder MethodGetArrayDimensions(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                          Context& context);
     ObjectHolder MethodGetDimensionCount(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                         Context& context);
     ObjectHolder MethodResize(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                              Context& context);
     ObjectHolder MethodPushBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                Context& context);
     ObjectHolder MethodBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                            Context& context);
     ObjectHolder MethodPopBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                               Context& context);
 
     std::vector<int> elements_count_;
     std::vector<ObjectHolder> data_storage_;
 };
 
 class MapInstance : public CommonClassInstance
-{ // Экземпляр ассоциативного массива (словаря) - специального встроенного объекта с предопределенным набором методов.
+{ // Р­РєР·РµРјРїР»СЏСЂ Р°СЃСЃРѕС†РёР°С‚РёРІРЅРѕРіРѕ РјР°СЃСЃРёРІР° (СЃР»РѕРІР°СЂСЏ) - СЃРїРµС†РёР°Р»СЊРЅРѕРіРѕ РІСЃС‚СЂРѕРµРЅРЅРѕРіРѕ РѕР±СЉРµРєС‚Р° СЃ РїСЂРµРґРѕРїСЂРµРґРµР»РµРЅРЅС‹Рј РЅР°Р±РѕСЂРѕРј РјРµС‚РѕРґРѕРІ.
 public:
 
     using MapCallMethod = ObjectHolder(MapInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
-        Context&);
+                                                       Context&);
     MapInstance() = default;
     void Print(std::ostream& os, Context& context) override;
     /*
-     * Вызывает у объекта-словаря метод method, передавая ему actual_args параметров.
-     * Параметр context задаёт контекст для выполнения метода. Если метод method не относится к тем,
-     * которые поддерживает словарь, метод выбрасывает исключение runtime_error.
-     * Набор методов, обеспечиваемых массивом, следующий:
-     * insert(key) - вставка в массив элемента с ключом key.
-     * find(key) - чтение или изменение уже существующего элемента с ключом key.
-     * erase(key) - удаление элемента с ключом key.
-     * contains(key) - проверка наличия элемента с ключом key.
-     * begin() - возврат "итератора", указывающего на первый элемент массива.
-     * next(iterator) - возвращает итератор, указывающий на элемент словаря, следующий после iterator.
-     * key(iterator) - возвращает ключ элемента, соответствующего iterator.
-     * value(iterator) - чтение или изменение элемента, на который указывает iterator.
-     * release() - сообщает об окончании процесса перечисления элементов словаря
+     * Р’С‹Р·С‹РІР°РµС‚ Сѓ РѕР±СЉРµРєС‚Р°-СЃР»РѕРІР°СЂСЏ РјРµС‚РѕРґ method, РїРµСЂРµРґР°РІР°СЏ РµРјСѓ actual_args РїР°СЂР°РјРµС‚СЂРѕРІ.
+     * РџР°СЂР°РјРµС‚СЂ context Р·Р°РґР°С‘С‚ РєРѕРЅС‚РµРєСЃС‚ РґР»СЏ РІС‹РїРѕР»РЅРµРЅРёСЏ РјРµС‚РѕРґР°. Р•СЃР»Рё РјРµС‚РѕРґ method РЅРµ РѕС‚РЅРѕСЃРёС‚СЃСЏ Рє С‚РµРј,
+     * РєРѕС‚РѕСЂС‹Рµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ СЃР»РѕРІР°СЂСЊ, РјРµС‚РѕРґ РІС‹Р±СЂР°СЃС‹РІР°РµС‚ РёСЃРєР»СЋС‡РµРЅРёРµ runtime_error.
+     * РќР°Р±РѕСЂ РјРµС‚РѕРґРѕРІ, РѕР±РµСЃРїРµС‡РёРІР°РµРјС‹С… РјР°СЃСЃРёРІРѕРј, СЃР»РµРґСѓСЋС‰РёР№:
+     * insert(key) - РІСЃС‚Р°РІРєР° РІ РјР°СЃСЃРёРІ СЌР»РµРјРµРЅС‚Р° СЃ РєР»СЋС‡РѕРј key.
+     * find(key) - С‡С‚РµРЅРёРµ РёР»Рё РёР·РјРµРЅРµРЅРёРµ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРіРѕ СЌР»РµРјРµРЅС‚Р° СЃ РєР»СЋС‡РѕРј key.
+     * erase(key) - СѓРґР°Р»РµРЅРёРµ СЌР»РµРјРµРЅС‚Р° СЃ РєР»СЋС‡РѕРј key.
+     * contains(key) - РїСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ СЌР»РµРјРµРЅС‚Р° СЃ РєР»СЋС‡РѕРј key.
+     * begin() - РІРѕР·РІСЂР°С‚ "РёС‚РµСЂР°С‚РѕСЂР°", СѓРєР°Р·С‹РІР°СЋС‰РµРіРѕ РЅР° РїРµСЂРІС‹Р№ СЌР»РµРјРµРЅС‚ РјР°СЃСЃРёРІР°.
+     * next(iterator) - РІРѕР·РІСЂР°С‰Р°РµС‚ РёС‚РµСЂР°С‚РѕСЂ, СѓРєР°Р·С‹РІР°СЋС‰РёР№ РЅР° СЌР»РµРјРµРЅС‚ СЃР»РѕРІР°СЂСЏ, СЃР»РµРґСѓСЋС‰РёР№ РїРѕСЃР»Рµ iterator.
+     * key(iterator) - РІРѕР·РІСЂР°С‰Р°РµС‚ РєР»СЋС‡ СЌР»РµРјРµРЅС‚Р°, СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРіРѕ iterator.
+     * value(iterator) - С‡С‚РµРЅРёРµ РёР»Рё РёР·РјРµРЅРµРЅРёРµ СЌР»РµРјРµРЅС‚Р°, РЅР° РєРѕС‚РѕСЂС‹Р№ СѓРєР°Р·С‹РІР°РµС‚ iterator.
+     * release() - СЃРѕРѕР±С‰Р°РµС‚ РѕР± РѕРєРѕРЅС‡Р°РЅРёРё РїСЂРѕС†РµСЃСЃР° РїРµСЂРµС‡РёСЃР»РµРЅРёСЏ СЌР»РµРјРµРЅС‚РѕРІ СЃР»РѕРІР°СЂСЏ
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context) override;
+                      Context& context) override;
     int AllocIteratorPackSerial()
     {
         if (!is_in_iterator_mode_)
@@ -127,31 +127,31 @@ public:
 private:
     static const std::unordered_map<std::string_view, MapCallMethod> map_method_table_;
 
-    // Обработчики методов класса "ассоциативный массив(словарь)"
+    // РћР±СЂР°Р±РѕС‚С‡РёРєРё РјРµС‚РѕРґРѕРІ РєР»Р°СЃСЃР° "Р°СЃСЃРѕС†РёР°С‚РёРІРЅС‹Р№ РјР°СЃСЃРёРІ(СЃР»РѕРІР°СЂСЊ)"
     ObjectHolder MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                              Context& context);
     ObjectHolder MethodFind(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                            Context& context);
     ObjectHolder MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                             Context& context);
     ObjectHolder MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                Context& context);
     ObjectHolder MethodBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                             Context& context);
     ObjectHolder MethodPrevious(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                Context& context);
     ObjectHolder MethodNext(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                            Context& context);
     ObjectHolder MethodKey(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                           Context& context);
     ObjectHolder MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                             Context& context);
     ObjectHolder MethodIsIteratorBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                       Context& context);
     ObjectHolder MethodIsIteratorEnd(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                                     Context& context);
     ObjectHolder MethodRelease(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-        Context& context);
+                               Context& context);
 
     std::map<std::string, ObjectHolder> map_storage_;
     bool is_in_iterator_mode_ = false;

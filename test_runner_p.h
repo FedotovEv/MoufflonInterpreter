@@ -59,23 +59,60 @@ std::ostream& operator<<(std::ostream& os, const std::map<K, V>& m) {
 }
 
 template <class K, class V>
-std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V>& m) {
+std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V>& m)
+{
     return TestRunnerPrivate::PrintMap(os, m);
 }
 
+inline std::ostream& operator<<(std::ostream& os, const runtime::NumberValue& m)
+{
+    if (std::holds_alternative<int>(m))
+        return os << std::get<int>(m);
+    else if (std::holds_alternative<double>(m))
+        return os << std::get<double>(m);
+    else
+        return os;
+}
+
+inline bool operator==(const runtime::NumberValue& lhs, const runtime::NumberValue& rhs)
+{
+    if (std::holds_alternative<int>(lhs) && std::holds_alternative<int>(rhs))
+    {
+        return std::get<int>(lhs) == std::get<int>(rhs);
+    }
+    else
+    {
+        double double_lhs = 0, double_rhs = 0;
+        if (std::holds_alternative<double>(lhs))
+            double_lhs = std::get<double>(lhs);
+        else if (std::holds_alternative<int>(lhs))
+            double_lhs = std::get<int>(lhs);
+
+        if (std::holds_alternative<double>(rhs))
+            double_rhs = std::get<double>(rhs);
+        else if (std::holds_alternative<int>(rhs))
+            double_rhs = std::get<int>(rhs);
+    
+        return double_lhs == double_rhs;
+    }
+}
+
 template <class T, class U>
-void AssertEqual(const T& t, const U& u, const std::string& hint = {}) {
-    if (!(t == u)) {
+void AssertEqual(const T& t, const U& u, const std::string& hint = {})
+{
+    if (!(t == u))
+    {
         std::ostringstream os;
         os << "Assertion failed: " << t << " != " << u;
-        if (!hint.empty()) {
+        if (!hint.empty())
             os << " hint: " << hint;
-        }
+
         throw std::runtime_error(os.str());
     }
 }
 
-inline void Assert(bool b, const std::string& hint) {
+inline void Assert(bool b, const std::string& hint)
+{
     AssertEqual(b, true, hint);
 }
 

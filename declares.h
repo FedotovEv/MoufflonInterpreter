@@ -5,8 +5,15 @@
 #include <functional>
 #include <variant>
 
+#ifdef MYTHLON_INTERPRETER_MODULE
+    #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllimport)
+#else
+    #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllexport)
+#endif
+
 namespace runtime
 {
+    using NumberValue = std::variant<int, double>;
     enum class LinkCallReason
     {
         CALL_REASON_UNKNOWN = 0,

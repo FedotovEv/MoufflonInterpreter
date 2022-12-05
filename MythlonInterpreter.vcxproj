@@ -22,6 +22,7 @@
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="lexer_test_open.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="math_object.cpp" />
     <ClCompile Include="parse.cpp" />
     <ClCompile Include="parse_test.cpp" />
     <ClCompile Include="runtime.cpp" />
@@ -34,9 +35,18 @@
   <ItemGroup>
     <ClInclude Include="declares.h" />
     <ClInclude Include="lexer.h" />
+    <ClInclude Include="math_object.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="math_object_statement.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="parse.h" />
     <ClInclude Include="runtime.h" />
     <ClInclude Include="special_objects.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="special_objects_statement.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="statement.h" />
