@@ -27,7 +27,8 @@ namespace
         int semi_colon_pos = filename.find_last_of(':');
         if (semi_colon_pos == string::npos)
             semi_colon_pos = -1;
-        int path_margin = max(rev_slash_pos, slash_pos, semi_colon_pos);
+        int path_margin = max(rev_slash_pos, slash_pos);
+        path_margin = max(path_margin, semi_colon_pos);
 
         int point_pos = filename.find_last_of('.');
         if (point_pos == string::npos || point_pos <= path_margin)
@@ -775,11 +776,14 @@ namespace
             LoadLibraryDefine lib_desc = parse_context.GetLoadLibraryDesc(library_filename);
             if (holds_alternative<monostate>(lib_desc))
                 return;
-            if (holds_alternative<InternalObjectCreator>(lib_desc))
+            if (holds_alternative<InternalObjectCreatorList>(lib_desc))
             { // Подсоединение втыкала, уже существующего в памяти.
                 if (library_alias.empty())
                     library_alias = library_filename;
-                internal_classes_[library_alias] = get<InternalObjectCreator>(lib_desc);
+
+                for (auto& internal_object_creator_pair : get<InternalObjectCreatorList>(lib_desc))
+                    internal_classes_[library_alias + "_"s + internal_object_creator_pair.first] =
+                        internal_object_creator_pair.second;
                 return;
             }
             // Далее будем пытыться загрузить втыкало из разделяемой библиотеки

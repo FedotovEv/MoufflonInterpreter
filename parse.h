@@ -29,14 +29,15 @@ struct ParseError : std::runtime_error
 // Если LoadLibraryDefine содержит string - втыкало загружается из разделяемой библиотеки, имя которой
 // совпадает с этой строкой. Это имя без дальнейшей обработки будет передано службе динамической загрузки
 // операционной системы (LoadLibraryW для виндовс или dlopen для линукса).
-// Если же LoadLibraryDefine содержит тип InternalObjectCreator - втыкало подключается, используя
-// "фабричный метод", указатель на который и есть значение LoadLibraryDefine.
+// Если же LoadLibraryDefine содержит тип InternalObjectCreatorList - втыкало подключается, используя
+// пары из имени класса и указателя на "фабричный метод", которые и содержатся в массиве LoadLibraryDefine.
 // В случае, когда LoadLibraryDefine содержит monostate, втыкало не загружается.
 
 using FuncInternalObjectCreator = std::unique_ptr<runtime::Executable>
-                        (std::vector<std::unique_ptr<runtime::Executable>>);
+                              (std::vector<std::unique_ptr<runtime::Executable>>);
 using InternalObjectCreator = std::function<FuncInternalObjectCreator>;
-using LoadLibraryDefine = std::variant<std::monostate, std::string, InternalObjectCreator>;
+using InternalObjectCreatorList = std::vector<std::pair<std::string, InternalObjectCreator>>;
+using LoadLibraryDefine = std::variant<std::monostate, std::string, InternalObjectCreatorList>;
 
 class ParseContext
 {
