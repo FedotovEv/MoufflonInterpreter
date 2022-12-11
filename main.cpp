@@ -380,7 +380,6 @@ print x * z + 6, z * 2 - x * 3 - 6
     
         {
             istringstream input(R"--(
-import "ququ", "mumu"
 x = 3.1415925 / 2
 m = math()
 cos0 = m.cos(x)
@@ -392,6 +391,42 @@ print m.atan(1), m.atan2(1, 1)
             ostringstream ostr;
             RunMythonProgram(input, ostr);
             ASSERT_EQUAL(ostr.str(), "1 7.67949e-08 2\n0.707107 0.92388\n0.785398 0.785398\n"s);
+        }
+    }
+    
+    void TestImportBinaryModule()
+    {
+        {
+            istringstream input(R"--(
+import "MythonTestPlugin"
+tst = MythonTestPlugin()
+print tst.print_hello()
+print tst.add_all(5, 6, 7, 8)
+print tst.add_all(5.5, 6.6, 7.7, 8.8)
+zp = tst.find_zero(5, 6, 0, 9, 10)
+zc = tst.find_char("ABCDabcd", "D")
+print zp, zc, tst.ston("56"), tst.ston("5.6")
+)--");
+
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "HelloHello\n26\n28.6\n2 3 56 5.6\n"s);
+        }
+
+        {
+            istringstream input(R"--(
+import "MythonTestPlugin", "plug"
+tst = plug_test()
+s = tst.print_hello()
+print tst.add_all(5, 6, 7.7, 8.8), s
+zp = tst.find_zero(5, 6, 9, 5, 0, 9, 10)
+zc = tst.find_char("ABCDabcd", "d")
+print zp, zc
+)--");
+
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "Hello27.5 Hello\n4 7\n"s);
         }
     }
     
@@ -416,6 +451,7 @@ print m.atan(1), m.atan2(1, 1)
         RUN_TEST(tr, TestArrays);
         RUN_TEST(tr, TestMaps);
         RUN_TEST(tr, TestFloatPointEvaluation);
+        RUN_TEST(tr, TestImportBinaryModule);
     }
 }  // namespace
 

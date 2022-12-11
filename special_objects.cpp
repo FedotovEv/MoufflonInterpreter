@@ -69,6 +69,8 @@ namespace runtime
         {"GetDimensionCount"sv, &ArrayInstance::MethodGetDimensionCount},
         {"resize"sv, &ArrayInstance::MethodResize},
         {"Resize"sv, &ArrayInstance::MethodResize},
+        {"clear"sv, &ArrayInstance::MethodClear},
+        {"Clear"sv, &ArrayInstance::MethodClear},
         {"push_back"sv, &ArrayInstance::MethodPushBack},
         {"PushBack"sv, &ArrayInstance::MethodPushBack},
         {"back"sv, &ArrayInstance::MethodBack},
@@ -87,6 +89,8 @@ namespace runtime
         {"Erase"sv, &MapInstance::MethodErase},
         {"contains"sv, &MapInstance::MethodContains},
         {"Contains"sv, &MapInstance::MethodContains},
+        {"clear"sv, &MapInstance::MethodClear},
+        {"Clear"sv, &MapInstance::MethodClear},
         {"begin"sv, &MapInstance::MethodBegin},
         {"Begin"sv, &MapInstance::MethodBegin},
         {"previous"sv, &MapInstance::MethodPrevious},
@@ -260,6 +264,25 @@ namespace runtime
         return ObjectHolder::None();
     }
 
+    ObjectHolder ArrayInstance::MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                            Context& context)
+    {
+        CheckMethodParams(context, "Clear"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+            
+        if (elements_count_.size() == 1)
+        {
+            data_storage_.clear();
+            elements_count_[0] = 0;
+        }
+        else
+        {
+            for (ObjectHolder& current_object : data_storage_)
+                current_object = ObjectHolder::None();
+        }        
+        return ObjectHolder::None();
+    }
+
     ObjectHolder ArrayInstance::MethodPushBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                                Context& context)
     {
@@ -282,6 +305,9 @@ namespace runtime
     ObjectHolder ArrayInstance::MethodBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                            Context& context)
     {
+        CheckMethodParams(context, "Back"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);    
+    
         if (elements_count_.size() == 1)
         {
             if (!data_storage_.empty())
@@ -298,6 +324,9 @@ namespace runtime
     ObjectHolder ArrayInstance::MethodPopBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                               Context& context)
     {
+        CheckMethodParams(context, "PopBack"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+
         if (elements_count_.size() == 1)
         {
             if (elements_count_[0])
@@ -487,6 +516,16 @@ namespace runtime
             MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
         return ObjectHolder::Own(Bool(map_storage_.count(GetStringKey(actual_args[0], context))));
+    }
+
+    ObjectHolder MapInstance::MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                          Context& context)
+    {
+        CheckMethodParams(context, "Clear"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+            
+        map_storage_.clear();
+        return ObjectHolder::None();            
     }
 
     ObjectHolder MapInstance::MethodBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,

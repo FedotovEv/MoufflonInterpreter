@@ -7,6 +7,15 @@ class MapIterator : public Object
 public:
     MapIterator(MapInstance& map_instance, std::map<std::string, ObjectHolder>& map_storage);
     void Print(std::ostream& os, Context& context) override;
+    const void* GetPtr() const
+    {
+        return nullptr;
+    }
+
+    size_t SizeOf() const
+    {
+        return 0;
+    }
     bool IsIteratorValid();
     ObjectHolder IteratorGetKey();
     ObjectHolder IteratorGetValue();
@@ -48,6 +57,8 @@ public:
      *      соответствующая размерность имеют номер 1).
      * resize(... количество элементов по размерностям ...) -
      *      - пересоздание массива с иной размерностью и количеством элементов.
+     * clear() - очистка массива. Для одномерных массивов размер сбрасывается в нуль (массив опустошается),
+     *         для многомерного массива все его элементы устанавливаются в None.
      * Следующие методы определены только для одномерных массивов. Для многомерных массивов будет выброшено
      * исключение runtime_error.
      * push_back(new_element) - добавляет элемент new_element в конец массива.
@@ -69,6 +80,8 @@ private:
                                          Context& context);
     ObjectHolder MethodResize(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                               Context& context);
+    ObjectHolder MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                             Context& context);
     ObjectHolder MethodPushBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                 Context& context);
     ObjectHolder MethodBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -97,6 +110,7 @@ public:
      * find(key) - чтение или изменение уже существующего элемента с ключом key.
      * erase(key) - удаление элемента с ключом key.
      * contains(key) - проверка наличия элемента с ключом key.
+     * clear() - очищает словарь, удаляя его содержимое.
      * begin() - возврат "итератора", указывающего на первый элемент массива.
      * next(iterator) - возвращает итератор, указывающий на элемент словаря, следующий после iterator.
      * key(iterator) - возвращает ключ элемента, соответствующего iterator.
@@ -136,6 +150,8 @@ private:
                              Context& context);
     ObjectHolder MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                 Context& context);
+    ObjectHolder MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                             Context& context);                                
     ObjectHolder MethodBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                              Context& context);
     ObjectHolder MethodPrevious(const std::string& method, const std::vector<ObjectHolder>& actual_args,

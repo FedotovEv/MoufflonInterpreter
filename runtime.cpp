@@ -293,6 +293,34 @@ namespace runtime
         os << "Class " << my_name_;
     }
 
+    const void* Number::GetPtr() const
+    {
+        if (std::holds_alternative<int>(value_))
+            return &std::get<int>(value_);
+        else if (std::holds_alternative<double>(value_))
+            return &std::get<double>(value_);
+        else
+            return nullptr;
+    }
+
+    size_t Number::SizeOf() const
+    {
+        if (std::holds_alternative<int>(value_))
+            return sizeof(int);
+        else if (std::holds_alternative<double>(value_))
+            return sizeof(double);
+        else
+            return 0;
+    }
+
+    void Number::Print(std::ostream& os, [[maybe_unused]] Context& context)
+    {
+        if (IsInt())
+            os << GetIntValue();
+        else if (IsDouble())
+            os << GetDoubleValue();
+    }
+
     void Bool::Print(std::ostream& os, [[maybe_unused]] Context& context)
     {
         os << (GetValue() ? "True"sv : "False"sv);

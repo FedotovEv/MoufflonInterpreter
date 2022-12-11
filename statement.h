@@ -32,7 +32,7 @@ namespace ast
 
     using Statement = runtime::Executable;
 
-    void PrepareExecute(Statement* exec_obj_ptr, runtime::Context& context);
+    void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(Statement* exec_obj_ptr, runtime::Context& context);
 
     // Выражение, возвращающее значение типа T,
     // используется как основа для создания констант

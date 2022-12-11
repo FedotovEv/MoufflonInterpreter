@@ -1,20 +1,48 @@
-﻿#include "parse.h"
-
+﻿
+#include "parse.h"
 #include "lexer.h"
 #include "statement.h"
 #include "throw_messages.h"
+
+#if defined (_WIN64) || defined(_WIN32)
+    #include <windows.h>
+#endif
 
 using namespace std;
 using runtime::ThrowMessageNumber;
 using runtime::ThrowMessages;
 
-namespace TokenType = parse::token_type;
+namespace ITokenType = parse::token_type;
 
 namespace
 {
+    pair<string, string> GetStemExt(const string& filename)
+    {
+        int rev_slash_pos = filename.find_last_of('\\');
+        if (rev_slash_pos == string::npos)
+            rev_slash_pos = -1;
+        int slash_pos = filename.find_last_of('/');
+        if (slash_pos == string::npos)
+            slash_pos = -1;
+        int semi_colon_pos = filename.find_last_of(':');
+        if (semi_colon_pos == string::npos)
+            semi_colon_pos = -1;
+        int path_margin = max(rev_slash_pos, slash_pos, semi_colon_pos);
+
+        int point_pos = filename.find_last_of('.');
+        if (point_pos == string::npos || point_pos <= path_margin)
+            point_pos = filename.size();
+
+        string stem = filename.substr(path_margin + 1, point_pos - path_margin - 1);
+        string ext;
+        if (point_pos < filename.size())
+            ext = filename.substr(point_pos);
+        return {stem, ext};
+    }
+
     bool operator==(const parse::Token& token, char c)
     {
-        const auto* p = token.TryAs<TokenType::Char>();
+        const auto* p = token.TryAs<ITokenType::Char>();
         return p != nullptr && p->value == c;
     }
 
@@ -22,6 +50,28 @@ namespace
     {
         return !(token == c);
     }
+
+    class TrivialParseContext : public ParseContext
+    {
+        LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const
+        {
+            #if defined (_WIN64) || defined(_WIN32)
+                string standart_lib_extension = ".dll"s;
+            #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+                string standart_lib_extension = ".so"s;
+            #else
+                string standart_lib_extension = ".dxe"s;
+            #endif
+
+            if (!library_name.size())
+                return {};
+
+            if (GetStemExt(library_name).second.size())
+                return library_name;
+            else
+                return library_name + standart_lib_extension;
+        }
+    };
 
     class StatementFactory
     {
@@ -63,10 +113,8 @@ namespace
     class Parser
     {
     public:
-        using InternalObjectCreator = function<unique_ptr<ast::Statement>
-                                (std::vector<std::unique_ptr<ast::Statement>> args)>;
-
-        explicit Parser(parse::Lexer& lexer) : lexer_(lexer), exec_factory_(lexer_)
+        explicit Parser(parse::Lexer& lexer, const ParseContext& parse_context = TrivialParseContext()) :
+            lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
         {
             internal_classes_["array"s] = ast::CreateArray;
             internal_classes_["map"s] = ast::CreateMap;
@@ -78,7 +126,7 @@ namespace
         unique_ptr<ast::Statement> ParseProgram()
         {
             auto result = exec_factory_.Create(ast::Compound());
-            while (!lexer_.CurrentToken().Is<TokenType::Eof>())
+            while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
             return result;
@@ -88,16 +136,16 @@ namespace
         // Suite -> NEWLINE INDENT (Statement)+ DEDENT
         unique_ptr<ast::Statement> ParseSuite()  // NOLINT
         {
-            lexer_.Expect<TokenType::Newline>();
-            lexer_.ExpectNext<TokenType::Indent>();
+            lexer_.Expect<ITokenType::Newline>();
+            lexer_.ExpectNext<ITokenType::Indent>();
 
             lexer_.NextToken();
 
             auto result = exec_factory_.Create(ast::Compound());
-            while (!lexer_.CurrentToken().Is<TokenType::Dedent>())
+            while (!lexer_.CurrentToken().Is<ITokenType::Dedent>())
                 result->AddStatement(ParseStatement());  // NOLINT
 
-            lexer_.Expect<TokenType::Dedent>();
+            lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
 
             return result;
@@ -108,22 +156,22 @@ namespace
         {
             vector<runtime::Method> result;
 
-            while (lexer_.CurrentToken().Is<TokenType::Def>())
+            while (lexer_.CurrentToken().Is<ITokenType::Def>())
             {
                 runtime::Method m;
 
-                m.name = lexer_.ExpectNext<TokenType::Id>().value;
-                lexer_.ExpectNext<TokenType::Char>('(');
+                m.name = lexer_.ExpectNext<ITokenType::Id>().value;
+                lexer_.ExpectNext<ITokenType::Char>('(');
 
-                if (lexer_.NextToken().Is<TokenType::Id>())
+                if (lexer_.NextToken().Is<ITokenType::Id>())
                 {
-                    m.formal_params.push_back(lexer_.Expect<TokenType::Id>().value);
+                    m.formal_params.push_back(lexer_.Expect<ITokenType::Id>().value);
                     while (lexer_.NextToken() == ',')
-                        m.formal_params.push_back(lexer_.ExpectNext<TokenType::Id>().value);
+                        m.formal_params.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
                 }
 
-                lexer_.Expect<TokenType::Char>(')');
-                lexer_.ExpectNext<TokenType::Char>(':');
+                lexer_.Expect<ITokenType::Char>(')');
+                lexer_.ExpectNext<ITokenType::Char>(':');
                 lexer_.NextToken();
 
                 m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()));  // NOLINT
@@ -136,15 +184,15 @@ namespace
         // ClassDefinition -> Id ['(' Id ')'] : new_line indent MethodList dedent
         unique_ptr<ast::Statement> ParseClassDefinition()  // NOLINT
         {
-            string class_name = lexer_.Expect<TokenType::Id>().value;
+            string class_name = lexer_.Expect<ITokenType::Id>().value;
 
             lexer_.NextToken();
 
             const runtime::Class* base_class = nullptr;
             if (lexer_.CurrentToken() == '(')
             {
-                auto name = lexer_.ExpectNext<TokenType::Id>().value;
-                lexer_.ExpectNext<TokenType::Char>(')');
+                auto name = lexer_.ExpectNext<ITokenType::Id>().value;
+                lexer_.ExpectNext<ITokenType::Char>(')');
                 lexer_.NextToken();
 
                 auto it = declared_classes_.find(name);
@@ -157,13 +205,13 @@ namespace
                 base_class = static_cast<const runtime::Class*>(it->second.Get());  // NOLINT
             }
 
-            lexer_.Expect<TokenType::Char>(':');
-            lexer_.ExpectNext<TokenType::Newline>();
-            lexer_.ExpectNext<TokenType::Indent>();
-            lexer_.ExpectNext<TokenType::Def>();
+            lexer_.Expect<ITokenType::Char>(':');
+            lexer_.ExpectNext<ITokenType::Newline>();
+            lexer_.ExpectNext<ITokenType::Indent>();
+            lexer_.ExpectNext<ITokenType::Def>();
             vector<runtime::Method> methods = ParseMethods();  // NOLINT
 
-            lexer_.Expect<TokenType::Dedent>();
+            lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
 
             auto [it, inserted] = declared_classes_.insert({
@@ -181,10 +229,10 @@ namespace
 
         vector<string> ParseDottedIds()
         {
-            vector<string> result(1, lexer_.Expect<TokenType::Id>().value);
+            vector<string> result(1, lexer_.Expect<ITokenType::Id>().value);
 
             while (lexer_.NextToken() == '.')
-                result.push_back(lexer_.ExpectNext<TokenType::Id>().value);
+                result.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
 
             return result;
         }
@@ -194,7 +242,7 @@ namespace
         //               | DottedIds '(' ExprList ')' = Expr
         unique_ptr<ast::Statement> ParseAssignmentOrCall()
         {
-            lexer_.Expect<TokenType::Id>();
+            lexer_.Expect<ITokenType::Id>();
 
             vector<string> id_list = ParseDottedIds();
             string last_name = id_list.back();
@@ -209,7 +257,7 @@ namespace
                 return exec_factory_.Create(ast::FieldAssignment(ast::VariableValue{std::move(id_list)},
                                                                  std::move(last_name), ParseTest()));
             }
-            lexer_.Expect<TokenType::Char>('(');
+            lexer_.Expect<ITokenType::Char>('(');
             lexer_.NextToken();
 
             if (id_list.empty())
@@ -220,7 +268,7 @@ namespace
             if (lexer_.CurrentToken() != ')')
                 args = ParseTestList();
 
-            lexer_.Expect<TokenType::Char>(')');
+            lexer_.Expect<ITokenType::Char>(')');
             lexer_.NextToken();
 
             // Далее разбираются два варианта - вызов метода либо косвенное присваивание
@@ -245,7 +293,7 @@ namespace
             unique_ptr<ast::Statement> result = ParseAdder();
             while (lexer_.CurrentToken() == '+' || lexer_.CurrentToken() == '-')
             {
-                char op = lexer_.CurrentToken().As<TokenType::Char>().value;
+                char op = lexer_.CurrentToken().As<ITokenType::Char>().value;
                 lexer_.NextToken();
 
                 if (op == '+')
@@ -263,7 +311,7 @@ namespace
             while (lexer_.CurrentToken() == '*' || lexer_.CurrentToken() == '/' ||
                    lexer_.CurrentToken() == '%')
             {
-                char op = lexer_.CurrentToken().As<TokenType::Char>().value;
+                char op = lexer_.CurrentToken().As<ITokenType::Char>().value;
                 lexer_.NextToken();
 
                 if (op == '*')
@@ -297,7 +345,7 @@ namespace
             {
                 lexer_.NextToken();
                 auto result = ParseTest();
-                lexer_.Expect<TokenType::Char>(')');
+                lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
                 return result;
             }
@@ -308,8 +356,8 @@ namespace
                 return exec_factory_.Create(ast::Mult(ParseMult(), exec_factory_.Create(ast::NumericConst(-1))));
             }
 
-            const auto* int_num_ptr = lexer_.CurrentToken().TryAs<TokenType::NumberInt>();
-            const auto* double_num_ptr = lexer_.CurrentToken().TryAs<TokenType::NumberDouble>();
+            const auto* int_num_ptr = lexer_.CurrentToken().TryAs<ITokenType::NumberInt>();
+            const auto* double_num_ptr = lexer_.CurrentToken().TryAs<ITokenType::NumberDouble>();
             if (int_num_ptr || double_num_ptr)
             {
                 if (int_num_ptr)
@@ -326,26 +374,26 @@ namespace
                 }
             }
 
-            if (const auto* str = lexer_.CurrentToken().TryAs<TokenType::String>())
+            if (const auto* str = lexer_.CurrentToken().TryAs<ITokenType::String>())
             {
                 string result = str->value;
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::StringConst(std::move(result)));
             }
 
-            if (lexer_.CurrentToken().Is<TokenType::True>())
+            if (lexer_.CurrentToken().Is<ITokenType::True>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::BoolConst(runtime::Bool(true)));
             }
 
-            if (lexer_.CurrentToken().Is<TokenType::False>())
+            if (lexer_.CurrentToken().Is<ITokenType::False>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::BoolConst(runtime::Bool(false)));
             }
 
-            if (lexer_.CurrentToken().Is<TokenType::None>())
+            if (lexer_.CurrentToken().Is<ITokenType::None>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::None());
@@ -365,7 +413,7 @@ namespace
                 if (lexer_.NextToken() != ')')
                     args = ParseTestList();
 
-                lexer_.Expect<TokenType::Char>(')');
+                lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
                 auto method_name = names.back();
@@ -427,20 +475,20 @@ namespace
         // Condition -> if LogicalExpr: Suite [else: Suite]
         unique_ptr<ast::Statement> ParseCondition()  // NOLINT
         {
-            lexer_.Expect<TokenType::If>();
+            lexer_.Expect<ITokenType::If>();
             lexer_.NextToken();
 
             auto condition = ParseTest();
 
-            lexer_.Expect<TokenType::Char>(':');
+            lexer_.Expect<ITokenType::Char>(':');
             lexer_.NextToken();
 
             auto if_body = ParseSuite();
 
             unique_ptr<ast::Statement> else_body;
-            if (lexer_.CurrentToken().Is<TokenType::Else>())
+            if (lexer_.CurrentToken().Is<ITokenType::Else>())
             {
-                lexer_.ExpectNext<TokenType::Char>(':');
+                lexer_.ExpectNext<ITokenType::Char>(':');
                 lexer_.NextToken();
                 else_body = ParseSuite();
             }
@@ -452,12 +500,12 @@ namespace
         // Condition -> while LogicalExpr: Suite
         unique_ptr<ast::Statement> ParseWhileCondition()  // NOLINT
         {
-            lexer_.Expect<TokenType::While>();
+            lexer_.Expect<ITokenType::While>();
             lexer_.NextToken();
 
             auto condition = ParseTest();
 
-            lexer_.Expect<TokenType::Char>(':');
+            lexer_.Expect<ITokenType::Char>(':');
             lexer_.NextToken();
 
             auto while_body = ParseSuite();
@@ -472,7 +520,7 @@ namespace
         unique_ptr<ast::Statement> ParseTest()  // NOLINT
         {
             auto result = ParseAndTest();
-            while (lexer_.CurrentToken().Is<TokenType::Or>())
+            while (lexer_.CurrentToken().Is<ITokenType::Or>())
             {
                 lexer_.NextToken();
                 result = exec_factory_.Create(ast::Or(std::move(result), ParseAndTest()));
@@ -483,7 +531,7 @@ namespace
         unique_ptr<ast::Statement> ParseAndTest()  // NOLINT
         {
             auto result = ParseNotTest();
-            while (lexer_.CurrentToken().Is<TokenType::And>())
+            while (lexer_.CurrentToken().Is<ITokenType::And>())
             {
                 lexer_.NextToken();
                 result = exec_factory_.Create(ast::And(std::move(result), ParseNotTest()));
@@ -493,7 +541,7 @@ namespace
 
         unique_ptr<ast::Statement> ParseNotTest()  // NOLINT
         {
-            if (lexer_.CurrentToken().Is<TokenType::Not>())
+            if (lexer_.CurrentToken().Is<ITokenType::Not>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Not(ParseNotTest()));  // NOLINT
@@ -520,25 +568,25 @@ namespace
                 return exec_factory_.Create(ast::Comparison(runtime::Greater, std::move(result),
                                                     ParseExpression()));
             }
-            if (tok.Is<TokenType::Eq>())
+            if (tok.Is<ITokenType::Eq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::Equal, std::move(result),
                                                     ParseExpression()));
             }
-            if (tok.Is<TokenType::NotEq>())
+            if (tok.Is<ITokenType::NotEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::NotEqual, std::move(result),
                                                     ParseExpression()));
             }
-            if (tok.Is<TokenType::LessOrEq>())
+            if (tok.Is<ITokenType::LessOrEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::LessOrEqual, std::move(result),
                                                     ParseExpression()));
             }
-            if (tok.Is<TokenType::GreaterOrEq>())
+            if (tok.Is<ITokenType::GreaterOrEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::GreaterOrEqual, std::move(result),
@@ -557,28 +605,30 @@ namespace
             {
                 const auto& tok = lexer_.CurrentToken();
 
-                if (tok.Is<TokenType::Class>())
+                if (tok.Is<ITokenType::Class>())
                 {
                     lexer_.NextToken();
                     return ParseClassDefinition();  // NOLINT
                 }
-                else if (tok.Is<TokenType::If>())
+                else if (tok.Is<ITokenType::If>())
                 {
                     return ParseCondition();
                 }
-                else if (tok.Is<TokenType::While>())
+                else if (tok.Is<ITokenType::While>())
                 {
                     return ParseWhileCondition();
                 }
 
                 auto result = ParseSimpleStatement();
-                lexer_.Expect<TokenType::Newline>();
+                lexer_.Expect<ITokenType::Newline>();
                 lexer_.NextToken();
                 if (result.has_value())
                     return move(result.value());
             }
         }
 
+        // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
+        // обрабатываются директивы времени трансляции (например, import).
         // StatementBody -> return Expression
         //               | print ExpressionList
         //               | break
@@ -588,23 +638,23 @@ namespace
         {
             const auto& tok = lexer_.CurrentToken();
 
-            if (tok.Is<TokenType::Import>())
+            if (tok.Is<ITokenType::Import>())
             {
                 lexer_.NextToken();
                 vector<parse::Token> args;
-                if (!lexer_.CurrentToken().Is<TokenType::Newline>())
+                if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
                     args = ParseTokenList();
-                ProcessImportLibrary(move(args));
+                ProcessImportLibrary(move(args), parse_context_);
                 return nullopt;
             }
 
-            if (tok.Is<TokenType::Return>())
+            if (tok.Is<ITokenType::Return>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Return(ParseTest()));
             }
 
-            if (tok.Is<TokenType::ReturnPtr>())
+            if (tok.Is<ITokenType::ReturnPtr>())
             {
                 lexer_.NextToken();
                 auto test_result = ParseTest();
@@ -623,25 +673,25 @@ namespace
                 }
             }
 
-            if (tok.Is<TokenType::Print>())
+            if (tok.Is<ITokenType::Print>())
             {
                 lexer_.NextToken();
                 vector<unique_ptr<ast::Statement>> args;
-                if (!lexer_.CurrentToken().Is<TokenType::Newline>())
+                if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
                     args = ParseTestList();
 
                 return exec_factory_.Create(ast::Print(std::move(args)));
             }
 
 
-            if (tok.Is<TokenType::Break>())
+            if (tok.Is<ITokenType::Break>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Break());
             }        
         
 
-            if (tok.Is<TokenType::Continue>())
+            if (tok.Is<ITokenType::Continue>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Continue());
@@ -650,20 +700,92 @@ namespace
             return ParseAssignmentOrCall();
         }
 
-        void ProcessImportLibrary(vector<parse::Token> args)
+        using PluginListType = vector<pair<string, string>>;
+        using FuncGetPluginList = PluginListType*();
+        static constexpr char LOAD_PLUGIN_LIST_NAME[] = "LoadPluginList";
+        // Пробуем загружать втыкало из разделяемой библиотеки.
+        #if defined (_WIN64) || defined(_WIN32)
+            // Загрузка .DLL для винды
+            void LoadImportLibrary(const string& library_filename, const string& library_alias)
+            {
+                #define WCHAR_FILENAME_SIZE 2048
+                wchar_t wchar_buffer[WCHAR_FILENAME_SIZE];
+                if (mbstowcs(wchar_buffer, library_filename.c_str(), WCHAR_FILENAME_SIZE - 1) ==
+                    static_cast<size_t>(-1))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME);
+
+                HMODULE hAddonDll = LoadLibraryW(wchar_buffer);
+                if (!hAddonDll || hAddonDll == INVALID_HANDLE_VALUE)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
+
+                FuncGetPluginList* load_plugin_list_proc = reinterpret_cast<FuncGetPluginList*>
+                                                           (GetProcAddress(hAddonDll, LOAD_PLUGIN_LIST_NAME));
+                if (!load_plugin_list_proc)
+                {
+                    FreeLibrary(hAddonDll);
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
+                }
+
+                for (const auto& current_plugin_pair : *load_plugin_list_proc())
+                {
+                    FuncInternalObjectCreator* create_plugin_proc = reinterpret_cast<FuncInternalObjectCreator*>
+                                                    (GetProcAddress(hAddonDll, current_plugin_pair.first.c_str()));
+                    if (!create_plugin_proc)
+                    {
+                        FreeLibrary(hAddonDll);
+                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND);
+                    }
+                    internal_classes_[library_alias + "_"s + current_plugin_pair.second] = create_plugin_proc;
+                    // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса
+                    if (!internal_classes_.count(library_alias))
+                        internal_classes_[library_alias] = create_plugin_proc;
+                }
+
+                return;
+            }
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            // Здесь реализована загрузка .SO линукса/юникса
+            void LoadImportLibrary(const string& library_filename, const string& library_alias)
+            {
+                return;
+            }
+        #else
+            // Какие-то другие, неподдерживаемые варианты платформ
+            void LoadImportLibrary(const string& library_filename, const string& library_alias)
+            {
+                return;
+            }
+        #endif
+
+        void ProcessImportLibrary(vector<parse::Token> args, const ParseContext& parse_context)
         {
             string library_filename, library_alias;
             if (args.size() != 1 && args.size() != 2)
                 exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
             for (parse::Token& current_token : args)
             {
-                if (!current_token.Is<TokenType::String>())
+                if (!current_token.Is<ITokenType::String>())
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
             }
 
-            library_filename = args[0].As<TokenType::String>().value;
+            library_filename = args[0].As<ITokenType::String>().value;
             if (args.size() == 2)
-                library_alias = args[1].As<TokenType::String>().value;
+                library_alias = args[1].As<ITokenType::String>().value;
+            // Пробуем загружить разделяемую библиотеку по имени library_filename.
+            LoadLibraryDefine lib_desc = parse_context.GetLoadLibraryDesc(library_filename);
+            if (holds_alternative<monostate>(lib_desc))
+                return;
+            if (holds_alternative<InternalObjectCreator>(lib_desc))
+            { // Подсоединение втыкала, уже существующего в памяти.
+                if (library_alias.empty())
+                    library_alias = library_filename;
+                internal_classes_[library_alias] = get<InternalObjectCreator>(lib_desc);
+                return;
+            }
+            // Далее будем пытыться загрузить втыкало из разделяемой библиотеки
+            if (library_alias.empty())
+                library_alias = GetStemExt(library_filename).first;
+            LoadImportLibrary(get<string>(lib_desc), library_alias);
         }
 
         vector<parse::Token> ParseTokenList()
@@ -674,7 +796,7 @@ namespace
             while (true)
             {
                 current_token = lexer_.CurrentToken();
-                if (current_token.Is<TokenType::Newline>())
+                if (current_token.Is<ITokenType::Newline>())
                 {
                     result.push_back(previous_token);
                     break;
@@ -686,12 +808,12 @@ namespace
                 }
                 else
                 {
-                    if (previous_token.Is<TokenType::None>() &&
-                        (current_token.Is<TokenType::NumberInt>() ||
-                            current_token.Is<TokenType::NumberDouble>() ||
-                            current_token.Is<TokenType::String>() ||
-                            current_token.Is<TokenType::True>() ||
-                            current_token.Is<TokenType::False>()))
+                    if (previous_token.Is<ITokenType::None>() &&
+                        (current_token.Is<ITokenType::NumberInt>() ||
+                            current_token.Is<ITokenType::NumberDouble>() ||
+                            current_token.Is<ITokenType::String>() ||
+                            current_token.Is<ITokenType::True>() ||
+                            current_token.Is<ITokenType::False>()))
                         previous_token = current_token;
                     else
                         exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
@@ -706,6 +828,7 @@ namespace
         StatementFactory exec_factory_;
         runtime::Closure declared_classes_;
         unordered_map<string, InternalObjectCreator> internal_classes_;
+        const ParseContext& parse_context_;
     }; // class Parser
 }  // namespace
 

@@ -110,9 +110,9 @@ namespace ast
                     variant<int, string> external_result = context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_READ_FIELD,
                                                                                         id_name, {});
                     if (holds_alternative<int>(external_result))
-                        return runtime::ObjectHolder::Own(runtime::ValueObject(get<int>(external_result)));
+                        return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
                     else if (holds_alternative<string>(external_result))
-                        return runtime::ObjectHolder::Own(runtime::ValueObject(get<string>(external_result)));
+                        return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
                 }
                 else
                 {
@@ -206,9 +206,9 @@ namespace ast
                 variant<int, string> external_result = context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_CALL_METHOD,
                     method_, real_args_str);
                 if (holds_alternative<int>(external_result))
-                    return runtime::ObjectHolder::Own(runtime::ValueObject(get<int>(external_result)));
+                    return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
                 else if (holds_alternative<string>(external_result))
-                    return runtime::ObjectHolder::Own(runtime::ValueObject(get<string>(external_result)));
+                    return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
             }
             else
             {

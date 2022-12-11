@@ -52,6 +52,10 @@ namespace runtime
         {ThrowMessageNumber::THRM_IN_METHOD, "В методе "s},
         {ThrowMessageNumber::THRM_ITERATOR_INVALID, " итератор недействителен"s},
         {ThrowMessageNumber::THRM_MATH_CTOR_HAS_NO_PARAMS, "Конструктор math не должен иметь аргументов"s},
-        {ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST, "Ошибка в параметрах команды"s}
+        {ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST, "Ошибка в параметрах команды"s},
+        {ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME, "Недопустимое имя импортируемой библиотеки"s},
+        {ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED, "Ошибка при загрузке разделяемой библиотеки"s},
+        {ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND, "Не найдена функция создания объекта"s},
+        {ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND, "Не найдена функция загрузки списка объектов"s}
     };
 } // namespace runtime

@@ -5,10 +5,14 @@
 #include <functional>
 #include <variant>
 
-#ifdef MYTHLON_INTERPRETER_MODULE
-    #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllimport)
+#if defined (_WIN64) || defined(_WIN32)
+    #ifdef MYTHLON_INTERPRETER_MODULE
+        #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllimport)
+    #else
+        #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllexport)
+    #endif
 #else
-    #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllexport)
+    #define MYTHLON_INTERPRETER_PUBLIC
 #endif
 
 namespace runtime

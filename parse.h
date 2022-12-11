@@ -22,25 +22,26 @@ struct ParseError : std::runtime_error
     ParseError(runtime::ThrowMessageNumber throw_message_number);
 };
 
-enum class LoadLibraryType
-{
-    LOAD_LIBRARY_DONT_LOAD = 0,
-    LOAD_LIBRARY_FROM_DLL_FILE,
-    LOAD_LIBRARY_BY_ADDRESS    
-};
+// Ќа данный момент поддерживаютс€ два способа загрузки внешних двоичных расширений ("втыкал") -
+// - из файла стандартной раздел€емой библиотеки (.DLL или .SO, в зависимости от операционной системы),
+// а также непосредственно из пам€ти, если весь нужный объектно-процедурный комплекс уже сформирован
+// внешней системой, котора€ подключила и использует этот интерпретатор.
+// ≈сли LoadLibraryDefine содержит string - втыкало загружаетс€ из раздел€емой библиотеки, им€ которой
+// совпадает с этой строкой. Ёто им€ без дальнейшей обработки будет передано службе динамической загрузки
+// операционной системы (LoadLibraryW дл€ виндовс или dlopen дл€ линукса).
+// ≈сли же LoadLibraryDefine содержит тип InternalObjectCreator - втыкало подключаетс€, использу€
+// "фабричный метод", указатель на который и есть значение LoadLibraryDefine.
+// ¬ случае, когда LoadLibraryDefine содержит monostate, втыкало не загружаетс€.
 
-struct LoadLibraryDescriptor
-{
-    using LoadLibraryCreateFunc = std::function<std::unique_ptr<runtime::Executable>
-                                       (std::vector<std::unique_ptr<runtime::Executable>>)>;
-    LoadLibraryType load_library_type;
-    LoadLibraryCreateFunc create_func;
-};
+using FuncInternalObjectCreator = std::unique_ptr<runtime::Executable>
+                        (std::vector<std::unique_ptr<runtime::Executable>>);
+using InternalObjectCreator = std::function<FuncInternalObjectCreator>;
+using LoadLibraryDefine = std::variant<std::monostate, std::string, InternalObjectCreator>;
 
 class ParseContext
 {
 public:
-    virtual LoadLibraryDescriptor GetLoadLibraryDesc(const std::string& library_name) = 0;
+    virtual LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const = 0;
 };
 
 std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer);

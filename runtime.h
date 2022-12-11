@@ -78,6 +78,8 @@ namespace runtime
     {
     public:
         virtual ~Object() = default;
+        virtual size_t SizeOf() const = 0;
+        virtual const void* GetPtr() const = 0;
         // выводит в os своё представление в виде строки
         virtual void Print(std::ostream& os, Context& context) = 0;
     };
@@ -151,6 +153,16 @@ namespace runtime
             return value_;
         }
 
+        const void* GetPtr() const
+        {
+            return &value_;
+        }
+        
+        size_t SizeOf() const
+        {
+            return sizeof(value_);
+        }
+
     private:
         T value_;
     };
@@ -174,6 +186,16 @@ namespace runtime
             return object_ptr_;
         }
 
+        const void* GetPtr() const
+        {
+            return reinterpret_cast<const void*>(&object_ptr_);
+        }
+
+        size_t SizeOf() const
+        {
+            return sizeof(object_ptr_);
+        }
+
     private:
         ObjectHolder* object_ptr_;
     };
@@ -186,7 +208,7 @@ namespace runtime
     bool IsTrue(const ObjectHolder& object);
 
     // Интерфейс для выполнения действий над объектами Mython
-    class Executable
+    class MYTHLON_INTERPRETER_PUBLIC Executable
     {
     public:
         Executable() = default;
@@ -209,7 +231,21 @@ namespace runtime
     };
 
     // Строковое значение
-    using String = ValueObject<std::string>;
+    class String : public ValueObject<std::string>
+    {
+    public:
+        using ValueObject<std::string>::ValueObject;
+
+        const void* GetPtr() const
+        {
+            return GetValue().data();
+        }
+
+        size_t SizeOf() const
+        {
+            return GetValue().size();
+        }
+    };
 
     // Далее описываются структуры, необходимые для работы с числовыми значениями
     class MYTHLON_INTERPRETER_PUBLIC Number : public Object
@@ -227,13 +263,7 @@ namespace runtime
         Number(const Number&) = default;
         Number(Number&&) = default;
 
-        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
-        {
-            if (IsInt())
-                os << GetIntValue();
-            else if (IsDouble())
-                os << GetDoubleValue();
-        }
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override;
 
         bool IsInt() const noexcept
         {
@@ -259,6 +289,9 @@ namespace runtime
         {
             return ImplGetValue<double>();
         }
+
+        const void* GetPtr() const;
+        size_t SizeOf() const;
 
     private:
         template <typename T>
@@ -319,18 +352,38 @@ namespace runtime
 
         // Выводит в os строку "Class <имя класса>", например "Class cat"
         void Print(std::ostream& os, Context& context) override;
+
+        const void* GetPtr() const
+        {
+            return nullptr;
+        }
+
+        size_t SizeOf() const
+        {
+            return 0;
+        }
+
     private:
         std::string my_name_;
         const Class& parent_;
         std::unordered_map<std::string, Method> virtual_method_table_;
     };
 
-    class CommonClassInstance : public Object
+    class MYTHLON_INTERPRETER_PUBLIC CommonClassInstance : public Object
     {
     public:
         void Print(std::ostream& os, Context& context) override = 0;
         virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                   Context& context) = 0;
+        const void* GetPtr() const
+        {
+            return nullptr;
+        }
+
+        size_t SizeOf() const
+        {
+            return 0;
+        }
     };
 
     // Экземпляр класса
@@ -438,7 +491,7 @@ namespace runtime
     // с внешним программным комплексом. в который встроен этот скриптовый язык.
     // Вдобавок поместим сюда ещё данные и методы, обеспечивающие поддержку отладки программ с
     // помощью внешнего отладчика.
-    class SimpleContext : public Context
+    class MYTHLON_INTERPRETER_PUBLIC SimpleContext : public Context
     {
     public:
         explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
@@ -477,10 +530,16 @@ namespace runtime
         std::vector<ProgramCommandDescriptor> breakpoints_;
     };
 
-    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const std::string& except_text);
-    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num);
-    [[noreturn]] void RethrowRuntimeError(runtime::Executable* exec_obj_ptr, std::runtime_error& orig_runtime_error);
-    [[noreturn]] void ThrowRuntimeError(Context& context, const std::string& except_text);
-    [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num);
-    [[noreturn]] void RethrowRuntimeError(Context& context, std::runtime_error& orig_runtime_error);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const std::string& except_text);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        RethrowRuntimeError(runtime::Executable* exec_obj_ptr, std::runtime_error& orig_runtime_error);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        ThrowRuntimeError(Context& context, const std::string& except_text);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num);
+    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
+        RethrowRuntimeError(Context& context, std::runtime_error& orig_runtime_error);
 }  // namespace runtime

@@ -8,7 +8,8 @@ using namespace std;
 namespace runtime {
 
 namespace {
-class Logger : public Object {
+class Logger : public Object
+{
 public:
     static int instance_count;
 
@@ -33,7 +34,8 @@ public:
     Logger& operator=(const Logger& /*rhs*/) = default;
     Logger& operator=(Logger&& /*rhs*/) = default;
 
-    [[nodiscard]] int GetId() const {
+    [[nodiscard]] int GetId() const
+    {
         return id_;
     }
 
@@ -42,8 +44,19 @@ public:
         --instance_count;
     }
 
-    void Print(ostream& os, [[maybe_unused]] Context& context) override {
+    void Print(ostream& os, [[maybe_unused]] Context& context) override
+    {
         os << id_;
+    }
+
+    const void* GetPtr() const
+    {
+        return nullptr;
+    }
+
+    size_t SizeOf() const
+    {
+        return 0;
     }
 
 private:
@@ -52,7 +65,8 @@ private:
 
 int Logger::instance_count = 0;
 
-void TestNumber() {
+void TestNumber()
+{
     Number num(127);
 
     DummyContext context;
@@ -62,7 +76,8 @@ void TestNumber() {
     ASSERT_EQUAL(num.GetValue(), 127);
 }
 
-void TestString() {
+void TestString()
+{
     String word("hello!"s);
 
     DummyContext context;
@@ -71,7 +86,8 @@ void TestString() {
     ASSERT_EQUAL(word.GetValue(), "hello!"s);
 }
 
-void TestBool() {
+void TestBool()
+{
     Bool t(true);
     ASSERT_EQUAL(t.GetValue(), true);
 
@@ -90,31 +106,34 @@ void TestBool() {
     ASSERT(context.output.str().empty());
 }
 
-struct TestMethodBody : Executable {
+struct TestMethodBody : Executable
+{
     using Fn = std::function<ObjectHolder(Closure& closure, Context& context)>;
     Fn body;
 
-    explicit TestMethodBody(Fn body)
-        : body(std::move(body)) {
-    }
+    explicit TestMethodBody(Fn body) : body(std::move(body))
+    {}
 
-    ObjectHolder Execute(Closure& closure, Context& context) override {
-        if (body) {
+    ObjectHolder Execute(Closure& closure, Context& context) override
+    {
+        if (body)
             return body(closure, context);
-        }
         return {};
     }
 };
 
-void TestMethodInvocation() {
+void TestMethodInvocation()
+{
     DummyContext context;
     Closure base_closure;
-    auto base_method_1 = [&base_closure, &context](Closure& closure, Context& ctx) {
+    auto base_method_1 = [&base_closure, &context](Closure& closure, Context& ctx)
+    {
         ASSERT_EQUAL(&context, &ctx);
         base_closure = closure;
         return ObjectHolder::Own(Number{123});
     };
-    auto base_method_2 = [&base_closure, &context](Closure& closure, Context& ctx) {
+    auto base_method_2 = [&base_closure, &context](Closure& closure, Context& ctx)
+    {
         ASSERT_EQUAL(&context, &ctx);
         base_closure = closure;
         return ObjectHolder::Own(Number{456});
@@ -180,7 +199,8 @@ void TestMethodInvocation() {
     ASSERT_THROWS(child_inst.Call("test"s, {ObjectHolder::None()}, context), runtime_error);
 }
 
-void TestNonowning() {
+void TestNonowning()
+{
     ASSERT_EQUAL(Logger::instance_count, 0);
     Logger logger(784);
     {
@@ -199,7 +219,8 @@ void TestNonowning() {
     ASSERT_EQUAL(context.output.str(), "784"sv);
 }
 
-void TestOwning() {
+void TestOwning()
+{
     ASSERT_EQUAL(Logger::instance_count, 0);
     {
         auto oh = ObjectHolder::Own(Logger());
@@ -218,7 +239,8 @@ void TestOwning() {
     ASSERT_EQUAL(context.output.str(), "312"sv);
 }
 
-void TestMove() {
+void TestMove()
+{
     {
         ASSERT_EQUAL(Logger::instance_count, 0);
         Logger logger;
@@ -242,13 +264,15 @@ void TestMove() {
     }
 }
 
-void TestNullptr() {
+void TestNullptr()
+{
     ObjectHolder oh;
     ASSERT(!oh);
     ASSERT(!oh.Get());
 }
 
-void TestIsTrue() {
+void TestIsTrue()
+{
     {
         ASSERT(!IsTrue(ObjectHolder::Own(Bool{false})));
         ASSERT(IsTrue(ObjectHolder::Own(Bool{true})));
@@ -282,7 +306,8 @@ void TestIsTrue() {
     }
 }
 
-void TestComparison() {
+void TestComparison()
+{
     auto test_equal = [](const ObjectHolder& lhs, const ObjectHolder& rhs, bool equality_result) {
         DummyContext ctx;
         ASSERT(Equal(lhs, rhs, ctx) == equality_result);
