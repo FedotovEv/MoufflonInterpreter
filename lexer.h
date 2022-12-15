@@ -49,6 +49,7 @@ namespace parse
         struct Newline {};   // Лексема «конец строки»
         struct Print {};     // Лексема «print»
         struct Import {};    // Лексема «import»
+        struct Include {};   // Лексема «include»
         struct Indent {};    // Лексема «увеличение отступа», соответствует двум пробелам
         struct Dedent {};    // Лексема «уменьшение отступа»
         struct Eof {};       // Лексема «конец файла»
@@ -69,7 +70,8 @@ namespace parse
                        token_type::String, token_type::Class,
                        token_type::Return, token_type::ReturnPtr, token_type::If, token_type::Else,
                        token_type::While, token_type::Break, token_type::Continue,
-                       token_type::Def, token_type::Newline, token_type::Print, token_type::Import,
+                       token_type::Def, token_type::Newline,
+                       token_type::Print, token_type::Import, token_type::Include,
                        token_type::Indent, token_type::Dedent, token_type::And, token_type::Or,
                        token_type::Not, token_type::Eq, token_type::NotEq, token_type::LessOrEq,
                        token_type::GreaterOrEq, token_type::None, token_type::True,
@@ -109,10 +111,67 @@ namespace parse
         using std::runtime_error::runtime_error;
     };
 
+    class LexerInputEx
+    {
+    public:
+        virtual ~LexerInputEx() = default;
+        virtual void IncludeSwitchTo(std::string include_arg) = 0;
+        virtual int get() = 0;
+        virtual int peek() = 0;
+        virtual LexerInputEx& unget() = 0;
+        virtual operator bool() = 0;
+        virtual bool operator!() = 0;
+        virtual bool good() = 0;
+    };
+    
+    class SimpleLexerInputEx : public LexerInputEx
+    {
+    public:
+        SimpleLexerInputEx(std::istream& input_stream): input_stream_(input_stream)
+        {}
+        void IncludeSwitchTo(std::string include_arg) override
+        {}
+        int get() override
+        {
+            return input_stream_.get();
+        }
+        
+        int peek() override
+        {
+            return input_stream_.peek();
+        }
+        
+        SimpleLexerInputEx& unget() override
+        {
+            input_stream_.unget();
+            return *this;
+        }
+                
+        bool good() override
+        {
+            return input_stream_.good();
+        }
+
+        operator bool() override
+        {
+            return bool(input_stream_);
+        }
+
+        bool operator!() override
+        {
+            return !input_stream_;
+        }
+
+    private:
+        std::istream& input_stream_;
+    };
+    
     class Lexer
     {
     public:
+        explicit Lexer(LexerInputEx& input);
         explicit Lexer(std::istream& input);
+        ~Lexer();
 
         // Возвращает ссылку на текущий токен или token_type::Eof, если поток токенов закончился
         [[nodiscard]] const Token& CurrentToken() const;
@@ -168,14 +227,20 @@ namespace parse
             return current_command_desc_;
         }
 
+        void IncludeSwitchTo(std::string include_arg)
+        {
+            input_.IncludeSwitchTo(include_arg);
+        }
+
     private:
 
         static constexpr int SPACES_PER_INDENT_STEP = 2;
 
-        std::istream& input_;
+        LexerInputEx& input_;
         int indent_amount_;
         int indent_sent_;
         Token current_token_;
         runtime::ProgramCommandDescriptor current_command_desc_;
+        bool is_input_need_delete_;
     };
 }  // namespace parse

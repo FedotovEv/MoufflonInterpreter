@@ -1,0 +1,5 @@
+print "now in include_2"
+include "Include21.muf"
+print "again in include_2"
+include "Include22.muf"
+print "finish in include_2"

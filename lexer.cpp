@@ -22,6 +22,7 @@ namespace parse
          {"def"s, token_type::Def{}},
          {"print"s, token_type::Print{}},
          {"import"s, token_type::Import{}},
+         {"include"s, token_type::Include{}},
          {"and"s, token_type::And{}},
          {"or"s, token_type::Or{}},
          {"not"s, token_type::Not{}},
@@ -54,7 +55,7 @@ namespace parse
         TOKEN_NUMBER_DOUBLE
     };
     
-    void SkipToEndLine(istream& input)
+    void SkipToEndLine(LexerInputEx& input)
     {
         while (input)
             if (input.get() == '\n')
@@ -64,7 +65,7 @@ namespace parse
             }
     }
     
-    string GetStringValue(istream& input)
+    string GetStringValue(LexerInputEx& input)
     {
         string result;
         char termin_symb = input.get();
@@ -85,6 +86,9 @@ namespace parse
                     char ch1 = input.get();
                     switch (ch1)
                     {
+                        case 'r':
+                            result += '\r';
+                            break;
                         case 'n':
                             result += '\n';
                             break;
@@ -111,7 +115,7 @@ namespace parse
         return result;
     }
 
-    string GetIdentString(istream& input)
+    string GetIdentString(LexerInputEx& input)
     {
         string result;
         while (input)
@@ -130,7 +134,7 @@ namespace parse
         return result;
     }
 
-    pair<string, TokenTypeId> GetNumberString(istream& input)
+    pair<string, TokenTypeId> GetNumberString(LexerInputEx& input)
     {
         string result_str;
         TokenTypeId result_token_id = TokenTypeId::TOKEN_NUMBER_INT;
@@ -181,7 +185,7 @@ namespace parse
         return {result_str, result_token_id};
     }
     
-    string GetChardSequence(istream& input)
+    string GetChardSequence(LexerInputEx& input)
     {
         string result;
         while (input)
@@ -205,7 +209,7 @@ namespace parse
         return result;
     }
 
-    int GoToTokenBegin(istream& input)
+    int GoToTokenBegin(LexerInputEx& input)
     {
         int space_counter = 0;
         while (input.good())
@@ -231,14 +235,25 @@ namespace parse
         return space_counter;
     }
     
-    pair<string, TokenTypeId> GetNextTokenPair(istream& input)
+    pair<string, TokenTypeId> GetNextTokenPair(LexerInputEx& input)
     {
         char ch = input.get(); // Первый символ лексемы
         if (!input)
             return {""s, TokenTypeId::TOKEN_EOF};
     
         if (ch == '\n')
+        {
+            if (input.peek() == '\r')
+                input.get();
             return {""s, TokenTypeId::TOKEN_NEWLINE};
+        }
+
+        if (ch == '\r')
+        {
+            if (input.peek() == '\n')
+                input.get();
+            return {""s, TokenTypeId::TOKEN_NEWLINE};
+        }
 
         input.unget();
 
@@ -327,12 +342,28 @@ namespace parse
         return os << "Unknown token :("sv;
     }
 
-    Lexer::Lexer(std::istream& input) : input_(input),
+    Lexer::Lexer(LexerInputEx& input) : input_(input),
                                         indent_amount_(0),
                                         indent_sent_(0),
                                         current_token_(token_type::Newline{})
     {
+        is_input_need_delete_ = false;
         NextToken();
+    }
+
+    Lexer::Lexer(istream& input) : input_(*new SimpleLexerInputEx(input)),
+                                   indent_amount_(0),
+                                   indent_sent_(0),
+                                   current_token_(token_type::Newline{})
+    {
+        is_input_need_delete_ = true;
+        NextToken();
+    }
+
+    Lexer::~Lexer()
+    {
+        if (is_input_need_delete_)
+            delete &input_;
     }
 
     const Token& Lexer::CurrentToken() const

@@ -2,6 +2,7 @@
 
 #include "declares.h"
 #include "runtime.h"
+#include "parse.h"
 
 #include <functional>
 
@@ -104,10 +105,12 @@ namespace ast
     };
 
     // Значение None
-    class None : public Statement {
+    class None : public Statement
+    {
     public:
         runtime::ObjectHolder Execute([[maybe_unused]] runtime::Closure& closure,
-                                      [[maybe_unused]] runtime::Context& context) override {
+                                      [[maybe_unused]] runtime::Context& context) override
+        {
             return {};
         }
     };
@@ -339,8 +342,7 @@ namespace ast
 
         // Последовательно выполняет добавленные инструкции. Возвращает None
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-    private:
-
+    protected:
         template <typename FirstArg, typename... Args>
         void PacketAddStatement(FirstArg&& first_arg, Args&& ... args)
         {
@@ -350,6 +352,47 @@ namespace ast
         }
 
         std::vector<std::unique_ptr<Statement>> comp_body_;
+    };
+
+    // Специальный корневой узел для хранения базового состава инструкций программы - списка
+    // инструкций начального (самого высокого) иерархического уровня. Этот узел, помимо обыкновенной
+    // сплотки инструкций comp_body_, содержит в себе также и некоторую дополнительную информацию о
+    // программе в целом. Такой узел всегда только один и находится в вершине (корне) синтаксического дерева.
+    class RootCompound : public Compound
+    {
+    public:
+        using Compound::Compound;
+
+        explicit RootCompound(RootCompound&& other) noexcept :
+            Compound(static_cast<Compound&&>(other))
+        {}
+
+        #if defined (_WIN64) || defined(_WIN32)
+            void AddDLLEntry(HMODULE hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            void AddDLLEntry(void* hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #endif
+
+        parse::GlobalResourceInfo GetGlobalResourceInfo() const
+        {
+            parse::GlobalResourceInfo result;
+            result.dll_list = dll_list_;
+            return result;
+        }
+
+    private:
+
+        #if defined (_WIN64) || defined(_WIN32)
+            std::vector<HMODULE> dll_list_;
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            std::vector<void*> dll_list_;
+        #endif
     };
 
     // Тело метода. Как правило, содержит составную инструкцию

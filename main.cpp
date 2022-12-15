@@ -30,18 +30,189 @@ namespace runtime
 
 void TestParseProgram(TestRunner& tr);
 
+class LexerInputExImpl : public parse::LexerInputEx
+{
+public:
+    struct StackType
+    {
+        string part_name;
+        int part_position;
+    };
+
+    LexerInputExImpl() = default;
+    LexerInputExImpl(initializer_list<pair<string, string>> part_list)
+    {
+        for (const auto& current_part_pair : part_list)
+        {
+            if (!include_map_.size())
+                current_part_name_ = current_part_pair.first;
+            include_map_[current_part_pair.first] = current_part_pair.second;
+        }
+
+        current_string_ptr_ = &include_map_[current_part_name_];
+        current_position_ = 0;
+    }
+
+    ~LexerInputExImpl() = default;
+    void AddIncludePart(const string& part_name, const string& part_body)
+    {
+        include_map_[part_name] = part_body;
+        if (include_map_.size() == 1)
+        {
+            current_part_name_ = part_name;
+            current_string_ptr_ = &include_map_[current_part_name_];
+            current_position_ = 0;
+        }
+    }
+
+    virtual void IncludeSwitchTo(std::string include_arg)
+    {
+        if (!include_map_.count(include_arg))
+            throw ParseError("Включаемая часть "s + include_arg + " не найдена"s);
+
+        include_stack_.push_back({current_part_name_, current_position_});
+        current_part_name_ = include_arg;
+        current_string_ptr_ = &include_map_[current_part_name_];
+        current_position_ = 0;
+    }
+
+    int get() override
+    {
+        if (!good())
+        {
+            last_read_symb_ = char_traits<char>::eof();
+            return last_read_symb_;
+        }
+
+        if (unget_symb_ != char_traits<char>::eof())
+        {
+            last_read_symb_ = unget_symb_;
+            unget_symb_ = char_traits<char>::eof();
+            return last_read_symb_;
+        }
+
+        while (true)
+        {
+            if (current_position_ < static_cast<int>(current_string_ptr_->size()))
+            {
+                last_read_symb_ = (*current_string_ptr_)[current_position_];
+                ++current_position_;
+                break;
+            }
+            else
+            {
+                if (include_stack_.size())
+                {
+                    StackType stack_rec = include_stack_.back();
+                    include_stack_.pop_back();
+                    current_part_name_ = stack_rec.part_name;
+                    current_position_ = stack_rec.part_position;
+                    current_string_ptr_ = &include_map_[current_part_name_];
+                }
+                else
+                {
+                    last_read_symb_ = char_traits<char>::eof();
+                    eof_bit_ = true;
+                    break;
+                }
+            }
+        }
+
+        return last_read_symb_;
+    }
+
+    int peek() override
+    {
+        if (!good())
+        {
+            return char_traits<char>::eof();
+        }
+
+        if (unget_symb_ != char_traits<char>::eof())
+        {
+            return unget_symb_;
+        }
+
+        get();
+        if (good())
+        {
+            --current_position_;
+            return last_read_symb_;
+        }
+        else
+        {
+            return char_traits<char>::eof();
+        }
+    }
+
+    LexerInputExImpl& unget() override
+    {
+        if (last_read_symb_ != char_traits<char>::eof())
+        {
+            unget_symb_ = last_read_symb_;
+            eof_bit_ = false;
+        }
+        return *this;
+    }
+
+    bool good() override
+    {
+        return !eof_bit_;
+    }
+
+    operator bool() override
+    {
+        return good();
+    }
+
+    bool operator!() override
+    {
+        return !good();
+    }
+
+private:
+    bool eof_bit_ = false;
+    int last_read_symb_ = char_traits<char>::eof();
+    int unget_symb_ = char_traits<char>::eof();
+    int current_position_ = 0;
+    string* current_string_ptr_ = nullptr;
+    string current_part_name_;
+    unordered_map<string, string> include_map_;
+    vector<StackType> include_stack_;
+};
+
 namespace
 {
     void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer);
-    
-        runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
-        program->Execute(closure, context);
+        parse::GlobalResourceInfo global_resources;
+        {
+            parse::Lexer lexer(input);
+            auto program = ParseProgram(lexer);
+
+            runtime::SimpleContext context(output, link_function);
+            runtime::Closure closure;
+            program->Execute(closure, context);
+            global_resources = GetGlobalResourceList(program);
+        }
+        DeallocateGlobalResources(global_resources);
     }
-    
+
+    void RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+    {
+        parse::GlobalResourceInfo global_resources;
+        {
+            parse::Lexer lexer(input);
+            auto program = ParseProgram(lexer);
+
+            runtime::SimpleContext context(output, link_function);
+            runtime::Closure closure;
+            program->Execute(closure, context);
+            global_resources = GetGlobalResourceList(program);
+        }
+        DeallocateGlobalResources(global_resources);
+    }
+
     void TestSimplePrints()
     {
         istringstream input(R"(
@@ -133,7 +304,7 @@ class XHolder:
 
 xh = XHolder()
 x = X(xh)
-)--");        
+)--");
 
         parse::Lexer lexer(input);
         auto program = ParseProgram(lexer);    
@@ -429,7 +600,56 @@ print zp, zc
             ASSERT_EQUAL(ostr.str(), "Hello27.5 Hello\n4 7\n"s);
         }
     }
-    
+
+    void TestIncludes()
+    {
+        LexerInputExImpl input_ex;
+        string main_program(R"--(
+print "in main"
+include "Include1"
+print "already in main"
+include "Include2"
+print "again in main"
+include "Include3"
+print "finish in main"
+)--");
+        string include_1(R"--(
+print "now in include_1"
+)--");
+        string include_2(R"--(
+print "now in include_2"
+include "Include21"
+print "again in include_2"
+include "Include22"
+print "finish in include_2"
+)--");
+        string include_3(R"--(
+print "now in include_3"
+include "Include1"
+print "again in include_3"
+)--");
+        string include_2_1(R"--(
+print "now in include_2_1"
+)--");
+        string include_2_2(R"--(
+print "now in include_2_2"
+)--");
+
+        input_ex.AddIncludePart("MainProgram", main_program);
+        input_ex.AddIncludePart("Include1", include_1);
+        input_ex.AddIncludePart("Include2", include_2);
+        input_ex.AddIncludePart("Include3", include_3);
+        input_ex.AddIncludePart("Include21", include_2_1);
+        input_ex.AddIncludePart("Include22", include_2_2);
+        ostringstream ostr;
+        RunMythonProgramEx(input_ex, ostr);
+        //cout << ostr.str() << endl;
+        string proper_result = "in main\nnow in include_1\nalready in main\nnow in include_2\n"s;
+        proper_result += "now in include_2_1\nagain in include_2\nnow in include_2_2\nfinish in include_2\n"s;
+        proper_result += "again in main\nnow in include_3\nnow in include_1\nagain in include_3\nfinish in main\n"s;
+        ASSERT_EQUAL(ostr.str(), proper_result);
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -452,6 +672,7 @@ print zp, zc
         RUN_TEST(tr, TestMaps);
         RUN_TEST(tr, TestFloatPointEvaluation);
         RUN_TEST(tr, TestImportBinaryModule);
+        RUN_TEST(tr, TestIncludes);
     }
 }  // namespace
 

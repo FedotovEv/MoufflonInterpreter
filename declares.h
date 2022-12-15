@@ -6,6 +6,16 @@
 #include <variant>
 
 #if defined (_WIN64) || defined(_WIN32)
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+    #undef GetClassName
+    #undef GetClassNameA
+    #undef GetClassNameW
+#elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+    #include <dlfcn.h>
+#endif
+
+#if defined (_WIN64) || defined(_WIN32)
     #ifdef MYTHLON_INTERPRETER_MODULE
         #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllimport)
     #else

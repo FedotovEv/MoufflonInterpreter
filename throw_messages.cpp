@@ -56,6 +56,8 @@ namespace runtime
         {ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME, "Недопустимое имя импортируемой библиотеки"s},
         {ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED, "Ошибка при загрузке разделяемой библиотеки"s},
         {ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND, "Не найдена функция создания объекта"s},
-        {ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND, "Не найдена функция загрузки списка объектов"s}
+        {ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND, "Не найдена функция загрузки списка объектов"s},
+        {ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS, "Ошибка в параметрах директивы include"s},
+        {ThrowMessageNumber::THRM_NODE_NOT_ROOT, "Аргумент не является корневым узлом"s}
     };
 } // namespace runtime

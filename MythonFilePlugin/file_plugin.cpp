@@ -85,6 +85,10 @@ namespace runtime
         {"Seek"sv, &PluginInstance::MethodFileSeek},
         {"tell"sv, &PluginInstance::MethodFileTell},
         {"Tell"sv, &PluginInstance::MethodFileTell},
+        {"rewind"sv, &PluginInstance::MethodFileRewind},
+        {"Rewind"sv, &PluginInstance::MethodFileRewind},
+        {"is_open"sv, &PluginInstance::MethodFileIsOpen},
+        {"IsOpen"sv, &PluginInstance::MethodFileIsOpen},
         {"remove"sv, &PluginInstance::MethodFileRemove},
         {"Remove"sv, &PluginInstance::MethodFileRemove},
         {"rename"sv, &PluginInstance::MethodFileRename},
@@ -108,6 +112,15 @@ namespace runtime
             errno = 0;
             file_handle_ptr_ = fopen(filename_.c_str(), filemode_.c_str());
             file_error_ = errno;
+        }
+    }
+
+    PluginInstance::~PluginInstance()
+    {
+        if (file_handle_ptr_)
+        {
+            fclose(file_handle_ptr_);
+            file_handle_ptr_ = nullptr;
         }
     }
 
@@ -235,6 +248,29 @@ namespace runtime
         int result = ftell(file_handle_ptr_);
         file_error_ = errno;
         return ObjectHolder::Own(Number(result));
+    }
+
+    ObjectHolder PluginInstance::MethodFileRewind(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                                  Context& context)
+    {
+        CheckMethodParams(context, "Rewind"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+
+        if (!file_handle_ptr_)
+            ThrowRuntimeError(context, string(file_not_opened));
+
+        errno = 0;
+        rewind(file_handle_ptr_);
+        file_error_ = errno;
+        return ObjectHolder::Own(Number(file_error_));
+    }
+
+    ObjectHolder PluginInstance::MethodFileIsOpen(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                                  Context& context)
+    {
+        CheckMethodParams(context, "IsOpen"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(Bool(file_handle_ptr_));
     }
 
     ObjectHolder PluginInstance::MethodFileRemove(const std::string& method, const std::vector<ObjectHolder>& actual_args,

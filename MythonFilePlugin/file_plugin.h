@@ -62,6 +62,7 @@ namespace runtime
         using PluginCallMethod = ObjectHolder(PluginInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
                                                                  Context&);
         PluginInstance(const std::string& filename, const std::string& filemode);
+        ~PluginInstance();
         void Print(std::ostream& os, Context& context) override;
 
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -82,6 +83,10 @@ namespace runtime
                                     Context& context);
         ObjectHolder MethodFileTell(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                     Context& context);
+        ObjectHolder MethodFileRewind(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                      Context& context);
+        ObjectHolder MethodFileIsOpen(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                                      Context& context);
         ObjectHolder MethodFileRemove(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                       Context& context);
         ObjectHolder MethodFileRename(const std::string& method, const std::vector<ObjectHolder>& actual_args,

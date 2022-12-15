@@ -1,0 +1,7 @@
+print "in main"
+include "Include1.muf"
+print "already in main"
+include "Include2.muf"
+print "again in main"
+include "Include3.muf"
+print "finish in main"

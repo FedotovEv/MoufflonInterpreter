@@ -4,10 +4,6 @@
 #include "statement.h"
 #include "throw_messages.h"
 
-#if defined (_WIN64) || defined(_WIN32)
-    #include <windows.h>
-#endif
-
 using namespace std;
 using runtime::ThrowMessageNumber;
 using runtime::ThrowMessages;
@@ -52,28 +48,6 @@ namespace
         return !(token == c);
     }
 
-    class TrivialParseContext : public ParseContext
-    {
-        LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const
-        {
-            #if defined (_WIN64) || defined(_WIN32)
-                string standart_lib_extension = ".dll"s;
-            #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-                string standart_lib_extension = ".so"s;
-            #else
-                string standart_lib_extension = ".dxe"s;
-            #endif
-
-            if (!library_name.size())
-                return {};
-
-            if (GetStemExt(library_name).second.size())
-                return library_name;
-            else
-                return library_name + standart_lib_extension;
-        }
-    };
-
     class StatementFactory
     {
     public:
@@ -114,7 +88,7 @@ namespace
     class Parser
     {
     public:
-        explicit Parser(parse::Lexer& lexer, const ParseContext& parse_context = TrivialParseContext()) :
+        explicit Parser(parse::Lexer& lexer, parse::ParseContext& parse_context) :
             lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
         {
             internal_classes_["array"s] = ast::CreateArray;
@@ -126,7 +100,8 @@ namespace
         //          | Statement \n Program
         unique_ptr<ast::Statement> ParseProgram()
         {
-            auto result = exec_factory_.Create(ast::Compound());
+            auto result = exec_factory_.Create(ast::RootCompound());
+            root_compound_ptr_ = result.get();
             while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
@@ -649,6 +624,18 @@ namespace
                 return nullopt;
             }
 
+            if (tok.Is<ITokenType::Include>())
+            {
+                lexer_.NextToken();
+                vector<parse::Token> args;
+                if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
+                    args = ParseTokenList();
+                if (args.size() != 1 || !args[0].Is<ITokenType::String>())
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS);
+                lexer_.IncludeSwitchTo(args[0].As<ITokenType::String>().value);
+                return nullopt;
+            }
+
             if (tok.Is<ITokenType::Return>())
             {
                 lexer_.NextToken();
@@ -741,7 +728,7 @@ namespace
                     if (!internal_classes_.count(library_alias))
                         internal_classes_[library_alias] = create_plugin_proc;
                 }
-
+                root_compound_ptr_->AddDLLEntry(hAddonDll);
                 return;
             }
         #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
@@ -758,7 +745,7 @@ namespace
             }
         #endif
 
-        void ProcessImportLibrary(vector<parse::Token> args, const ParseContext& parse_context)
+        void ProcessImportLibrary(vector<parse::Token> args, const parse::ParseContext& parse_context)
         {
             string library_filename, library_alias;
             if (args.size() != 1 && args.size() != 2)
@@ -832,7 +819,8 @@ namespace
         StatementFactory exec_factory_;
         runtime::Closure declared_classes_;
         unordered_map<string, InternalObjectCreator> internal_classes_;
-        const ParseContext& parse_context_;
+        parse::ParseContext& parse_context_;
+        ast::RootCompound* root_compound_ptr_ = nullptr;
     }; // class Parser
 }  // namespace
 
@@ -840,7 +828,52 @@ ParseError::ParseError(ThrowMessageNumber throw_message_number) :
     runtime_error(ThrowMessages::GetThrowText(throw_message_number))
 {}
 
+class TrivialParseContext : public parse::ParseContext
+{
+public:
+    LoadLibraryDefine GetLoadLibraryDesc(const string& library_name) const override
+    {
+        #if defined (_WIN64) || defined(_WIN32)
+            string standart_lib_extension = ".dll"s;
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            string standart_lib_extension = ".so"s;
+        #else
+            string standart_lib_extension = ".dxe"s;
+        #endif
+
+        if (!library_name.size())
+            return {};
+
+        if (GetStemExt(library_name).second.size())
+            return library_name;
+        else
+            return library_name + standart_lib_extension;
+    }
+};
+
 unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
 {
-    return Parser{lexer}.ParseProgram();
+    TrivialParseContext parse_context;
+    return Parser(lexer, parse_context).ParseProgram();
+}
+
+parse::GlobalResourceInfo GetGlobalResourceList(const unique_ptr<runtime::Executable>& node)
+{
+    const ast::RootCompound* root_ptr = dynamic_cast<const ast::RootCompound*>(node.get());
+    if (!root_ptr)
+        throw ParseError(ThrowMessageNumber::THRM_NODE_NOT_ROOT);
+    return root_ptr->GetGlobalResourceInfo();
+}
+
+void DeallocateGlobalResources(const parse::GlobalResourceInfo& global_resources)
+{
+    #if defined (_WIN64) || defined(_WIN32)
+        for (HMODULE hmodule : global_resources.dll_list)
+            FreeLibrary(hmodule);
+    #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+        for (void* hmodule : global_resources.dll_list)
+            dlclose(hmodule);
+    #else
+
+    #endif    
 }
