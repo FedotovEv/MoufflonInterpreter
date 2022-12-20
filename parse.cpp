@@ -100,8 +100,7 @@ namespace
         //          | Statement \n Program
         unique_ptr<ast::Statement> ParseProgram()
         {
-            auto result = exec_factory_.Create(ast::RootCompound());
-            root_compound_ptr_ = result.get();
+            auto result = exec_factory_.Create(ast::Compound());
             while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
@@ -728,13 +727,40 @@ namespace
                     if (!internal_classes_.count(library_alias))
                         internal_classes_[library_alias] = create_plugin_proc;
                 }
-                root_compound_ptr_->AddDLLEntry(hAddonDll);
+                parse_context_.AddDLLEntry(hAddonDll);
                 return;
             }
         #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
             // Здесь реализована загрузка .SO линукса/юникса
             void LoadImportLibrary(const string& library_filename, const string& library_alias)
             {
+                void* hAddonDll = dlopen(library_filename.c_str(), RTLD_NOW | RTLD_GLOBAL);
+                if (!hAddonDll)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
+
+                FuncGetPluginList* load_plugin_list_proc = reinterpret_cast<FuncGetPluginList*>
+                                                           (dlsym(hAddonDll, LOAD_PLUGIN_LIST_NAME));
+                if (!load_plugin_list_proc)
+                {
+                    dlclose(hAddonDll);
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
+                }
+
+                for (const auto& current_plugin_pair : *load_plugin_list_proc())
+                {
+                    FuncInternalObjectCreator* create_plugin_proc = reinterpret_cast<FuncInternalObjectCreator*>
+                                                    (dlsym(hAddonDll, current_plugin_pair.first.c_str()));
+                    if (!create_plugin_proc)
+                    {
+                        dlclose(hAddonDll);
+                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND);
+                    }
+                    internal_classes_[library_alias + "_"s + current_plugin_pair.second] = create_plugin_proc;
+                    // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса
+                    if (!internal_classes_.count(library_alias))
+                        internal_classes_[library_alias] = create_plugin_proc;
+                }
+                parse_context_.AddDLLEntry(hAddonDll);
                 return;
             }
         #else
@@ -820,7 +846,6 @@ namespace
         runtime::Closure declared_classes_;
         unordered_map<string, InternalObjectCreator> internal_classes_;
         parse::ParseContext& parse_context_;
-        ast::RootCompound* root_compound_ptr_ = nullptr;
     }; // class Parser
 }  // namespace
 
@@ -828,52 +853,52 @@ ParseError::ParseError(ThrowMessageNumber throw_message_number) :
     runtime_error(ThrowMessages::GetThrowText(throw_message_number))
 {}
 
-class TrivialParseContext : public parse::ParseContext
+parse::ParseContext::~ParseContext()
 {
-public:
-    LoadLibraryDefine GetLoadLibraryDesc(const string& library_name) const override
-    {
-        #if defined (_WIN64) || defined(_WIN32)
-            string standart_lib_extension = ".dll"s;
-        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-            string standart_lib_extension = ".so"s;
-        #else
-            string standart_lib_extension = ".dxe"s;
-        #endif
-
-        if (!library_name.size())
-            return {};
-
-        if (GetStemExt(library_name).second.size())
-            return library_name;
-        else
-            return library_name + standart_lib_extension;
-    }
-};
-
-unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
-{
-    TrivialParseContext parse_context;
-    return Parser(lexer, parse_context).ParseProgram();
+    if (is_auto_deallocate_)
+        DeallocateGlobalResources();
 }
 
-parse::GlobalResourceInfo GetGlobalResourceList(const unique_ptr<runtime::Executable>& node)
-{
-    const ast::RootCompound* root_ptr = dynamic_cast<const ast::RootCompound*>(node.get());
-    if (!root_ptr)
-        throw ParseError(ThrowMessageNumber::THRM_NODE_NOT_ROOT);
-    return root_ptr->GetGlobalResourceInfo();
-}
-
-void DeallocateGlobalResources(const parse::GlobalResourceInfo& global_resources)
+void parse::ParseContext::DeallocateGlobalResources()
 {
     #if defined (_WIN64) || defined(_WIN32)
-        for (HMODULE hmodule : global_resources.dll_list)
+        for (HMODULE hmodule : dll_list_)
             FreeLibrary(hmodule);
     #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-        for (void* hmodule : global_resources.dll_list)
+        for (void* hmodule : dll_list_)
             dlclose(hmodule);
     #else
 
-    #endif    
+    #endif
+    dll_list_.clear();
+}
+
+LoadLibraryDefine parse::TrivialParseContext::GetLoadLibraryDesc(const string& library_name) const
+{
+    #if defined (_WIN64) || defined(_WIN32)
+        string standart_lib_extension = ".dll"s;
+    #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+        string standart_lib_extension = ".so"s;
+    #else
+        string standart_lib_extension = ".dxe"s;
+    #endif
+
+    if (!library_name.size())
+        return {};
+
+    if (GetStemExt(library_name).second.size())
+        return library_name;
+    else
+        return library_name + standart_lib_extension;
+}
+
+unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
+{
+    parse::TrivialParseContext parse_context;
+    return Parser(lexer, parse_context).ParseProgram();
+}
+
+unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context)
+{
+    return Parser(lexer, parse_context).ParseProgram();
 }

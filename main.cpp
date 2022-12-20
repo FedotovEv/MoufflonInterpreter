@@ -185,32 +185,24 @@ namespace
 {
     void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        parse::GlobalResourceInfo global_resources;
-        {
-            parse::Lexer lexer(input);
-            auto program = ParseProgram(lexer);
+        parse::TrivialParseContext parse_context(true);
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
 
-            runtime::SimpleContext context(output, link_function);
-            runtime::Closure closure;
-            program->Execute(closure, context);
-            global_resources = GetGlobalResourceList(program);
-        }
-        DeallocateGlobalResources(global_resources);
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        program->Execute(closure, context);
     }
 
     void RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        parse::GlobalResourceInfo global_resources;
-        {
-            parse::Lexer lexer(input);
-            auto program = ParseProgram(lexer);
+        parse::TrivialParseContext parse_context(true);
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
 
-            runtime::SimpleContext context(output, link_function);
-            runtime::Closure closure;
-            program->Execute(closure, context);
-            global_resources = GetGlobalResourceList(program);
-        }
-        DeallocateGlobalResources(global_resources);
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        program->Execute(closure, context);
     }
 
     void TestSimplePrints()
@@ -307,7 +299,8 @@ x = X(xh)
 )--");
 
         parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer);    
+        parse::TrivialParseContext parse_context;
+        auto program = ParseProgram(lexer, parse_context);
         runtime::DummyContext context;
         runtime::Closure closure;
         program->Execute(closure, context);

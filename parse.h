@@ -6,11 +6,6 @@
 
 #include "throw_messages.h"
 
-namespace ast
-{
-    class RootCompound;
-}
-
 namespace runtime
 {
     class Executable;
@@ -39,17 +34,42 @@ namespace parse
     class ParseContext
     {
     public:
-        virtual ~ParseContext() = default;
+        ParseContext() : is_auto_deallocate_(false)
+        {}
+        ParseContext(bool is_auto_deallocate) : is_auto_deallocate_(is_auto_deallocate)
+        {}
+        virtual ~ParseContext();
         virtual LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const = 0;
+        #if defined (_WIN64) || defined(_WIN32)
+            void AddDLLEntry(HMODULE hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            void AddDLLEntry(void* hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #endif
+        void DeallocateGlobalResources();
+
+    private:
+        bool is_auto_deallocate_ = false;
+        #if defined (_WIN64) || defined(_WIN32)
+            std::vector<HMODULE> dll_list_;
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            std::vector<void*> dll_list_;
+        #endif
     };
 
-    struct GlobalResourceInfo
+    class TrivialParseContext : public ParseContext
     {
-        #if defined (_WIN64) || defined(_WIN32)
-            std::vector<HMODULE> dll_list;
-        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-            std::vector<void*> dll_list;
-        #endif
+    public:
+        TrivialParseContext() : ParseContext()
+        {}
+        TrivialParseContext(bool is_auto_deallocate) : ParseContext(is_auto_deallocate)
+        {}        
+        LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const override;
     };
 }
 
@@ -60,5 +80,4 @@ struct ParseError : std::runtime_error
 };
 
 std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer);
-parse::GlobalResourceInfo GetGlobalResourceList(const std::unique_ptr<runtime::Executable>& node);
-void DeallocateGlobalResources(const parse::GlobalResourceInfo& global_resources);
+std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context);

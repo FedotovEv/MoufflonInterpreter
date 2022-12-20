@@ -192,18 +192,15 @@ private:
 void RunMythonProgramFromFile(const string& input_filename, ostream& output,
                               const runtime::LinkageFunction& link_function = {})
 {
-    parse::GlobalResourceInfo global_resources;
-    {
-        LexerFileInputExImpl input_ex(input_filename);
-        parse::Lexer lexer(input_ex);
-        auto program = ParseProgram(lexer);
+    LexerFileInputExImpl input_ex(input_filename);
+    parse::Lexer lexer(input_ex);
+    parse::TrivialParseContext parse_context;
+    auto program = ParseProgram(lexer, parse_context);
 
-        runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
-        program->Execute(closure, context);
-        global_resources = GetGlobalResourceList(program);
-    }
-    DeallocateGlobalResources(global_resources);
+    runtime::SimpleContext context(output, link_function);
+    runtime::Closure closure;
+    program->Execute(closure, context);
+    parse_context.DeallocateGlobalResources();
 }
 
 int main(int argc, char* argv[])

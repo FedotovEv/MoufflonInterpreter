@@ -8,13 +8,15 @@ using namespace std;
 
 namespace parse {
 
-unique_ptr<ast::Statement> ParseProgramFromString(const string& program) {
+unique_ptr<ast::Statement> ParseProgramFromString(const string& program)
+{
     istringstream is(program);
     parse::Lexer lexer(is);
     return ParseProgram(lexer);
 }
 
-void TestSimpleProgram() {
+void TestSimpleProgram()
+{
     const string program = R"(
 x = 4
 y = 5
@@ -32,7 +34,8 @@ print x + y, z + n
     ASSERT_EQUAL(context.output.str(), "9 hello, world\n"s);
 }
 
-void TestProgramWithClasses() {
+void TestProgramWithClasses()
+{
     const string program = R"(
 program_name = "Classes test"
 
@@ -247,7 +250,8 @@ print r, c, t1, t2
 
 }  // namespace parse
 
-void TestParseProgram(TestRunner& tr) {
+void TestParseProgram(TestRunner& tr)
+{
     RUN_TEST(tr, parse::TestSimpleProgram);
     RUN_TEST(tr, parse::TestProgramWithClasses);
     RUN_TEST(tr, parse::TestProgramWithIf);
