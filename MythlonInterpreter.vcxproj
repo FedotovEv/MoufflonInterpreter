@@ -53,6 +53,9 @@
     <ClInclude Include="test_runner_p.h" />
     <ClInclude Include="throw_messages.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{52A14600-38C7-4421-870F-60A39D31C4E0}</ProjectGuid>

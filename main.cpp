@@ -33,10 +33,17 @@ void TestParseProgram(TestRunner& tr);
 class LexerInputExImpl : public parse::LexerInputEx
 {
 public:
+    struct ModuleDescType
+    {
+        int part_number;
+        string part_body;
+    };
+
     struct StackType
     {
         string part_name;
         int part_position;
+        int module_string_number;
     };
 
     LexerInputExImpl() = default;
@@ -45,35 +52,38 @@ public:
         for (const auto& current_part_pair : part_list)
         {
             if (!include_map_.size())
-                current_part_name_ = current_part_pair.first;
-            include_map_[current_part_pair.first] = current_part_pair.second;
+                main_module_name_ = current_part_pair.first;
+            include_map_[current_part_pair.first] = { ++last_part_number_, current_part_pair.second };
         }
-
-        current_string_ptr_ = &include_map_[current_part_name_];
-        current_position_ = 0;
     }
 
     ~LexerInputExImpl() = default;
     void AddIncludePart(const string& part_name, const string& part_body)
     {
-        include_map_[part_name] = part_body;
-        if (include_map_.size() == 1)
-        {
-            current_part_name_ = part_name;
-            current_string_ptr_ = &include_map_[current_part_name_];
-            current_position_ = 0;
-        }
+        if (!include_map_.size())
+            main_module_name_ = part_name;
+        include_map_[part_name] = {++last_part_number_, part_body};
     }
 
-    virtual void IncludeSwitchTo(std::string include_arg)
+    void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) override
     {
+        command_desc_ptr_ = command_desc_ptr;
+    }
+
+    void IncludeSwitchTo(std::string include_arg) override
+    {
+        if (!include_arg.size())    
+            include_arg = main_module_name_;
+        
         if (!include_map_.count(include_arg))
             throw ParseError("Включаемая часть "s + include_arg + " не найдена"s);
-
-        include_stack_.push_back({current_part_name_, current_position_});
+        if (current_part_name_.size())
+            include_stack_.push_back({current_part_name_, current_position_, command_desc_ptr_->module_string_number});
         current_part_name_ = include_arg;
-        current_string_ptr_ = &include_map_[current_part_name_];
+        current_module_desc_ptr_ = &include_map_[current_part_name_];
         current_position_ = 0;
+        command_desc_ptr_->module_id = current_module_desc_ptr_->part_number;
+        command_desc_ptr_->module_string_number = 0;
     }
 
     int get() override
@@ -93,9 +103,9 @@ public:
 
         while (true)
         {
-            if (current_position_ < static_cast<int>(current_string_ptr_->size()))
+            if (current_position_ < static_cast<int>(current_module_desc_ptr_->part_body.size()))
             {
-                last_read_symb_ = (*current_string_ptr_)[current_position_];
+                last_read_symb_ = current_module_desc_ptr_->part_body[current_position_];
                 ++current_position_;
                 break;
             }
@@ -107,7 +117,9 @@ public:
                     include_stack_.pop_back();
                     current_part_name_ = stack_rec.part_name;
                     current_position_ = stack_rec.part_position;
-                    current_string_ptr_ = &include_map_[current_part_name_];
+                    current_module_desc_ptr_ = &include_map_[current_part_name_];
+                    command_desc_ptr_->module_id = current_module_desc_ptr_->part_number;
+                    command_desc_ptr_->module_string_number = stack_rec.module_string_number;
                 }
                 else
                 {
@@ -175,10 +187,14 @@ private:
     int last_read_symb_ = char_traits<char>::eof();
     int unget_symb_ = char_traits<char>::eof();
     int current_position_ = 0;
-    string* current_string_ptr_ = nullptr;
+    ModuleDescType* current_module_desc_ptr_ = nullptr;
     string current_part_name_;
-    unordered_map<string, string> include_map_;
+    unordered_map<string, ModuleDescType> include_map_;
     vector<StackType> include_stack_;
+    runtime::ProgramCommandDescriptor* command_desc_ptr_ = nullptr;
+    string main_module_name_;
+
+    inline static int last_part_number_ = 0;
 };
 
 namespace

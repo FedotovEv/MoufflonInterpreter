@@ -115,6 +115,13 @@ namespace parse
     {
     public:
         virtual ~LexerInputEx() = default;
+        // Описанная ниже функция вызывается из конструктора лексического разборщика Муфлона один раз
+        // и передаёт нашему классу указатель на внутреннее поле разборщика, хранящего описатель текущей
+        // строки исходника в формате runtime::ProgramCommandDescriptor. Наследники этого класса должны
+        // самостоятельно изменять содержимое этого поля при любом переключении (как прямом, по директиве
+        // include, так и обратном - когда текущий модуль завершается) исходных модулей.
+        virtual void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) = 0;
+        // Функция ниже вызывается при обработке директивы include. include_arg - параметр этой директивы.
         virtual void IncludeSwitchTo(std::string include_arg) = 0;
         virtual int get() = 0;
         virtual int peek() = 0;
@@ -127,10 +134,15 @@ namespace parse
     class SimpleLexerInputEx : public LexerInputEx
     {
     public:
-        SimpleLexerInputEx(std::istream& input_stream): input_stream_(input_stream)
+        SimpleLexerInputEx(std::istream& input_stream) : input_stream_(input_stream)
         {}
+
         void IncludeSwitchTo(std::string include_arg) override
         {}
+
+        void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) override
+        {}
+
         int get() override
         {
             return input_stream_.get();
@@ -186,9 +198,15 @@ namespace parse
         {
             using namespace std::literals;
             if (current_token_.Is<T>())
+            {
                 return current_token_.As<T>();
+            }
             else
-                throw LexerError("Bad token type"s);
+            {
+                std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
+                    std::to_string(current_command_desc_.module_string_number) + "):"s;
+                throw LexerError(command_desc + "Bad token type"s);
+            }
         }
 
         // Метод проверяет, что текущий токен имеет тип T, а сам токен содержит значение value.
@@ -199,7 +217,11 @@ namespace parse
             using namespace std::literals;
             Expect<T>();
             if (current_token_ != T{value})
-                throw LexerError("Bad token value"s);
+            {
+                std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
+                    std::to_string(current_command_desc_.module_string_number) + "):"s;
+                throw LexerError(command_desc + "Bad token value"s);
+            }
         }
 
         // Если следующий токен имеет тип T, метод возвращает ссылку на него.

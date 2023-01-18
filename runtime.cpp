@@ -280,7 +280,24 @@ namespace runtime
             else
                 current_class = &current_class->parent_;
         }
-        return nullptr;    
+        return nullptr;
+    }
+
+    std::vector<std::pair<std::string, size_t>> Class::GetMethodsDesc() const
+    {
+        std::unordered_map<std::string, size_t> intermediate_result;
+        const Class* current_class = this;
+        while (current_class)
+        {
+            for (auto& method_table_pair : current_class->virtual_method_table_)
+                intermediate_result[method_table_pair.second.name] = method_table_pair.second.formal_params.size();
+            current_class = &current_class->parent_;
+        }
+
+        std::vector<std::pair<std::string, size_t>> result;
+        for (auto& current_method_pair : intermediate_result)
+            result.emplace_back(current_method_pair.first, current_method_pair.second);
+        return result;
     }
 
     [[nodiscard]] const std::string& Class::GetName() const

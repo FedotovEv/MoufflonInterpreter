@@ -339,7 +339,8 @@ namespace ast
         {
             comp_body_.push_back(std::move(stmt));
         }
-
+        // Специальный метод, позволяющий получить операторы, входящие в состав сплотки.
+        std::vector<const Statement*> GetCompoundStatements();
         // Последовательно выполняет добавленные инструкции. Возвращает None
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     protected:
@@ -427,6 +428,11 @@ namespace ast
         // Создаёт внутри closure новый объект, совпадающий с именем класса и значением, переданным в
         // конструктор
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        std::string GetClassName() const;
+        // Функция-член GetMethodsDesc() возвращает некоторую информацию о методах класса.
+        // В результирующем массиве пар каждая пара соответствует определённому методу класса.
+        // Первый член пары (.first) - имя метода, второй (.second) - количество его формальных параметров.
+        std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
     private:
         runtime::ObjectHolder cls_;
     };

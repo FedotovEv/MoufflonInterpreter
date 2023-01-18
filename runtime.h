@@ -346,6 +346,9 @@ namespace runtime
 
         // Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует
         [[nodiscard]] const Method* GetMethod(const std::string& name) const;
+        
+        // Возвращает массив пар-описателей методов класса
+        std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
 
         // Возвращает имя класса
         [[nodiscard]] const std::string& GetName() const;

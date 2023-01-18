@@ -107,10 +107,12 @@ namespace ast
                 if (cur_class_instance_ptr && cur_class_instance_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
                     context.GetExternalLinkage() && id_name.size())
                 {  // Вызов звонковой функции при чтении полей объекта "__external"
-                    variant<int, string> external_result = context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_READ_FIELD,
-                                                                                        id_name, {});
+                    variant<int, double, string> external_result = context.GetExternalLinkage()(
+                                    runtime::LinkCallReason::CALL_REASON_READ_FIELD, id_name, {});
                     if (holds_alternative<int>(external_result))
                         return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
+                    else if (holds_alternative<double>(external_result))
+                        return runtime::ObjectHolder::Own(runtime::Number(get<double>(external_result)));
                     else if (holds_alternative<string>(external_result))
                         return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
                 }
@@ -203,10 +205,12 @@ namespace ast
                     cur_real_arg.Get()->Print(set_value_stream, context);
                     real_args_str.push_back(set_value_stream.str());
                 }
-                variant<int, string> external_result = context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_CALL_METHOD,
-                    method_, real_args_str);
+                variant<int, double, string> external_result = context.GetExternalLinkage()(
+                    runtime::LinkCallReason::CALL_REASON_CALL_METHOD, method_, real_args_str);
                 if (holds_alternative<int>(external_result))
                     return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
+                else if (holds_alternative<double>(external_result))
+                    return runtime::ObjectHolder::Own(runtime::Number(get<double>(external_result)));
                 else if (holds_alternative<string>(external_result))
                     return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
             }
@@ -353,6 +357,14 @@ namespace ast
         return {};
     }
 
+    std::vector<const Statement*> Compound::GetCompoundStatements()
+    {
+        std::vector<const Statement*> result;
+        for (auto& current_statement_unique : comp_body_)
+            result.push_back(current_statement_unique.get());
+        return result;
+    }
+
     ObjectHolder Return::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, context);
@@ -404,6 +416,16 @@ namespace ast
         PrepareExecute(this, context);
         closure[cls_.TryAs<runtime::Class>()->GetName()] = cls_;
         return cls_;
+    }
+
+    string ClassDefinition::GetClassName() const
+    {
+        return cls_.TryAs<runtime::Class>()->GetName();
+    }
+
+    std::vector<std::pair<std::string, size_t>> ClassDefinition::GetMethodsDesc() const
+    {
+        return cls_.TryAs<runtime::Class>()->GetMethodsDesc();
     }
 
     FieldAssignment::FieldAssignment(VariableValue object, std::string field_name,

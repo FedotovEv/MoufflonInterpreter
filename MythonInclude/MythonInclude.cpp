@@ -16,27 +16,44 @@ using namespace std;
 class LexerFileInputExImpl : public parse::LexerInputEx
 {
 public:
+
     struct StackType
     {
         string file_name;
         int file_position;
-    };
+        int module_string_number;
+    };    
 
-    LexerFileInputExImpl(const string& start_file_name)
-    {
-        OpenFile(start_file_name);
-    }
+    LexerFileInputExImpl(string start_file_name) : start_file_name_(move(start_file_name))
+    {}
 
     ~LexerFileInputExImpl()
     {
         CloseFile();
     }
 
-    virtual void IncludeSwitchTo(std::string include_arg)
+    void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) override
     {
-        include_stack_.push_back({current_file_name_, current_file_position_});
-        CloseFile();
+        command_desc_ptr_ = command_desc_ptr;
+    }
+
+    void IncludeSwitchTo(std::string include_arg) override
+    {
+        if (!include_arg.size())
+            include_arg = start_file_name_;
+
+        if (current_file_name_.size())
+        {
+            include_stack_.push_back({current_file_name_, current_file_position_,
+                                      command_desc_ptr_->module_string_number});
+            CloseFile();
+        }
+
         OpenFile(include_arg);
+        if (!filename_to_module_id_.count(current_file_name_))
+            filename_to_module_id_[current_file_name_] = ++last_file_number_;
+        command_desc_ptr_->module_id = filename_to_module_id_[current_file_name_];
+        command_desc_ptr_->module_string_number = 0;
     }
 
     int get() override
@@ -77,6 +94,8 @@ public:
                     if (fseek(current_file_, stack_rec.file_position, SEEK_SET) || errno)
                         ThrowReadException(current_file_name_);                    
                     current_file_position_ = stack_rec.file_position;
+                    command_desc_ptr_->module_id = filename_to_module_id_[current_file_name_];
+                    command_desc_ptr_->module_string_number = stack_rec.module_string_number;
                 }
                 else
                 {
@@ -142,12 +161,12 @@ public:
 
 private:
 
-    [[no_return]] static void ThrowOpenException(const string& filename)
+    [[noreturn]] static void ThrowOpenException(const string& filename)
     {
         throw ParseError("Файл "s + filename + " не найден или ошибка при открытии"s);
     }
 
-    [[no_return]] static void ThrowReadException(const string& filename)
+    [[noreturn]] static void ThrowReadException(const string& filename)
     {
         throw ParseError("Ошибка при чтении Файла "s + filename);
     }
@@ -187,19 +206,26 @@ private:
     int current_file_position_ = 0;
     FILE* current_file_ = nullptr;
     vector<StackType> include_stack_;
+    unordered_map<string, int> filename_to_module_id_;
+    runtime::ProgramCommandDescriptor* command_desc_ptr_ = nullptr;
+    string start_file_name_;
+
+    inline static int last_file_number_ = 0;
 };
 
 void RunMythonProgramFromFile(const string& input_filename, ostream& output,
                               const runtime::LinkageFunction& link_function = {})
 {
+    parse::TrivialParseContext parse_context;
     LexerFileInputExImpl input_ex(input_filename);
     parse::Lexer lexer(input_ex);
-    parse::TrivialParseContext parse_context;
-    auto program = ParseProgram(lexer, parse_context);
-
     runtime::SimpleContext context(output, link_function);
     runtime::Closure closure;
-    program->Execute(closure, context);
+
+    {
+        auto program = ParseProgram(lexer, parse_context);
+        program->Execute(closure, context);
+    }
     parse_context.DeallocateGlobalResources();
 }
 

@@ -240,18 +240,13 @@ namespace parse
         char ch = input.get(); // Первый символ лексемы
         if (!input)
             return {""s, TokenTypeId::TOKEN_EOF};
-    
+
         if (ch == '\n')
-        {
-            if (input.peek() == '\r')
-                input.get();
             return {""s, TokenTypeId::TOKEN_NEWLINE};
-        }
 
         if (ch == '\r')
         {
-            if (input.peek() == '\n')
-                input.get();
+            input.get(); // После \r должна следовать \n - её нужно тоже удалить из потока
             return {""s, TokenTypeId::TOKEN_NEWLINE};
         }
 
@@ -286,6 +281,8 @@ namespace parse
             return lhs.As<Char>().value == rhs.As<Char>().value;
         if (lhs.Is<NumberInt>())
             return lhs.As<NumberInt>().value == rhs.As<NumberInt>().value;
+        if (lhs.Is<NumberDouble>())
+            return abs(lhs.As<NumberDouble>().value - rhs.As<NumberDouble>().value) < ZERO_TOLERANCE;
         if (lhs.Is<String>())
             return lhs.As<String>().value == rhs.As<String>().value;
         if (lhs.Is<Id>())
@@ -306,6 +303,7 @@ namespace parse
         if (auto p = rhs.TryAs<type>()) return os << #type << '{' << p->value << '}';
 
         VALUED_OUTPUT(NumberInt);
+        VALUED_OUTPUT(NumberDouble);
         VALUED_OUTPUT(Id);
         VALUED_OUTPUT(String);
         VALUED_OUTPUT(Char);
@@ -320,9 +318,13 @@ namespace parse
         UNVALUED_OUTPUT(If);
         UNVALUED_OUTPUT(Else);
         UNVALUED_OUTPUT(While);
+        UNVALUED_OUTPUT(Break);
+        UNVALUED_OUTPUT(Continue);
         UNVALUED_OUTPUT(Def);
         UNVALUED_OUTPUT(Newline);
         UNVALUED_OUTPUT(Print);
+        UNVALUED_OUTPUT(Import);
+        UNVALUED_OUTPUT(Include);
         UNVALUED_OUTPUT(Indent);
         UNVALUED_OUTPUT(Dedent);
         UNVALUED_OUTPUT(And);
@@ -348,6 +350,8 @@ namespace parse
                                         current_token_(token_type::Newline{})
     {
         is_input_need_delete_ = false;
+        input_.SetCommandDescPtr(&current_command_desc_);
+        input_.IncludeSwitchTo("");
         NextToken();
     }
 
@@ -357,6 +361,8 @@ namespace parse
                                    current_token_(token_type::Newline{})
     {
         is_input_need_delete_ = true;
+        input_.SetCommandDescPtr(&current_command_desc_);
+        input_.IncludeSwitchTo("");
         NextToken();
     }
 
@@ -390,6 +396,12 @@ namespace parse
                     else if (peek_chr == '\n')
                     {
                         input_.get();
+                        space_cnt = GoToTokenBegin(input_);
+                    }
+                    else if (peek_chr == '\r')
+                    {
+                        input_.get();
+                        input_.get(); // После \r должна следовать \n - её нужно тоже удалить из потока
                         space_cnt = GoToTokenBegin(input_);
                     }
                     else

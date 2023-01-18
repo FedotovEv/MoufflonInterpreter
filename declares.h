@@ -25,6 +25,8 @@
     #define MYTHLON_INTERPRETER_PUBLIC
 #endif
 
+#define ZERO_TOLERANCE 0.000000001
+
 namespace runtime
 {
     using NumberValue = std::variant<int, double>;
@@ -36,7 +38,7 @@ namespace runtime
         CALL_REASON_CALL_METHOD
     };
 
-    using LinkageReturn = std::variant<int, std::string>;
+    using LinkageReturn = std::variant<int, double, std::string>;
     using LinkageFunction = std::function<LinkageReturn(LinkCallReason, const std::string&,
         const std::vector<std::string>&)>;
 
