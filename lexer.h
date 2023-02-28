@@ -39,7 +39,7 @@ namespace parse
 
         struct Class {};     // Лексема «class»
         struct Return {};    // Лексема «return»
-        struct ReturnPtr {}; // Лексема «return_ptr»
+        struct ReturnRef {}; // Лексема «return_ref»
         struct If {};        // Лексема «if»
         struct Else {};      // Лексема «else»
         struct While {};     // Лексема "while"
@@ -68,7 +68,7 @@ namespace parse
     using TokenBase
         = std::variant<token_type::NumberInt, token_type::NumberDouble, token_type::Id, token_type::Char,
                        token_type::String, token_type::Class,
-                       token_type::Return, token_type::ReturnPtr, token_type::If, token_type::Else,
+                       token_type::Return, token_type::ReturnRef, token_type::If, token_type::Else,
                        token_type::While, token_type::Break, token_type::Continue,
                        token_type::Def, token_type::Newline,
                        token_type::Print, token_type::Import, token_type::Include,

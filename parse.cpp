@@ -605,6 +605,8 @@ namespace
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
         // обрабатываются директивы времени трансляции (например, import).
         // StatementBody -> return Expression
+        //               | return_ref VariableValue
+        //               | return_ref MethodCall
         //               | print ExpressionList
         //               | break
         //               | continue
@@ -641,23 +643,32 @@ namespace
                 return exec_factory_.Create(ast::Return(ParseTest()));
             }
 
-            if (tok.Is<ITokenType::ReturnPtr>())
+            if (tok.Is<ITokenType::ReturnRef>())
             {
                 lexer_.NextToken();
                 auto test_result = ParseTest();
-                if (typeid(*test_result) != typeid(ast::VariableValue))
+                ast::VariableValue* variable_value_ptr = dynamic_cast<ast::VariableValue*>(test_result.get());
+                ast::MethodCall* method_call_ptr = dynamic_cast<ast::MethodCall*>(test_result.get());
+                if (variable_value_ptr)
                 {
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED);
+                    vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
+                    if (dotted_ids.size() && dotted_ids[0] == "self"sv)
+                        return exec_factory_.Create(ast::ReturnRef(move(dotted_ids)));
                 }
-                else
+                else if (method_call_ptr)
                 {
-                    ast::VariableValue& result_ref = static_cast<ast::VariableValue&>(*test_result);
-                    std::vector<std::string> dotted_ids = result_ref.GetDottedIds();
-                    if (!dotted_ids.size() || dotted_ids[0] != "self"sv)
-                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED);
-                    else
-                        return exec_factory_.Create(ast::ReturnPtr(move(dotted_ids)));
+                    ast::MethodCall::MethodCallDesc method_call_desc = method_call_ptr->GetMethodCallDesc();
+                    ast::VariableValue* variable_value_ptr =
+                        dynamic_cast<ast::VariableValue*>(method_call_desc.call_object.get());
+                    if (variable_value_ptr)
+                    {
+                        vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
+                        if (dotted_ids.size() && dotted_ids[0] == "self"sv)
+                            return exec_factory_.Create(ast::ReturnRef(move(method_call_desc.call_object),
+                                move(method_call_desc.call_method), move(method_call_desc.call_args)));
+                    }
                 }
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED);
             }
 
             if (tok.Is<ITokenType::Print>())

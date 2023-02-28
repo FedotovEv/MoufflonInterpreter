@@ -521,18 +521,18 @@ class Rect:
   def get_h():
     return self.h
 
-  def get_w_ptr():
-    return_ptr self.w
+  def get_w_ref():
+    return_ref self.w
 
-  def get_h_ptr():
-    return_ptr self.h
+  def get_h_ref():
+    return_ref self.h
 
 x_rect = Rect(10, 20)
 print x_rect.w, x_rect.h # Эта команда выведет: 10 20
 print x_rect.get_w(), x_rect.get_h() # Эта команда выведет: 10 20
-print x_rect.get_w_ptr(), x_rect.get_h_ptr() # Эта команда также выведет: 10 20
-x_rect.get_w_ptr() = 100
-x_rect.get_h_ptr() = 200
+print x_rect.get_w_ref(), x_rect.get_h_ref() # Эта команда также выведет: 10 20
+x_rect.get_w_ref() = 100
+x_rect.get_h_ref() = 200
 print x_rect.w, x_rect.h # Эта команда выведет: 100 200
 )--");
 
@@ -659,6 +659,106 @@ print "now in include_2_2"
         ASSERT_EQUAL(ostr.str(), proper_result);
     }
 
+    void TestReturnRef()
+    {
+        // Сначала проверим работоспособность ссылок при разных способах их правильного применения
+        istringstream input(R"--(
+class WithArray:
+  def __init__(w, h):
+    self.test_arr = array(w, h)
+    self.w = w
+    self.h = h
+
+  def get_arr_cell_ref(gw, gh):
+    return_ref self.test_arr.get(gw, gh)
+
+  def get_arr_cell(gw, gh):
+    return self.test_arr.get(gw, gh)
+
+  def get_arr_cell_ref_ind(gw, gh):
+    return_ref self.get_arr_cell_ref(gw, gh)
+
+  def get_w_ref():
+    return_ref self.w
+
+  def get_h_ref():
+    return_ref self.h
+
+  def get_w_():
+    return self.w
+
+  def get_h():
+    return self.h
+
+wa_object = WithArray(10, 20)
+# Начальная инициализация используемых в тесте элементов массива wa_object.test_arr
+wa_object.test_arr.get(3, 4) = -1
+wa_object.test_arr.get(4, 3) = -1
+wa_object.test_arr.get(3, 8) = -38
+wa_object.test_arr.get(8, 3) = -83
+# Простая переустановка некоторых ячеек массива с использованием ссылок на них
+wa_object.get_arr_cell_ref(3, 4) = 34
+wa_object.get_arr_cell_ref(4, 3) = 43
+print wa_object.get_arr_cell(3, 4), wa_object.get_arr_cell_ref(4, 3) # Выводится 34 43
+print wa_object.test_arr.get(3, 4) + wa_object.test_arr.get(4, 3) # Выводится 77
+# Более сложная констукция косвенного присваивания с применением автоматического разыменования ссылок
+wa_object.get_arr_cell_ref(3, 8) = -wa_object.get_arr_cell_ref(3, 8)
+wa_object.get_arr_cell_ref(8, 3) = wa_object.get_arr_cell_ref(8, 3) * 2
+print wa_object.get_arr_cell(3, 8), wa_object.get_arr_cell_ref(8, 3) # Здесь будет напечатано 38 -166
+# Получим ссылку косвенно, добавив ещё один уровень вложенности
+wa_object.get_arr_cell_ref_ind(3, 4) = -wa_object.get_arr_cell_ref_ind(3, 4) + 10
+# Нижележащий оператор print должен вывести: -24 -24 -24
+print wa_object.get_arr_cell(3, 4), wa_object.get_arr_cell_ref(3, 4), wa_object.get_arr_cell_ref_ind(3, 4)
+# Ну и, наконец, проверка образования ссылок на простые скалярные поля
+wa_object.get_w_ref() = 100
+wa_object.get_h_ref() = 200
+print wa_object.w, wa_object.h # Эта команда выведет: 100 200
+# Ещё одна проба разыменования ссылок в правой части косвенного присваивания
+wa_object.get_w_ref() = 2 * wa_object.get_h_ref()
+print wa_object.w, wa_object.h # Эта команда выведет: 400 200
+)--");
+
+        ostringstream ostr;
+        RunMythonProgram(input, ostr);
+        ASSERT_EQUAL(ostr.str(), "34 43\n77\n38 -166\n-24 -24 -24\n100 200\n400 200\n"s);
+
+        // Далее испытаем швырки исключений при ошибках формирования ссылок
+        // (запрещённые ссылки на локальные перменные и временные значения).
+        istringstream input2(R"--(
+class ArrayWithInvalidRefs:
+  def __init__(w, h):
+    self.test_arr = array(w, h)
+
+  def get_arr_cell_invalid_ref(gw, gh):
+    # Аргументом расположенного ниже оператора return_ref является временное значение,
+    # что недопустимо. Тут должна возникнуть ошибка при синтаксическом разборе
+    return_ref self.test_arr.get(gw, gh) + 2
+
+wa_object = ArrayWithInvalidRefs(10, 20)
+r = wa_object.get_arr_cell_invalid_ref(3, 4)
+)--");
+
+        ASSERT_THROWS(RunMythonProgram(input2, ostr), ParseError);
+
+        istringstream input3(R"--(
+class ClassWithInvalidRefs:
+  def __init__(w, h):
+    self.w = w
+    self.h = h
+
+  def get_invalid_ref(gw, gh):
+    # Аргументом расположенного ниже оператора return_ref является локальная переменная
+    # метода, что недопустимо. Тут должна возникнуть ошибка при синтаксическом разборе
+    local_var = 5
+    return_ref local_var
+
+wa_object = ClassWithInvalidRefs(10, 20)
+r = wa_object.get_invalid_ref(3, 4)
+)--");
+
+        ASSERT_THROWS(RunMythonProgram(input3, ostr), ParseError);
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -668,7 +768,7 @@ print "now in include_2_2"
         runtime::RunObjectsTests(tr);
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
-    
+
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);
         RUN_TEST(tr, TestArithmetics);
@@ -677,6 +777,7 @@ print "now in include_2_2"
         RUN_TEST(tr, TestExternalObject);
         RUN_TEST(tr, TestWhileLoop);
         RUN_TEST(tr, TestIndirectAssignment);
+        RUN_TEST(tr, TestReturnRef);
         RUN_TEST(tr, TestArrays);
         RUN_TEST(tr, TestMaps);
         RUN_TEST(tr, TestFloatPointEvaluation);

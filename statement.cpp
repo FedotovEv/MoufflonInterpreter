@@ -371,9 +371,8 @@ namespace ast
         throw ReturnResult(statement_->Execute(closure, context));
     }
 
-    ObjectHolder ReturnPtr::Execute(Closure& closure, [[maybe_unused]] Context& context)
+    ObjectHolder ReturnRef::ExecuteForVariable(Closure& closure, [[maybe_unused]] Context& context)
     {
-        PrepareExecute(this, context);
         size_t i = 1;
         Closure* cur_closure_ptr = &closure;
         runtime::ClassInstance* cur_class_instance_ptr = nullptr;
@@ -390,10 +389,34 @@ namespace ast
             else
             {
                 throw ReturnResult(runtime::ObjectHolder::Own(
-                                   runtime::PointerObject(&cur_closure_ptr->at(id_name))));
+                    runtime::PointerObject(&cur_closure_ptr->at(id_name))));
             }
         }
         return {};
+    }
+
+    ObjectHolder ReturnRef::ExecuteForMethod(Closure& closure, Context& context)
+    {
+        ObjectHolder real_object = object_->Execute(closure, context);
+        vector<ObjectHolder> real_args;
+        for (auto& cur_arg_ptr : args_) // Вычисляем истинные значения аргументов метода
+            real_args.push_back(cur_arg_ptr->Execute(closure, context));
+
+        ObjectHolder target_field = real_object.TryAs<runtime::CommonClassInstance>()->
+                                    Call(method_, real_args, context);
+        if (target_field.TryAs<runtime::PointerObject>())
+            throw ReturnResult(move(target_field));
+        else
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR);
+    }
+
+    ObjectHolder ReturnRef::Execute(Closure& closure, [[maybe_unused]] Context& context)
+    {
+        PrepareExecute(this, context);
+        if (dotted_ids_.size())
+            return ExecuteForVariable(closure, context);
+        else
+            return ExecuteForMethod(closure, context);
     }
 
     ObjectHolder Break::Execute(Closure& closure, Context& context)

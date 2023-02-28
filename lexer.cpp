@@ -13,7 +13,7 @@ namespace parse
     static const unordered_map<std::string, Token> keyword_tokens
         {{"class"s, token_type::Class{}},
          {"return"s, token_type::Return{}},
-         {"return_ptr"s, token_type::ReturnPtr{}},
+         {"return_ref"s, token_type::ReturnRef{}},
          {"if"s, token_type::If{}},
          {"else"s, token_type::Else{}},
          {"while"s, token_type::While{}},

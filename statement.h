@@ -141,10 +141,21 @@ namespace ast
     class MethodCall : public Statement
     {
     public:
+        struct MethodCallDesc
+        {
+            std::unique_ptr<Statement> call_object;
+            std::string call_method;
+            std::vector<std::unique_ptr<Statement>> call_args;
+        };
+
         MethodCall(std::unique_ptr<Statement> object, std::string method,
                    std::vector<std::unique_ptr<Statement>> args);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        MethodCallDesc GetMethodCallDesc()
+        {
+            return {std::move(object_), std::move(method_), std::move(args_)};
+        }
     private:
 
         std::unique_ptr<Statement> object_;
@@ -152,10 +163,14 @@ namespace ast
         std::vector<std::unique_ptr<Statement>> args_;
     };
 
-    // Вызывает метод object.method со списком параметров args.
-    // А затем присваивает переменной, адрес которой будет результатом выполнения
-    // метода object.method, значение выражения rv. Это является возможным, так как все
-    // переменные Муфлона (а также и возвращаемые методами значения) суть есть указатели.
+    // Косвенное присваивание - присваивание значения некоторой переменной по вычисляемому указателю на неё.
+    // Сначала вызывается метод object.method со списком параметров args.
+    // Данный метод обязательно должен возвращать объект-"указатель" - runtime::PointerObject, в противном
+    // случае возникнет ошибка периода исполнения - "ошибка косвенного присваивания".
+    // Далее целевой переменной, на которую указывает этот объект, будет присвоено значение выражения rv.
+    // Учитывая строение переменных Муфлона, можно сказать, что при этом её внутренний указатель (data_)
+    // будет перенацелен на новое значение, на которое указывает результат вычисления (типа ObjectHolder)
+    // выражения rv.
     class IndirectAssignment : public Statement
     {
     public:
@@ -383,19 +398,36 @@ namespace ast
         std::unique_ptr<Statement> statement_;
     };
 
-    // Выполняет инструкцию return_ptr с переменной dotted_ids, которая должна быть полем
+    // Выполняет инструкцию return_ref с переменной dotted_ids, которая должна быть полем
     // объекта (начинаться с self).
-    class ReturnPtr : public Statement
+    class ReturnRef : public Statement
     {
     public:
-        explicit ReturnPtr(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
+        explicit ReturnRef(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
         {}
-        // Останавливает выполнение текущего метода. После выполнения инструкции return_ptr метод,
+
+        explicit ReturnRef(std::unique_ptr<Statement> object, std::string method,
+                           std::vector<std::unique_ptr<Statement>> args) :
+            object_(move(object)),
+            method_(move(method)),
+            args_(move(args))
+        {}
+
+        // Останавливает выполнение текущего метода. После выполнения инструкции return_ref метод,
         // внутри которого она была исполнена, должен вернуть результат в виде указателя PointerObject
         // на поле dotted_ids_ текущего объекта.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
-        std::vector<std::string> dotted_ids_;
+        std::vector<std::string> dotted_ids_; // Данное поле обслуживает вариант оператора return_ref
+                                              // с аргументом-полем объекта (return_ref VariableValue).
+        // Остальные поля служат для обработки варианта оператора return_ref с аргументом-вызовом метода
+        // (return_ref MethodCall).
+        std::unique_ptr<Statement> object_;
+        std::string method_;
+        std::vector<std::unique_ptr<Statement>> args_;
+
+        runtime::ObjectHolder ExecuteForVariable(runtime::Closure& closure, runtime::Context& context);
+        runtime::ObjectHolder ExecuteForMethod(runtime::Closure& closure, runtime::Context& context);
     };
 
     // Выполняет инструкцию break
