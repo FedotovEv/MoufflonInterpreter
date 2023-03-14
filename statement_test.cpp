@@ -1,4 +1,4 @@
-﻿#include "statement.h"
+#include "statement.h"
 
 #include "test_runner_p.h"
 

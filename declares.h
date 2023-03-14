@@ -44,7 +44,19 @@ namespace runtime
 
     struct ProgramCommandDescriptor
     {
-        int module_id = 0;
-        int module_string_number = 0;
+        int module_id = -1;
+        int module_string_number = -1;
+
+        bool operator==(const ProgramCommandDescriptor& other)
+        {
+            return module_id == other.module_id &&
+                   module_string_number == other.module_string_number;
+        }
+    
+        bool operator!=(const ProgramCommandDescriptor& other)
+        {
+            return module_id != other.module_id ||
+                   module_string_number != other.module_string_number;
+        }
     };
 } // namespace return

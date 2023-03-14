@@ -18,6 +18,7 @@ using namespace std;
 
 class my_streambuf : public streambuf
 {
+public:
     int_type overflow(int_type c) override
     {
         if (c != '\n' && c >= 0 && c <= 255)

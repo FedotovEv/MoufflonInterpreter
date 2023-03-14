@@ -27,7 +27,7 @@ namespace ast
 
     runtime::ObjectHolder NewPlugin::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         string filename, filemode;
         
         if (args_.size() >= 1)
@@ -277,7 +277,7 @@ namespace runtime
                                                   Context& context)
     {
         CheckMethodParams(context, "Remove"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_NUMERIC_STRING, 1, actual_args);    
+            MethodParamType::PARAM_TYPE_STRING, 1, actual_args);    
 
         string remove_file_name = actual_args[0].TryAs<String>()->GetValue();
         errno = 0;
@@ -290,7 +290,7 @@ namespace runtime
                                                   Context& context)
     {
         CheckMethodParams(context, "Rename"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_NUMERIC_STRING, 2, actual_args);    
+            MethodParamType::PARAM_TYPE_STRING, 2, actual_args);    
 
         string old_file_name = actual_args[0].TryAs<String>()->GetValue();
         string new_file_name = actual_args[0].TryAs<String>()->GetValue();

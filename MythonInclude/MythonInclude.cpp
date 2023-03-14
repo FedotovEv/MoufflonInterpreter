@@ -16,7 +16,6 @@ using namespace std;
 class LexerFileInputExImpl : public parse::LexerInputEx
 {
 public:
-
     struct StackType
     {
         string file_name;
@@ -40,7 +39,22 @@ public:
     void IncludeSwitchTo(std::string include_arg) override
     {
         if (!include_arg.size())
+        { // Инициализирующий вызов IncludeSwitchTo()
+            eof_bit_ = false;
+            last_read_symb_ = std::char_traits<char>::eof();
+            unget_symb_ = std::char_traits<char>::eof();
+            if (current_file_)
+            {
+                fclose(current_file_);
+                current_file_ = nullptr;
+            }
+            current_file_name_.clear();
+            current_file_size_ = 0;
+            current_file_position_ = 0;
+            include_stack_.clear();
+            // Устанавливаем start_file_name_ в качестве стартового модуля проекта.
             include_arg = start_file_name_;
+        }
 
         if (current_file_name_.size())
         {

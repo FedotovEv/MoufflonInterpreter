@@ -33,7 +33,8 @@ namespace ast
 
     using Statement = runtime::Executable;
 
-    void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(Statement* exec_obj_ptr, runtime::Context& context);
+    void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(Statement* exec_obj_ptr, runtime::Closure& closure,
+                                                   runtime::Context& context);
 
     // Выражение, возвращающее значение типа T,
     // используется как основа для создания констант
@@ -309,6 +310,73 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
+    // Возвращает результат побитовой инверсии единственного аргумента
+    class Complement : public UnaryOperation
+    {
+    public:
+        using UnaryOperation::UnaryOperation;
+
+        // Поддерживается выполнение побитового отрицания (двоичное дополнение, комплемент, ~).
+        // Для всех чисел (как целых, так и дробных) выполняется прямое ~.
+        // В случае числа с плавающей точкой внутренняя структура такого числа игнорируется.
+        // Строки инвертируются посимвольно, действие выполняетя для всех содержащихся в них символов.
+        // Результат - строка такой же длины, каждый символ которой двоично обращён.
+        // Для всех остальных типов битовое отрицание эквивалентно логическому (not).
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
+    // Возвращает результат вычисления побитовой операции | (или) над lhs и rhs
+    class BitwiseOr : public BinaryOperation
+    {
+    public:
+        using BinaryOperation::BinaryOperation;
+        // Расчёт побитового ИЛИ идёт по четырём различным путям:
+        // 1. Оба аргумента целые числа. Результат - целое число, являющееся результатом применения к ним
+        //    побитового ИЛИ.
+        // 2. Оба аргумента дробные числа. Вычисление выполняется аналогично целым числам, игнорируя
+        //    внутреннюю структуру дробного числа (они представляются как простые восьмибайтовые поля).
+        //    Результат также возвращается как дробное число.
+        // 3. Оба операнда - строки. Результат - строка, каждый символ которой есть результат побитового ИЛИ
+        //    над соответствующими по порядку символами аргументов. Более короткая строка дополняется при этом
+        //    нулевыми символами справа.
+        // 4. Для всех прочих случаев побитовое ИЛИ эквивалентно логическому ИЛИ. Результат - True или False.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
+    // Возвращает результат вычисления побитовой операции & (и) над lhs и rhs
+    class BitwiseAnd : public BinaryOperation
+    {
+        using BinaryOperation::BinaryOperation;
+        // Расчёт побитового И идёт по четырём различным путям:
+        // 1. Оба аргумента целые числа. Результат - целое число, являющееся результатом применения к ним
+        //    побитового И.
+        // 2. Оба аргумента дробные числа. Вычисление выполняется аналогично целым числам, игнорируя
+        //    внутреннюю структуру дробного числа (они представляются как простые восьмибайтовые поля).
+        //    Результат также возвращается как дробное число.
+        // 3. Оба операнда - строки. Результат - строка, каждый символ которой есть результат побитового И
+        //    над соответствующими по порядку символами аргументов. Более короткая строка дополняется при этом
+        //    нулевыми символами справа.
+        // 4. Для всех прочих случаев побитовое И эквивалентно логическому И. Результат - True или False.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
+    // Возвращает результат вычисления побитовой операции ^ (исключающее или) над lhs и rhs
+    class BitwiseXor : public BinaryOperation
+    {
+        using BinaryOperation::BinaryOperation;
+        // Расчёт побитового XOR идёт по четырём различным путям:
+        // 1. Оба аргумента целые числа. Результат - целое число, являющееся результатом применения к ним
+        //    побитового XOR.
+        // 2. Оба аргумента дробные числа. Вычисление выполняется аналогично целым числам, игнорируя
+        //    внутреннюю структуру дробного числа (они представляются как простые восьмибайтовые поля).
+        //    Результат также возвращается как дробное число.
+        // 3. Оба операнда - строки. Результат - строка, каждый символ которой есть результат побитового XOR
+        //    над соответствующими по порядку символами аргументов. Более короткая строка дополняется при этом
+        //    нулевыми символами справа.
+        // 4. Для всех прочих случаев побитовое ИЛИ эквивалентно логическому XOR. Результат - True или False.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
     // Возвращает результат вычисления логической операции or над lhs и rhs
     class Or : public BinaryOperation
     {
@@ -349,13 +417,14 @@ namespace ast
                 PacketAddStatement(args...);
         }
 
-        // Добавляет очередную инструкцию в конец составной инструкции
-        void AddStatement(std::unique_ptr<Statement> stmt)
-        {
-            comp_body_.push_back(std::move(stmt));
+        runtime::ProgramCommandDescriptor GetLastCommandDesc()
+        { // Возвращает дескриптор последней команды сплотки        
+            return last_body_command_desc_;
         }
-        // Специальный метод, позволяющий получить операторы, входящие в состав сплотки.
-        std::vector<const Statement*> GetCompoundStatements();
+
+        // Добавляет очередную инструкцию в конец составной инструкции
+        void AddStatement(std::unique_ptr<Statement> stmt);
+
         // Последовательно выполняет добавленные инструкции. Возвращает None
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     protected:
@@ -367,7 +436,8 @@ namespace ast
                 PacketAddStatement(args...);
         }
 
-        std::vector<std::unique_ptr<Statement>> comp_body_;
+        std::vector<std::unique_ptr<Statement>> comp_body_;        
+        runtime::ProgramCommandDescriptor last_body_command_desc_; // дескриптор последней команды сплотки
     };
 
     // Тело метода. Как правило, содержит составную инструкцию
@@ -382,6 +452,7 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
         std::unique_ptr<Statement> body_;
+        std::unique_ptr<Statement> dummy_statement_ = std::make_unique<Compound>();
     };
 
     // Выполняет инструкцию return с выражением statement
@@ -389,7 +460,9 @@ namespace ast
     {
     public:
         explicit Return(std::unique_ptr<Statement> statement) : statement_(move(statement))
-        {}
+        {
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
+        }
 
         // Останавливает выполнение текущего метода. После выполнения инструкции return метод,
         // внутри которого она была исполнена, должен вернуть результат вычисления выражения statement.
@@ -403,9 +476,14 @@ namespace ast
     class ReturnRef : public Statement
     {
     public:
+        // Вариант конструктора, если аргументом return_ref выступает переменная
         explicit ReturnRef(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
-        {}
+        {
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
+        }
 
+        // Вариант конструктора, если аргументом return_ref является вызов метода (который,
+        // в свою очередь, должен возвратить указатель PointerObject).
         explicit ReturnRef(std::unique_ptr<Statement> object, std::string method,
                            std::vector<std::unique_ptr<Statement>> args) :
             object_(move(object)),
@@ -414,8 +492,9 @@ namespace ast
         {}
 
         // Останавливает выполнение текущего метода. После выполнения инструкции return_ref метод,
-        // внутри которого она была исполнена, должен вернуть результат в виде указателя PointerObject
-        // на поле dotted_ids_ текущего объекта.
+        // внутри которого она была исполнена, возвращает результат в виде указателя PointerObject.
+        // Он может либо указывать на поле dotted_ids_ объекта-аргумента, либо быть ретрансляцией
+        // аналогичного указателя, возвращённого методом-аргументом method_.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
         std::vector<std::string> dotted_ids_; // Данное поле обслуживает вариант оператора return_ref

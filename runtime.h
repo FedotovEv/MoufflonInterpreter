@@ -10,6 +10,7 @@
 #include <functional>
 #include <map>
 #include <variant>
+#include <atomic>
 
 namespace runtime
 {
@@ -44,6 +45,22 @@ namespace runtime
         PARAM_TYPE_NUMERIC_STRING_LOGICAL = 7,
         PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = 15
     };
+    
+    enum class CommandGenus
+    {
+        CMD_GENUS_UNKNOWN = 0,
+        CMD_GENUS_CALL_METHOD,
+        CMD_GENUS_RETURN_FROM_METHOD,
+        CMD_GENUS_AFTER_LAST_METHOD_STMT,
+        CMD_GENUS_INITIALIZE
+    };
+
+    struct CallStackEntry
+    {
+        ProgramCommandDescriptor call_command; // Строка исходника, в которой находится
+                                               // точка вызова метода, создавшего данный стековый кадр.
+        ProgramCommandDescriptor first_command; // Строка первой исполняемой команды данного стекового кадра
+    };
 
     // Контекст исполнения инструкций Mython
     class MYTHLON_INTERPRETER_PUBLIC Context
@@ -51,10 +68,10 @@ namespace runtime
     public:
         // Возвращает поток вывода для команд print
         virtual std::ostream& GetOutputStream() = 0;
-        virtual LinkageFunction GetExternalLinkage() = 0;
-        virtual bool IsTraceMode() = 0;
-        virtual void TraceOn() = 0;
-        virtual void TraceOff() = 0;
+        virtual LinkageFunction& GetExternalLinkage() = 0;
+        virtual bool IsTerminate() = 0;
+        virtual void SetTerminate() = 0;
+        virtual void Clear() = 0;
 
         ProgramCommandDescriptor GetLastCommandDesc()
         {
@@ -226,7 +243,18 @@ namespace runtime
             command_desc_ = command_desc;
         }
 
+        CommandGenus GetCommandGenus()
+        {
+            return command_genus_;
+        }
+
+        void SetCommandGenus(CommandGenus command_genus)
+        {
+            command_genus_ = command_genus;
+        }
+
     private:
+        CommandGenus command_genus_ = CommandGenus::CMD_GENUS_UNKNOWN;
         ProgramCommandDescriptor command_desc_;
     };
 
@@ -313,6 +341,10 @@ namespace runtime
     Number operator*(const Number& first_op, const Number& second_op);
     Number operator/(const Number& first_op, const Number& second_op);
     Number operator%(const Number& first_op, const Number& second_op);
+    Number operator|(const Number& first_op, const Number& second_op);
+    Number operator&(const Number& first_op, const Number& second_op);
+    Number operator^(const Number& first_op, const Number& second_op);
+    Number operator~(const Number& first_op);
     bool operator<(const Number& first_op, const Number& second_op);
     bool operator==(const Number& first_op, const Number& second_op);
 
@@ -470,23 +502,24 @@ namespace runtime
             return output;
         }
         
-        LinkageFunction GetExternalLinkage() override
+        LinkageFunction& GetExternalLinkage() override
         {
-            return {};
+            return external_link_;
         }
 
-        bool IsTraceMode() override
+        bool IsTerminate() override
         {
             return false;
         }
 
-        void TraceOn() override
+        void SetTerminate() override
         {}
 
-        void TraceOff() override
+        void Clear() override
         {}
 
         std::ostringstream output;
+        LinkageFunction external_link_;
     };
 
     // Простой контекст, в нём хранится ссылка на поток, который будет использовать команда print.
@@ -498,7 +531,7 @@ namespace runtime
     {
     public:
         explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
-            : output_(output), external_link_(external_link)
+            : output_(output), external_link_(std::move(external_link))
         {}
 
         std::ostream& GetOutputStream() override
@@ -506,31 +539,30 @@ namespace runtime
             return output_;
         }
 
-        LinkageFunction GetExternalLinkage() override
+        LinkageFunction& GetExternalLinkage() override
         {
             return external_link_;
         }
 
-        bool IsTraceMode() override
+        bool IsTerminate() override
         {
-            return is_trace_mode_;
+            return is_terminate_;
         }
 
-        void TraceOn() override
+        void SetTerminate() override
         {
-            is_trace_mode_ = true;
+            is_terminate_ = true;
         }
 
-        void TraceOff() override
+        void Clear() override
         {
-            is_trace_mode_ = false;
+            is_terminate_ = false;
         }
 
     private:
         std::ostream& output_;
         LinkageFunction external_link_;
-        bool is_trace_mode_ = false;
-        std::vector<ProgramCommandDescriptor> breakpoints_;
+        std::atomic_bool is_terminate_{false};
     };
 
     [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC

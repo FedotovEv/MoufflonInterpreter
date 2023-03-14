@@ -1,0 +1,2014 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<wxFormBuilder_Project>
+    <FileVersion major="1" minor="16" />
+    <object class="Project" expanded="1">
+        <property name="class_decoration">; </property>
+        <property name="code_generation">C++</property>
+        <property name="disconnect_events">1</property>
+        <property name="disconnect_mode">source_name</property>
+        <property name="disconnect_php_events">0</property>
+        <property name="disconnect_python_events">0</property>
+        <property name="embedded_files_path">res</property>
+        <property name="encoding">UTF-8</property>
+        <property name="event_generation">connect</property>
+        <property name="file">MythonDebuggerGui</property>
+        <property name="first_id">1000</property>
+        <property name="help_provider">none</property>
+        <property name="image_path_wrapper_function_name"></property>
+        <property name="indent_with_spaces"></property>
+        <property name="internationalize">1</property>
+        <property name="name">MythonDebugger</property>
+        <property name="namespace"></property>
+        <property name="path">.</property>
+        <property name="precompiled_header"></property>
+        <property name="relative_path">1</property>
+        <property name="skip_lua_events">1</property>
+        <property name="skip_php_events">1</property>
+        <property name="skip_python_events">1</property>
+        <property name="ui_table">UI</property>
+        <property name="use_array_enum">0</property>
+        <property name="use_enum">0</property>
+        <property name="use_microsoft_bom">0</property>
+        <object class="Frame" expanded="1">
+            <property name="aui_managed">0</property>
+            <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
+            <property name="bg"></property>
+            <property name="center">wxBOTH</property>
+            <property name="context_help"></property>
+            <property name="context_menu">1</property>
+            <property name="enabled">1</property>
+            <property name="event_handler">impl_virtual</property>
+            <property name="extra_style"></property>
+            <property name="fg"></property>
+            <property name="font"></property>
+            <property name="hidden">0</property>
+            <property name="id">wxID_MAIN_WINDOW</property>
+            <property name="maximum_size"></property>
+            <property name="minimum_size"></property>
+            <property name="name">MainDebuggerWindow</property>
+            <property name="pos"></property>
+            <property name="size">553,360</property>
+            <property name="style">wxDEFAULT_FRAME_STYLE</property>
+            <property name="subclass">; ; forward_declare</property>
+            <property name="title"></property>
+            <property name="tooltip"></property>
+            <property name="two_step_creation">0</property>
+            <property name="window_extra_style"></property>
+            <property name="window_name"></property>
+            <property name="window_style">wxTAB_TRAVERSAL</property>
+            <property name="xrc_skip_sizer">1</property>
+            <event name="OnClose">MainDebuggerWindowOnClose</event>
+            <object class="wxBoxSizer" expanded="1">
+                <property name="minimum_size"></property>
+                <property name="name">bSizer1</property>
+                <property name="orient">wxHORIZONTAL</property>
+                <property name="permission">none</property>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">1</property>
+                    <object class="wxListBox" expanded="1">
+                        <property name="BottomDockable">1</property>
+                        <property name="LeftDockable">1</property>
+                        <property name="RightDockable">1</property>
+                        <property name="TopDockable">1</property>
+                        <property name="aui_layer"></property>
+                        <property name="aui_name"></property>
+                        <property name="aui_position"></property>
+                        <property name="aui_row"></property>
+                        <property name="best_size"></property>
+                        <property name="bg"></property>
+                        <property name="caption"></property>
+                        <property name="caption_visible">1</property>
+                        <property name="center_pane">0</property>
+                        <property name="choices"></property>
+                        <property name="close_button">1</property>
+                        <property name="context_help"></property>
+                        <property name="context_menu">1</property>
+                        <property name="default_pane">0</property>
+                        <property name="dock">Dock</property>
+                        <property name="dock_fixed">0</property>
+                        <property name="docking">Left</property>
+                        <property name="enabled">1</property>
+                        <property name="fg"></property>
+                        <property name="floatable">1</property>
+                        <property name="font"></property>
+                        <property name="gripper">0</property>
+                        <property name="hidden">0</property>
+                        <property name="id">wxID_MODULE_LIST</property>
+                        <property name="max_size"></property>
+                        <property name="maximize_button">0</property>
+                        <property name="maximum_size"></property>
+                        <property name="min_size"></property>
+                        <property name="minimize_button">0</property>
+                        <property name="minimum_size"></property>
+                        <property name="moveable">1</property>
+                        <property name="name">ModuleList</property>
+                        <property name="pane_border">1</property>
+                        <property name="pane_position"></property>
+                        <property name="pane_size"></property>
+                        <property name="permission">protected</property>
+                        <property name="pin_button">1</property>
+                        <property name="pos"></property>
+                        <property name="resize">Resizable</property>
+                        <property name="show">1</property>
+                        <property name="size"></property>
+                        <property name="style"></property>
+                        <property name="subclass">; ; forward_declare</property>
+                        <property name="toolbar_pane">0</property>
+                        <property name="tooltip"></property>
+                        <property name="validator_data_type"></property>
+                        <property name="validator_style">wxFILTER_NONE</property>
+                        <property name="validator_type">wxDefaultValidator</property>
+                        <property name="validator_variable"></property>
+                        <property name="window_extra_style"></property>
+                        <property name="window_name"></property>
+                        <property name="window_style">wxALWAYS_SHOW_SB|wxHSCROLL|wxVSCROLL</property>
+                        <event name="OnListBox">ModuleListOnListBox</event>
+                        <event name="OnListBoxDClick">ModuleListOnListBoxDClick</event>
+                    </object>
+                </object>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">2</property>
+                    <object class="wxStyledTextCtrl" expanded="1">
+                        <property name="BottomDockable">1</property>
+                        <property name="LeftDockable">1</property>
+                        <property name="RightDockable">1</property>
+                        <property name="TopDockable">1</property>
+                        <property name="aui_layer"></property>
+                        <property name="aui_name"></property>
+                        <property name="aui_position"></property>
+                        <property name="aui_row"></property>
+                        <property name="backspace_unindents">1</property>
+                        <property name="best_size"></property>
+                        <property name="bg"></property>
+                        <property name="caption"></property>
+                        <property name="caption_visible">1</property>
+                        <property name="center_pane">0</property>
+                        <property name="close_button">1</property>
+                        <property name="context_help"></property>
+                        <property name="context_menu">1</property>
+                        <property name="default_pane">0</property>
+                        <property name="dock">Dock</property>
+                        <property name="dock_fixed">0</property>
+                        <property name="docking">Left</property>
+                        <property name="enabled">1</property>
+                        <property name="fg"></property>
+                        <property name="floatable">1</property>
+                        <property name="folding">0</property>
+                        <property name="font"></property>
+                        <property name="gripper">0</property>
+                        <property name="hidden">0</property>
+                        <property name="id">wxID_SOURCE_VIEWER</property>
+                        <property name="indentation_guides">1</property>
+                        <property name="line_numbers">1</property>
+                        <property name="max_size"></property>
+                        <property name="maximize_button">0</property>
+                        <property name="maximum_size"></property>
+                        <property name="min_size"></property>
+                        <property name="minimize_button">0</property>
+                        <property name="minimum_size"></property>
+                        <property name="moveable">1</property>
+                        <property name="name">SourceViewer</property>
+                        <property name="pane_border">1</property>
+                        <property name="pane_position"></property>
+                        <property name="pane_size"></property>
+                        <property name="permission">protected</property>
+                        <property name="pin_button">1</property>
+                        <property name="pos"></property>
+                        <property name="read_only">1</property>
+                        <property name="resize">Resizable</property>
+                        <property name="show">1</property>
+                        <property name="size"></property>
+                        <property name="subclass">; ; forward_declare</property>
+                        <property name="tab_indents">1</property>
+                        <property name="tab_width">4</property>
+                        <property name="toolbar_pane">0</property>
+                        <property name="tooltip"></property>
+                        <property name="use_tabs">1</property>
+                        <property name="view_eol">0</property>
+                        <property name="view_whitespace">0</property>
+                        <property name="window_extra_style"></property>
+                        <property name="window_name"></property>
+                        <property name="window_style"></property>
+                        <event name="OnKeyDown">SourceViewerOnKeyDown</event>
+                        <event name="OnLeftDown">SourceViewerOnLeftDown</event>
+                        <event name="OnRightDown">SourceViewerOnRightDown</event>
+                    </object>
+                </object>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">1</property>
+                    <object class="wxBoxSizer" expanded="1">
+                        <property name="minimum_size"></property>
+                        <property name="name">bSizer2</property>
+                        <property name="orient">wxVERTICAL</property>
+                        <property name="permission">none</property>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxEXPAND</property>
+                            <property name="proportion">1</property>
+                            <object class="wxListBox" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="choices"></property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="default_pane">0</property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_BREAKPOINTS_LIST</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">BreakPointsList</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style">wxALWAYS_SHOW_SB|wxHSCROLL|wxVSCROLL</property>
+                                <event name="OnListBox">BreakPointsListOnListBox</event>
+                                <event name="OnListBoxDClick">BreakPointsListOnListBoxDClick</event>
+                            </object>
+                        </object>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxEXPAND</property>
+                            <property name="proportion">1</property>
+                            <object class="wxListBox" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="choices"></property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="default_pane">0</property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_SYMBOLS_LIST</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">SymbolsList</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style">wxALWAYS_SHOW_SB|wxHSCROLL|wxVSCROLL</property>
+                                <event name="OnListBox">SymbolsListOnListBox</event>
+                                <event name="OnListBoxDClick">SymbolsListOnListBoxDClick</event>
+                            </object>
+                        </object>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxEXPAND</property>
+                            <property name="proportion">1</property>
+                            <object class="wxListBox" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="choices"></property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="default_pane">0</property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_STACK_LIST</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">StackList</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style">wxALWAYS_SHOW_SB|wxHSCROLL|wxVSCROLL</property>
+                                <event name="OnListBox">StackListOnListBox</event>
+                                <event name="OnListBoxDClick">StackListOnListBoxDClick</event>
+                            </object>
+                        </object>
+                    </object>
+                </object>
+            </object>
+            <object class="wxStatusBar" expanded="1">
+                <property name="bg"></property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="fields">2</property>
+                <property name="font"></property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_MAIN_STATUSBAR</property>
+                <property name="maximum_size"></property>
+                <property name="minimum_size"></property>
+                <property name="name">MainWindowStatusBar</property>
+                <property name="permission">protected</property>
+                <property name="pos"></property>
+                <property name="size"></property>
+                <property name="style">wxSTB_SIZEGRIP</property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+            </object>
+            <object class="wxMenuBar" expanded="1">
+                <property name="bg"></property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="font"></property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_MAIN_MENUBAR</property>
+                <property name="maximum_size"></property>
+                <property name="minimum_size"></property>
+                <property name="name">MainWindowMenuBar</property>
+                <property name="permission">protected</property>
+                <property name="pos"></property>
+                <property name="size"></property>
+                <property name="style"></property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Файл</property>
+                    <property name="name">file_menu</property>
+                    <property name="permission">public</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Создаёт новый отладочный проект</property>
+                        <property name="id">wxID_CREATE_NEW_PROJECT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Создать новый проект</property>
+                        <property name="name">FileCreateProject</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">CreateProjectOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Открывает существующий проект</property>
+                        <property name="id">wxID_OPEN_PROJECT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Открыть проект</property>
+                        <property name="name">FileOpenProject</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F3</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">FileLoadProjectOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Сохранить отладочный проект в файл</property>
+                        <property name="id">wxID_SAVE_PROJECT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Сохранить проект</property>
+                        <property name="name">FileSaveProject</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F2</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">FileSaveProjectOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Сохранить как</property>
+                        <property name="id">wxID_SAVE_PROJECT_AS</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Сохранить как</property>
+                        <property name="name">FileSaveAsProject</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F2</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">FileSaveAsProjectOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator8</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Добавляет существующий модуль к открытому проекту</property>
+                        <property name="id">wxID_LOAD_ONE_FILE</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Добавить модуль к проекту</property>
+                        <property name="name">FileAddOneFile</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl+Alt+F3</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">FileAddOneFileOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator1</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Завершает работу отладчика</property>
+                        <property name="id">wxID_EXIT_PROGRAM</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Выйти из программы</property>
+                        <property name="name">FileExitProgram</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F4</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">FileExitProgramOnMenuSelection</event>
+                    </object>
+                </object>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Вид</property>
+                    <property name="name">view_menu</property>
+                    <property name="permission">protected</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Делает видимым окно консоли отлаживаемой программы</property>
+                        <property name="id">wxID_VIEW_OUTPUT_WINDOW</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Показать окно консоли</property>
+                        <property name="name">ViewOutputWindow</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Shift-F3</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">ViewOutputWindowOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Настрока программы</property>
+                        <property name="id">wxID_VIEW_CONFIG</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Настройка</property>
+                        <property name="name">ViewConfig</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">ViewConfigOnMenuSelection</event>
+                    </object>
+                    <object class="submenu" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="label">Доступные языки</property>
+                        <property name="name">ViewAvailLanguages</property>
+                        <property name="permission">protected</property>
+                    </object>
+                </object>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Трассировка</property>
+                    <property name="name">trace_menu</property>
+                    <property name="permission">public</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Запускает или продолжает работу программы под отладчиком</property>
+                        <property name="id">wxID_RUN_DEBUG_PROGRAM</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Начать/Продолжить отладку программы </property>
+                        <property name="name">TraceRunWithDebug</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F5</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceRunWithDebugOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Запускает программу без отладки, в свободном исполнении</property>
+                        <property name="id">wxID_RUN_PROGRAM</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Запустить программу без отладчика</property>
+                        <property name="name">TraceRunFree</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-F5</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceRunFreeOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator9</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Шаг трассировки с заходом в методы</property>
+                        <property name="id">wxID_TRACE_IN</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Шаг с заходом</property>
+                        <property name="name">TraceIn</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F11</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceInOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Шаг трассировки, не заходя в тела методов</property>
+                        <property name="id">wxID_TRACE_OUT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Шаг с обходом</property>
+                        <property name="name">TraceOut</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F10</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceOutOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Исполнить программу до точки, на которой расположен курсор</property>
+                        <property name="id">wxID_GOTO_TO_CURSOR</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Исполнить до курсора</property>
+                        <property name="name">TraceToCursor</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-F10</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceToCursorOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Исполняет программу до оператора выхода из метода</property>
+                        <property name="id">wxID_EXIT_METHOD</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Выход из метода</property>
+                        <property name="name">TraceExitFromMethod</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Shift-F11</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceExitFromMethodOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator2</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Приостанавливает исполнение отлаживаемой программы</property>
+                        <property name="id">wxID_STOP_PROGRAM</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Приостановка исполнения программмы</property>
+                        <property name="name">TraceStopProgram</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Shift-F5</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceStopProgramOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Немедленно завершает работу отлаживаемой программой</property>
+                        <property name="id">wxID_FINISH_PROGRAM</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Прекратить исполнение программы</property>
+                        <property name="name">TraceFinishProgram</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-Shift-F5</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">TraceFinishProgramOnMenuSelection</event>
+                    </object>
+                </object>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Точки останова</property>
+                    <property name="name">breakpoint_menu</property>
+                    <property name="permission">protected</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap">Load From File; </property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Создаёт новую точку останова</property>
+                        <property name="id">wxID_CREATE_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Создать точку останова</property>
+                        <property name="name">BreakpointCreate</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-B</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointCreateOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Создаёт условную точку останова</property>
+                        <property name="id">wxID_CREATE_COND_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Создать условную точку останова</property>
+                        <property name="name">BreakpointCreateConditional</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Shift-Ctrl-B</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointCreateConditionalOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Удаляет точку останова под курсором</property>
+                        <property name="id">wxID_DELETE_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Удалить точку останова</property>
+                        <property name="name">BreakpointDelete</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-Ctrl-B</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointDeleteOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Удаляет все существующие точки останова</property>
+                        <property name="id">wxID_DELETE_ALL_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Удалить все точки останова</property>
+                        <property name="name">BreakpointDeleteAll</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointDeleteAllOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator3</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Активизирует точку останова под курсором</property>
+                        <property name="id">wxID_ENABLE_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Включить точку останова</property>
+                        <property name="name">BreakpointOn</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F9</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointOnOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Отключает точку останова под курсором</property>
+                        <property name="id">wxID_ANY</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Выключить точку останова</property>
+                        <property name="name">BreakpointOff</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-F9</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointOffOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Активрует все существующие точки останова</property>
+                        <property name="id">wxID_ENABLE_ALL_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Включить все точки останова</property>
+                        <property name="name">BreakpointEnableAll</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointEnableAllOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Отключает все существующие точки останова</property>
+                        <property name="id">wxID_DISABLE_ALL_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Отключить все точки останова</property>
+                        <property name="name">BreakpointDisableAll</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointDisableAllOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator4</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Включает/выключает точку останова в текущей строке исходника</property>
+                        <property name="id">wxID_GOTO_NEXT_BREAK</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Переключить точку останова</property>
+                        <property name="name">BreakpointToggle</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F9</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">BreakpointToggleOnMenuSelection</event>
+                    </object>
+                </object>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Символы</property>
+                    <property name="name">symbol_menu</property>
+                    <property name="permission">public</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Создаёт новый элемент слежения за символом</property>
+                        <property name="id">wxID_CREATE_WATCH</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Добавить слежение</property>
+                        <property name="name">WatchCreate</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-F7</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">WatchCreateOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Удаляет существующий элемент слежения</property>
+                        <property name="id">wxID_DELETE_WATCH</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Удалить слежение</property>
+                        <property name="name">WatchDelete</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F7</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">WatchDeleteOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator7</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Сохраняет всю символьную информацию в текстовый файл</property>
+                        <property name="id">wxID_SAVE_SYMBOL_INFO</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Сохранить сведения о символах</property>
+                        <property name="name">SymbolsSave</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">SymbolsSaveOnMenuSelection</event>
+                    </object>
+                </object>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Помощь</property>
+                    <property name="name">help_menu</property>
+                    <property name="permission">public</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Вызывает систему помощи программы</property>
+                        <property name="id">wxID_HELP_INDEX</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Индекс помощи</property>
+                        <property name="name">HelpIndex</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F1</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">HelpIndexOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Вызывает дилог с краткими сведениями о программе</property>
+                        <property name="id">wxID_HELP_ABOUT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">О программе</property>
+                        <property name="name">HelpAbout</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut"></property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">HelpAboutOnMenuSelection</event>
+                    </object>
+                </object>
+            </object>
+            <object class="wxToolBar" expanded="1">
+                <property name="BottomDockable">1</property>
+                <property name="LeftDockable">1</property>
+                <property name="RightDockable">1</property>
+                <property name="TopDockable">1</property>
+                <property name="aui_layer"></property>
+                <property name="aui_name"></property>
+                <property name="aui_position"></property>
+                <property name="aui_row"></property>
+                <property name="best_size"></property>
+                <property name="bg"></property>
+                <property name="bitmapsize"></property>
+                <property name="caption"></property>
+                <property name="caption_visible">1</property>
+                <property name="center_pane">0</property>
+                <property name="close_button">1</property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="default_pane">0</property>
+                <property name="dock">Dock</property>
+                <property name="dock_fixed">0</property>
+                <property name="docking">Left</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="floatable">1</property>
+                <property name="font"></property>
+                <property name="gripper">0</property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_MAIN_TOOLBAR</property>
+                <property name="margins"></property>
+                <property name="max_size"></property>
+                <property name="maximize_button">0</property>
+                <property name="maximum_size"></property>
+                <property name="min_size"></property>
+                <property name="minimize_button">0</property>
+                <property name="minimum_size"></property>
+                <property name="moveable">1</property>
+                <property name="name">MainWindowToolBar</property>
+                <property name="packing">1</property>
+                <property name="pane_border">1</property>
+                <property name="pane_position"></property>
+                <property name="pane_size"></property>
+                <property name="permission">protected</property>
+                <property name="pin_button">1</property>
+                <property name="pos"></property>
+                <property name="resize">Resizable</property>
+                <property name="separation">5</property>
+                <property name="show">1</property>
+                <property name="size"></property>
+                <property name="style">wxTB_HORIZONTAL</property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="toolbar_pane">0</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_NEW; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_CREATE_PROJECT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolCreateProject</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Создание нового отладочного проекта</property>
+                    <property name="tooltip">Создать новый проект</property>
+                    <event name="OnToolClicked">ToolCreateProjectOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_FILE_OPEN; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_OPEN_PROJECT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolOpenProject</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Открывает существующий файл отладочного проекта</property>
+                    <property name="tooltip">Открыть файл проекта</property>
+                    <event name="OnToolClicked">ToolOpenProjectOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_SAVE_PROJECT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolSaveProject</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Сохранить проект под текущим именем</property>
+                    <property name="tooltip">Сохранить проект</property>
+                    <event name="OnToolClicked">ToolSaveProjectOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE_AS; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_SAVE_PROJECT_AS</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolSaveAsProject</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Изменить имя текущего проекта</property>
+                    <property name="tooltip">Сохранить проект под другим именем</property>
+                    <event name="OnToolClicked">ToolSaveAsProjectOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_PLUS; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_ADD_ONE_FILE</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolAddOneFile</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Добавить один исходный модуль к проекту со всеми внутренне подключаемыми модулями</property>
+                    <property name="tooltip">Добавить исходный файл к проекту</property>
+                    <event name="OnToolClicked">ToolAddOneFileOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_QUIT; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_EXIT_PROGRAM</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolExitProgram</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Завершить работу данной программы</property>
+                    <property name="tooltip">Выход из программы</property>
+                    <event name="OnToolClicked">ToolExitProgramOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_GOTO_LAST; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_RUN_DEBUG</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolRunWithDebug</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Начать отладку - запустить программу под контролем отладчика</property>
+                    <property name="tooltip">Запуск под отладкой</property>
+                    <event name="OnToolClicked">ToolRunWithDebugOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_GO_FORWARD; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_RUN_FREE</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolRunFree</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Запустить программу без контроля отладчика</property>
+                    <property name="tooltip">Запуск без отладки</property>
+                    <event name="OnToolClicked">ToolRunFreeOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_GO_TO_PARENT; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_TRACE_IN</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolTraceIn</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Сдклать шаг исполнения отлаживаемой программы, заходя в вызовы функций</property>
+                    <property name="tooltip">Выполнить с заходом</property>
+                    <event name="OnToolClicked">ToolTraceInOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_REDO; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_TRACE_OUT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolTraceOut</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Сделать шаг выполнения отлаживаемой программы, не заходя  в вызовы функций</property>
+                    <property name="tooltip">Выполнить с обходом</property>
+                    <event name="OnToolClicked">ToolTraceOutOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_GO_UP; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TRACE_TO_CURSOR</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolTraceToCursor</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Выполнить отлаживаемую программу до текущей строки под курсором</property>
+                    <property name="tooltip">Исполнять до курсора</property>
+                    <event name="OnToolClicked">ToolTraceToCursorOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_UNDO; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_EXIT_FROM_METHOD</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolExitFromMethod</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Исполнить программу до операторов возврата из функции</property>
+                    <property name="tooltip">Выйти из функции</property>
+                    <event name="OnToolClicked">ToolExitFromMethodOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_CROSS_MARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_STOP_PROGRAM</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolStopProgram</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Приостановить (вернуть в состояние останова) текущую отлаживаемую программу</property>
+                    <property name="tooltip">Приостановка программы</property>
+                    <event name="OnToolClicked">ToolStopProgramOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_DELETE; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_FINISH_PROGRAM</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolFinishProgram</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Прекратить исполнение работающей программы</property>
+                    <property name="tooltip">Завершить программу</property>
+                    <event name="OnToolClicked">ToolFinishProgramOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_ADD_BOOKMARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_CREATE_BREAK</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolCreateBreakpoint</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Создаёт новую точку останова, указывающую на текущую строку исходника</property>
+                    <property name="tooltip">Создание точки останова</property>
+                    <event name="OnToolClicked">ToolCreateBreakpointOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_DEL_BOOKMARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_DELETE_BREAK</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDeleteBreakpoint</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Удаление текущей (под курсором) точки останова</property>
+                    <property name="tooltip">Удаление текущей точки останова</property>
+                    <event name="OnToolClicked">ToolDeleteBreakpointOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_GO_TO_PARENT; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_TOGGLE_BREAK</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolToggleBreakpoint</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Создать/удалить точку останова в текущем положении</property>
+                    <property name="tooltip">Переброс точки останова</property>
+                    <event name="OnToolClicked">ToolToggleBreakpointOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_TICK_MARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_BREAK_ON</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolBreakpointOn</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Включение (активация) точки останова, на которую указвает курсор</property>
+                    <property name="tooltip">Включение точки останова</property>
+                    <event name="OnToolClicked">ToolBreakpointOnOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_CROSS_MARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_BREAK_OFF</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolBreakpointOff</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Выключает (деактивирует) точку останова, на которую указывает курсор</property>
+                    <property name="tooltip">Выключение точки останова</property>
+                    <event name="OnToolClicked">ToolBreakpointOffOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_ADD_BOOKMARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_CREATE_WATCH</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolCreateWatch</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Создать элемент наблюдения над состоянием символа</property>
+                    <property name="tooltip">Установить наблюдение</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_DEL_BOOKMARK; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_DELETE_WATCH</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDeleteWatch</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Удаляет существующий элемент наблюдения над символом</property>
+                    <property name="tooltip">Снять наблюдение с символа</property>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_HELP; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_HELP</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolHelp</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Вызывает систему помощи по работе с программой</property>
+                    <property name="tooltip">Помощь по работе с программой</property>
+                    <event name="OnToolClicked">ToolHelpOnToolClicked</event>
+                </object>
+            </object>
+        </object>
+        <object class="Frame" expanded="1">
+            <property name="aui_managed">0</property>
+            <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
+            <property name="bg"></property>
+            <property name="center">wxBOTH</property>
+            <property name="context_help"></property>
+            <property name="context_menu">1</property>
+            <property name="enabled">1</property>
+            <property name="event_handler">impl_virtual</property>
+            <property name="extra_style"></property>
+            <property name="fg"></property>
+            <property name="font"></property>
+            <property name="hidden">0</property>
+            <property name="id">wxID_DEBUGGER_OUTPUT_WINDOW</property>
+            <property name="maximum_size"></property>
+            <property name="minimum_size"></property>
+            <property name="name">OutputDebuggerWindow</property>
+            <property name="pos"></property>
+            <property name="size">500,300</property>
+            <property name="style">wxDEFAULT_FRAME_STYLE</property>
+            <property name="subclass">; ; forward_declare</property>
+            <property name="title">Вывод отлаживаемой программы</property>
+            <property name="tooltip"></property>
+            <property name="two_step_creation">0</property>
+            <property name="window_extra_style"></property>
+            <property name="window_name"></property>
+            <property name="window_style">wxTAB_TRAVERSAL</property>
+            <property name="xrc_skip_sizer">1</property>
+            <event name="OnClose">OutputDebuggerWindowOnClose</event>
+            <object class="wxStatusBar" expanded="1">
+                <property name="bg"></property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="fields">1</property>
+                <property name="font"></property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_DEBUGGER_STATUSBAR</property>
+                <property name="maximum_size"></property>
+                <property name="minimum_size"></property>
+                <property name="name">DebuggerWindowStatusBer</property>
+                <property name="permission">protected</property>
+                <property name="pos"></property>
+                <property name="size"></property>
+                <property name="style">wxSTB_SIZEGRIP</property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+            </object>
+            <object class="wxMenuBar" expanded="1">
+                <property name="bg"></property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="font"></property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_DEBUGGER_MENUBAR</property>
+                <property name="maximum_size"></property>
+                <property name="minimum_size"></property>
+                <property name="name">DebuggerWindowMenuBar</property>
+                <property name="permission">protected</property>
+                <property name="pos"></property>
+                <property name="size"></property>
+                <property name="style"></property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+                <object class="wxMenu" expanded="1">
+                    <property name="label">Файл</property>
+                    <property name="name">debug_file_menu</property>
+                    <property name="permission">protected</property>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Сохраняет вывод программы в файл</property>
+                        <property name="id">wxID_MENU_DEBUG_SAVE_OUTPUT</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Сохранить</property>
+                        <property name="name">DebugOutputSave</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">F2</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">DebugOutputSaveOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Сохраняет вывод отлаживаемой программы в файл под любым именем</property>
+                        <property name="id">wxID_MENU_DEBUG_SAVE_OUTPUT_AS</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Сохранить как</property>
+                        <property name="name">DebugOutputSaveAs</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-F2</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">DebugOutputSaveAsOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Очищает окно вывода программы</property>
+                        <property name="id">wxID_MENU_DEBUG_CLEAR_WINDOW</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Очистить</property>
+                        <property name="name">DebugOutputClear</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F7</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">DebugOutputClearOnMenuSelection</event>
+                    </object>
+                    <object class="separator" expanded="1">
+                        <property name="name">m_separator8</property>
+                        <property name="permission">none</property>
+                    </object>
+                    <object class="wxMenuItem" expanded="1">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Закрывает данное отладочное окно</property>
+                        <property name="id">wxID_MENU_DEBUG_CLOSE_WINDOW</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Закрыть окно</property>
+                        <property name="name">DebugClose</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Alt-F4</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">DebugCloseOnMenuSelection</event>
+                    </object>
+                </object>
+            </object>
+            <object class="wxToolBar" expanded="1">
+                <property name="BottomDockable">1</property>
+                <property name="LeftDockable">1</property>
+                <property name="RightDockable">1</property>
+                <property name="TopDockable">1</property>
+                <property name="aui_layer"></property>
+                <property name="aui_name"></property>
+                <property name="aui_position"></property>
+                <property name="aui_row"></property>
+                <property name="best_size"></property>
+                <property name="bg"></property>
+                <property name="bitmapsize"></property>
+                <property name="caption"></property>
+                <property name="caption_visible">1</property>
+                <property name="center_pane">0</property>
+                <property name="close_button">1</property>
+                <property name="context_help"></property>
+                <property name="context_menu">1</property>
+                <property name="default_pane">0</property>
+                <property name="dock">Dock</property>
+                <property name="dock_fixed">0</property>
+                <property name="docking">Left</property>
+                <property name="enabled">1</property>
+                <property name="fg"></property>
+                <property name="floatable">1</property>
+                <property name="font"></property>
+                <property name="gripper">0</property>
+                <property name="hidden">0</property>
+                <property name="id">wxID_DEBUGGER_TOOLBAR</property>
+                <property name="margins"></property>
+                <property name="max_size"></property>
+                <property name="maximize_button">0</property>
+                <property name="maximum_size"></property>
+                <property name="min_size"></property>
+                <property name="minimize_button">0</property>
+                <property name="minimum_size"></property>
+                <property name="moveable">1</property>
+                <property name="name">DebuggerWindowToolBar</property>
+                <property name="packing">1</property>
+                <property name="pane_border">1</property>
+                <property name="pane_position"></property>
+                <property name="pane_size"></property>
+                <property name="permission">protected</property>
+                <property name="pin_button">1</property>
+                <property name="pos"></property>
+                <property name="resize">Resizable</property>
+                <property name="separation">5</property>
+                <property name="show">1</property>
+                <property name="size"></property>
+                <property name="style">wxTB_HORIZONTAL</property>
+                <property name="subclass">; ; forward_declare</property>
+                <property name="toolbar_pane">0</property>
+                <property name="tooltip"></property>
+                <property name="window_extra_style"></property>
+                <property name="window_name"></property>
+                <property name="window_style"></property>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_SAVE_DEBUG_OUTPUT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDebugOutputSave</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar"></property>
+                    <property name="tooltip"></property>
+                    <event name="OnToolClicked">ToolDebugOutputSaveOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE_AS; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_SAVE_AS_DEBUG_OUTPUT</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDebugOutputSaveAs</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar"></property>
+                    <property name="tooltip"></property>
+                    <event name="OnToolClicked">ToolDebugOutputSaveAsOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_DELETE; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_DEBUG_CLEAR_WINDOW</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDebugClearWindow</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar"></property>
+                    <property name="tooltip"></property>
+                    <event name="OnToolClicked">ToolDebugClearWindowOnToolClicked</event>
+                </object>
+                <object class="toolSeparator" expanded="1">
+                    <property name="permission">protected</property>
+                </object>
+                <object class="tool" expanded="1">
+                    <property name="bitmap">Load From Art Provider; wxART_QUIT; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_DEBUG_CLOSE_WINDOW</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolDebugCloseWindow</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar"></property>
+                    <property name="tooltip"></property>
+                    <event name="OnToolClicked">ToolDebugCloseWindowOnToolClicked</event>
+                </object>
+            </object>
+            <object class="wxBoxSizer" expanded="1">
+                <property name="minimum_size"></property>
+                <property name="name">bSizer3</property>
+                <property name="orient">wxVERTICAL</property>
+                <property name="permission">none</property>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">1</property>
+                    <object class="wxTextCtrl" expanded="1">
+                        <property name="BottomDockable">1</property>
+                        <property name="LeftDockable">1</property>
+                        <property name="RightDockable">1</property>
+                        <property name="TopDockable">1</property>
+                        <property name="aui_layer"></property>
+                        <property name="aui_name"></property>
+                        <property name="aui_position"></property>
+                        <property name="aui_row"></property>
+                        <property name="best_size"></property>
+                        <property name="bg"></property>
+                        <property name="caption"></property>
+                        <property name="caption_visible">1</property>
+                        <property name="center_pane">0</property>
+                        <property name="close_button">1</property>
+                        <property name="context_help"></property>
+                        <property name="context_menu">1</property>
+                        <property name="default_pane">0</property>
+                        <property name="dock">Dock</property>
+                        <property name="dock_fixed">0</property>
+                        <property name="docking">Left</property>
+                        <property name="enabled">1</property>
+                        <property name="fg"></property>
+                        <property name="floatable">1</property>
+                        <property name="font"></property>
+                        <property name="gripper">0</property>
+                        <property name="hidden">0</property>
+                        <property name="id">wxID_DEBUG_OUTPUT_TEXT</property>
+                        <property name="max_size"></property>
+                        <property name="maximize_button">0</property>
+                        <property name="maximum_size"></property>
+                        <property name="maxlength"></property>
+                        <property name="min_size"></property>
+                        <property name="minimize_button">0</property>
+                        <property name="minimum_size"></property>
+                        <property name="moveable">1</property>
+                        <property name="name">DebugOutputText</property>
+                        <property name="pane_border">1</property>
+                        <property name="pane_position"></property>
+                        <property name="pane_size"></property>
+                        <property name="permission">protected</property>
+                        <property name="pin_button">1</property>
+                        <property name="pos"></property>
+                        <property name="resize">Resizable</property>
+                        <property name="show">1</property>
+                        <property name="size"></property>
+                        <property name="style">wxHSCROLL|wxTE_MULTILINE|wxTE_READONLY</property>
+                        <property name="subclass">; ; forward_declare</property>
+                        <property name="toolbar_pane">0</property>
+                        <property name="tooltip"></property>
+                        <property name="validator_data_type"></property>
+                        <property name="validator_style">wxFILTER_NONE</property>
+                        <property name="validator_type">wxDefaultValidator</property>
+                        <property name="validator_variable"></property>
+                        <property name="value"></property>
+                        <property name="window_extra_style"></property>
+                        <property name="window_name"></property>
+                        <property name="window_style"></property>
+                    </object>
+                </object>
+            </object>
+        </object>
+        <object class="Dialog" expanded="1">
+            <property name="aui_managed">0</property>
+            <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
+            <property name="bg"></property>
+            <property name="center">wxBOTH</property>
+            <property name="context_help"></property>
+            <property name="context_menu">1</property>
+            <property name="enabled">1</property>
+            <property name="event_handler">impl_virtual</property>
+            <property name="extra_style"></property>
+            <property name="fg"></property>
+            <property name="font"></property>
+            <property name="hidden">0</property>
+            <property name="id">wxID_CONFIG_DIALOG</property>
+            <property name="maximum_size"></property>
+            <property name="minimum_size"></property>
+            <property name="name">ConfigDialog</property>
+            <property name="pos"></property>
+            <property name="size">-1,-1</property>
+            <property name="style">wxCAPTION|wxDEFAULT_DIALOG_STYLE</property>
+            <property name="subclass">; ; forward_declare</property>
+            <property name="title">Настройка программы</property>
+            <property name="tooltip"></property>
+            <property name="two_step_creation">0</property>
+            <property name="window_extra_style"></property>
+            <property name="window_name"></property>
+            <property name="window_style"></property>
+            <event name="OnClose">ConfigDialogOnClose</event>
+            <event name="OnInitDialog">ConfigDialogOnInitDialog</event>
+            <object class="wxBoxSizer" expanded="1">
+                <property name="minimum_size"></property>
+                <property name="name">bSizer7</property>
+                <property name="orient">wxVERTICAL</property>
+                <property name="permission">none</property>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">1</property>
+                    <object class="wxStaticBoxSizer" expanded="1">
+                        <property name="id">wxID_CONFIG_SOURCE_CODE</property>
+                        <property name="label">Исходники</property>
+                        <property name="minimum_size"></property>
+                        <property name="name">ConfigSourceCode</property>
+                        <property name="orient">wxVERTICAL</property>
+                        <property name="parent">1</property>
+                        <property name="permission">none</property>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxALL</property>
+                            <property name="proportion">0</property>
+                            <object class="wxCheckBox" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="checked">0</property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="default_pane">0</property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_SOURCE_UTF8</property>
+                                <property name="label">В UTF-8</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">SourceUtf8</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style"></property>
+                            </object>
+                        </object>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxALL</property>
+                            <property name="proportion">0</property>
+                            <object class="wxCheckBox" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="checked">0</property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="default_pane">0</property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_SOURCE_SAVE_IN_PROJECT</property>
+                                <property name="label">Сохранять в проекте</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">SourceFullSave</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style"></property>
+                            </object>
+                        </object>
+                    </object>
+                </object>
+                <object class="sizeritem" expanded="1">
+                    <property name="border">5</property>
+                    <property name="flag">wxEXPAND</property>
+                    <property name="proportion">0</property>
+                    <object class="wxBoxSizer" expanded="1">
+                        <property name="minimum_size"></property>
+                        <property name="name">bSizer8</property>
+                        <property name="orient">wxHORIZONTAL</property>
+                        <property name="permission">none</property>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxALL</property>
+                            <property name="proportion">0</property>
+                            <object class="wxButton" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="auth_needed">0</property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="bitmap"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="current"></property>
+                                <property name="default">0</property>
+                                <property name="default_pane">0</property>
+                                <property name="disabled"></property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="focus"></property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_ANY</property>
+                                <property name="label">Сохранить</property>
+                                <property name="margins"></property>
+                                <property name="markup">0</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">SaveConfig</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="position"></property>
+                                <property name="pressed"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style"></property>
+                                <event name="OnButtonClick">SaveConfigOnButtonClick</event>
+                            </object>
+                        </object>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxALL</property>
+                            <property name="proportion">0</property>
+                            <object class="wxButton" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="auth_needed">0</property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="bitmap"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="current"></property>
+                                <property name="default">0</property>
+                                <property name="default_pane">0</property>
+                                <property name="disabled"></property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="focus"></property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_ANY</property>
+                                <property name="label">Отменить</property>
+                                <property name="margins"></property>
+                                <property name="markup">0</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">CancelConfig</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="position"></property>
+                                <property name="pressed"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style"></property>
+                                <event name="OnButtonClick">CancelConfigOnButtonClick</event>
+                            </object>
+                        </object>
+                        <object class="sizeritem" expanded="1">
+                            <property name="border">5</property>
+                            <property name="flag">wxALL</property>
+                            <property name="proportion">0</property>
+                            <object class="wxButton" expanded="1">
+                                <property name="BottomDockable">1</property>
+                                <property name="LeftDockable">1</property>
+                                <property name="RightDockable">1</property>
+                                <property name="TopDockable">1</property>
+                                <property name="aui_layer"></property>
+                                <property name="aui_name"></property>
+                                <property name="aui_position"></property>
+                                <property name="aui_row"></property>
+                                <property name="auth_needed">0</property>
+                                <property name="best_size"></property>
+                                <property name="bg"></property>
+                                <property name="bitmap"></property>
+                                <property name="caption"></property>
+                                <property name="caption_visible">1</property>
+                                <property name="center_pane">0</property>
+                                <property name="close_button">1</property>
+                                <property name="context_help"></property>
+                                <property name="context_menu">1</property>
+                                <property name="current"></property>
+                                <property name="default">0</property>
+                                <property name="default_pane">0</property>
+                                <property name="disabled"></property>
+                                <property name="dock">Dock</property>
+                                <property name="dock_fixed">0</property>
+                                <property name="docking">Left</property>
+                                <property name="enabled">1</property>
+                                <property name="fg"></property>
+                                <property name="floatable">1</property>
+                                <property name="focus"></property>
+                                <property name="font"></property>
+                                <property name="gripper">0</property>
+                                <property name="hidden">0</property>
+                                <property name="id">wxID_ANY</property>
+                                <property name="label">Текущая</property>
+                                <property name="margins"></property>
+                                <property name="markup">0</property>
+                                <property name="max_size"></property>
+                                <property name="maximize_button">0</property>
+                                <property name="maximum_size"></property>
+                                <property name="min_size"></property>
+                                <property name="minimize_button">0</property>
+                                <property name="minimum_size"></property>
+                                <property name="moveable">1</property>
+                                <property name="name">RestoreCurrentConfig</property>
+                                <property name="pane_border">1</property>
+                                <property name="pane_position"></property>
+                                <property name="pane_size"></property>
+                                <property name="permission">protected</property>
+                                <property name="pin_button">1</property>
+                                <property name="pos"></property>
+                                <property name="position"></property>
+                                <property name="pressed"></property>
+                                <property name="resize">Resizable</property>
+                                <property name="show">1</property>
+                                <property name="size"></property>
+                                <property name="style"></property>
+                                <property name="subclass">; ; forward_declare</property>
+                                <property name="toolbar_pane">0</property>
+                                <property name="tooltip"></property>
+                                <property name="validator_data_type"></property>
+                                <property name="validator_style">wxFILTER_NONE</property>
+                                <property name="validator_type">wxDefaultValidator</property>
+                                <property name="validator_variable"></property>
+                                <property name="window_extra_style"></property>
+                                <property name="window_name"></property>
+                                <property name="window_style"></property>
+                                <event name="OnButtonClick">RestoreCurrentConfigOnButtonClick</event>
+                            </object>
+                        </object>
+                    </object>
+                </object>
+            </object>
+        </object>
+    </object>
+</wxFormBuilder_Project>

@@ -20,7 +20,7 @@ namespace ast
 
     runtime::ObjectHolder NewArray::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         std::vector<int> elements_count;
         for (auto& cur_param_ptr : args_)
         {
@@ -43,7 +43,7 @@ namespace ast
 
     runtime::ObjectHolder NewMap::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         return ObjectHolder::Own(runtime::MapInstance());
     }
 
@@ -129,6 +129,7 @@ namespace runtime
                            to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
                 ThrowRuntimeError(context, err_mess);
             }
+            break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_LESS_EQ:
             if (actual_args.size() > required_params)
             {
@@ -137,6 +138,7 @@ namespace runtime
                     to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
                 ThrowRuntimeError(context, err_mess);
             }
+            break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ:
             if (actual_args.size() < required_params)
             {
@@ -145,6 +147,7 @@ namespace runtime
                     to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
                 ThrowRuntimeError(context, err_mess);
             }
+            break;
         default:
             break;
         }

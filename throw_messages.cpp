@@ -1,4 +1,4 @@
-﻿#include "throw_messages.h"
+#include "throw_messages.h"
 
 using namespace std;
 
@@ -58,6 +58,7 @@ namespace runtime
         {ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND, "Не найдена функция создания объекта"s},
         {ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND, "Не найдена функция загрузки списка объектов"s},
         {ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS, "Ошибка в параметрах директивы include"s},
-        {ThrowMessageNumber::THRM_NODE_NOT_ROOT, "Аргумент не является корневым узлом"s}
+        {ThrowMessageNumber::THRM_NODE_NOT_ROOT, "Аргумент не является корневым узлом"s},
+        {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s}
     };
 } // namespace runtime

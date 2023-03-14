@@ -65,6 +65,22 @@ namespace parse
             }
     }
     
+    unsigned char DblHexToChar(char l_symb, char h_symb = '0')
+    {
+        unsigned char result = 0;
+        if (isdigit(h_symb))
+            result += (h_symb - 0x30) * 16;
+        else if (isxdigit(h_symb))
+            result += (toupper(h_symb) - 'A' + 10) * 16;
+
+        if (isdigit(l_symb))
+            result += l_symb - 0x30;
+        else if (isxdigit(l_symb))
+            result += toupper(l_symb) - 'A' + 10;
+
+        return result;
+    }
+
     string GetStringValue(LexerInputEx& input)
     {
         string result;
@@ -100,6 +116,10 @@ namespace parse
                             break;
                         case '"':
                             result += '"';
+                            break;
+                        case 'x': // Символ, определённый двухзначным шестнадцатеричным кодом
+                            ch1 = input.get();
+                            result += DblHexToChar(input.get(), ch1);
                             break;
                         default:
                             result += '\\';
@@ -352,6 +372,7 @@ namespace parse
         is_input_need_delete_ = false;
         input_.SetCommandDescPtr(&current_command_desc_);
         input_.IncludeSwitchTo("");
+        --current_command_desc_.module_string_number;
         NextToken();
     }
 
@@ -363,6 +384,7 @@ namespace parse
         is_input_need_delete_ = true;
         input_.SetCommandDescPtr(&current_command_desc_);
         input_.IncludeSwitchTo("");
+        --current_command_desc_.module_string_number;
         NextToken();
     }
 

@@ -1,4 +1,4 @@
-﻿
+
 #include "lexer.h"
 #include "parse.h"
 #include "runtime.h"
@@ -31,7 +31,7 @@ namespace runtime
 void TestParseProgram(TestRunner& tr);
 
 class LexerInputExImpl : public parse::LexerInputEx
-{
+{ // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных
 public:
     struct ModuleDescType
     {
@@ -72,8 +72,17 @@ public:
 
     void IncludeSwitchTo(std::string include_arg) override
     {
-        if (!include_arg.size())    
+        if (!include_arg.size())
+        { // Инициализирующий вызов IncludeSwitchTo()
+            eof_bit_ = false;
+            last_read_symb_ = std::char_traits<char>::eof();
+            unget_symb_ = std::char_traits<char>::eof();
+            current_position_ = 0;
+            current_module_desc_ptr_ = nullptr;
+            current_part_name_.clear();
+            include_stack_.clear();
             include_arg = main_module_name_;
+        }
         
         if (!include_map_.count(include_arg))
             throw ParseError("Включаемая часть "s + include_arg + " не найдена"s);
@@ -234,7 +243,7 @@ print None
 )");
 
         ostringstream output;
-        RunMythonProgram(input, output);    
+        RunMythonProgram(input, output);
         ASSERT_EQUAL(output.str(), "57\n10 24 -8\nhello\nworld\nTrue False\n\nNone\n");
     }
     
@@ -723,7 +732,7 @@ print wa_object.w, wa_object.h # Эта команда выведет: 400 200
         ASSERT_EQUAL(ostr.str(), "34 43\n77\n38 -166\n-24 -24 -24\n100 200\n400 200\n"s);
 
         // Далее испытаем швырки исключений при ошибках формирования ссылок
-        // (запрещённые ссылки на локальные перменные и временные значения).
+        // (запрещённые ссылки на локальные переменные и временные значения).
         istringstream input2(R"--(
 class ArrayWithInvalidRefs:
   def __init__(w, h):
@@ -759,6 +768,34 @@ r = wa_object.get_invalid_ref(3, 4)
         ASSERT_THROWS(RunMythonProgram(input3, ostr), ParseError);
     }
 
+
+    void TestBitwiseOps()
+    {
+        {
+            istringstream istr(R"--(
+x = 5
+print x, ~x, 2 * ~x, ~(2 * x)
+y = 3.1415925
+print y, ~y, 2 * ~y, ~(2 * y)
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "5 -6 -12 -11\n3.14159 -1.4292 -2.85841 -0.714602\n");
+        }
+
+        {
+            istringstream istr(R"--(
+s = "qwerty"
+print ~s
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            string qq = ostr.str();
+            //cout << ostr.str() << endl;
+            //ASSERT_EQUAL(ostr.str(), "5 -6 -12 -11\n3.14159 -1.4292 -2.85841 -0.714602\n");
+        }
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -783,6 +820,7 @@ r = wa_object.get_invalid_ref(3, 4)
         RUN_TEST(tr, TestFloatPointEvaluation);
         RUN_TEST(tr, TestImportBinaryModule);
         RUN_TEST(tr, TestIncludes);
+        RUN_TEST(tr, TestBitwiseOps);
     }
 }  // namespace
 

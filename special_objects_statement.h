@@ -4,8 +4,8 @@ class NewArray : public Statement
 {
 public:
     NewArray(std::vector<std::unique_ptr<Statement>> args);
-    // Возвращает объект, содержащий значение типа ArrayInstance,
-    // представляющее собой созданный экземпляр массива.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ArrayInstance,
+    // РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰РµРµ СЃРѕР±РѕР№ СЃРѕР·РґР°РЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ РјР°СЃСЃРёРІР°.
     runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 private:
 
@@ -16,8 +16,8 @@ class NewMap : public Statement
 {
 public:
     NewMap(std::vector<std::unique_ptr<Statement>> args);
-    // Возвращает объект, содержащий значение типа MapInstance,
-    // представляющее собой созданный экземпляр ассоциативного массива (словаря).
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° MapInstance,
+    // РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰РµРµ СЃРѕР±РѕР№ СЃРѕР·РґР°РЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ Р°СЃСЃРѕС†РёР°С‚РёРІРЅРѕРіРѕ РјР°СЃСЃРёРІР° (СЃР»РѕРІР°СЂСЏ).
     runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 };
 

@@ -1,4 +1,4 @@
-﻿
+
 #include "parse.h"
 #include "lexer.h"
 #include "statement.h"
@@ -62,6 +62,14 @@ namespace
             return result;
         }
 
+        template <typename T>
+        [[nodiscard]] unique_ptr<T> Create(T&& object, runtime::ProgramCommandDescriptor targ_command_desc)
+        {
+            auto result = make_unique<T>(forward<T>(object));
+            result->SetCommandDesc(targ_command_desc);
+            return result;
+        }
+
         void AddCommandDesc(ast::Statement* statement_ptr)
         {
             statement_ptr->SetCommandDesc(lexer_.GetCurrentCommandDesc());
@@ -101,6 +109,11 @@ namespace
         unique_ptr<ast::Statement> ParseProgram()
         {
             auto result = exec_factory_.Create(ast::Compound());
+            // Перед началом действительных команд вставим инициализирующий псевдооператор.
+            auto init_psevdoexec = exec_factory_.Create(ast::Compound());
+            init_psevdoexec->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
+            result->AddStatement(move(init_psevdoexec));
+
             while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
@@ -262,9 +275,12 @@ namespace
             }
         }
 
+        // Далее следуют функции, образующие синтаксический анализатор арифметических выражений
         // Expr -> Adder ['+'/'-' Adder]*
         unique_ptr<ast::Statement> ParseExpression()  // NOLINT
-        {
+        { // Эта функция разбирает арифметическое выражение на операции самого низкого приоритета - сложение
+          // и вычитание. Результат же её работы - исполняемый узел, вычисляющий данное арифметическое
+          // выражение целиком. Отсюда и название  - ParseExpression().
             unique_ptr<ast::Statement> result = ParseAdder();
             while (lexer_.CurrentToken() == '+' || lexer_.CurrentToken() == '-')
             {
@@ -279,9 +295,12 @@ namespace
             return result;
         }
 
-        // Adder -> Mult ['*'/'/' Mult]*
+        // Adder -> Mult ['*'/'/'/'%' Mult]*
         unique_ptr<ast::Statement> ParseAdder()  // NOLINT
-        {
+        { // Объектом обработки данной функции являются уже более приоритетные операции - умножение, деление
+          // и модульное деление (получение остатка от деления). В целом же формируемый ей узел может являться
+          // операндом для операций более низкого приоритета (сложения и вычитания), то есть быть слагаемым.
+          // Из этого следует и название - ParseAdder().
             unique_ptr<ast::Statement> result = ParseMult();
             while (lexer_.CurrentToken() == '*' || lexer_.CurrentToken() == '/' ||
                    lexer_.CurrentToken() == '%')
@@ -308,6 +327,7 @@ namespace
         // Mult -> '(' Expr ')'
         //       | NUMBER
         //       | '-' Mult
+        //       | '~' Mult
         //       | STRING
         //       | NONE
         //       | TRUE
@@ -315,7 +335,9 @@ namespace
         //       | DottedIds '(' ExprList ')'
         //       | DottedIds
         unique_ptr<ast::Statement> ParseMult()  // NOLINT
-        {
+        { // Данная же функция выделяет операции самого высокого приоритета - унарные (негация и побитовая инверсия),
+          // атомы, вызовы методов. Образуемые же ей узлы могут быть операндами для менее приоритетных операций -
+          // умножения, деления, и. т. д., то есть множителями. Поэтому название - ParseMult().
             if (lexer_.CurrentToken() == '(')
             {
                 lexer_.NextToken();
@@ -329,6 +351,12 @@ namespace
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Mult(ParseMult(), exec_factory_.Create(ast::NumericConst(-1))));
+            }
+
+            if (lexer_.CurrentToken() == '~')
+            {
+                lexer_.NextToken();
+                return exec_factory_.Create(ast::Complement(ParseMult()));
             }
 
             const auto* int_num_ptr = lexer_.CurrentToken().TryAs<ITokenType::NumberInt>();
@@ -451,6 +479,8 @@ namespace
         unique_ptr<ast::Statement> ParseCondition()  // NOLINT
         {
             lexer_.Expect<ITokenType::If>();
+            // Запомним истинное положение в исходном тексте оператора if
+            runtime::ProgramCommandDescriptor if_desc = lexer_.GetCurrentCommandDesc();
             lexer_.NextToken();
 
             auto condition = ParseTest();
@@ -469,13 +499,15 @@ namespace
             }
 
             return exec_factory_.Create(ast::IfElse(std::move(condition), std::move(if_body),
-                                            std::move(else_body)));
+                                            std::move(else_body)), if_desc);
         }
 
         // Condition -> while LogicalExpr: Suite
         unique_ptr<ast::Statement> ParseWhileCondition()  // NOLINT
         {
             lexer_.Expect<ITokenType::While>();
+            // Запомним истинное положение в исходном тексте оператора while
+            runtime::ProgramCommandDescriptor while_desc = lexer_.GetCurrentCommandDesc();
             lexer_.NextToken();
 
             auto condition = ParseTest();
@@ -485,7 +517,7 @@ namespace
 
             auto while_body = ParseSuite();
 
-            return exec_factory_.Create(ast::While(std::move(condition), std::move(while_body)));
+            return exec_factory_.Create(ast::While(std::move(condition), std::move(while_body)), while_desc);
         }
 
         // LogicalExpr -> AndTest [OR AndTest]

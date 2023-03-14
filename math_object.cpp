@@ -21,7 +21,7 @@ namespace ast
 
     runtime::ObjectHolder NewMath::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         return ObjectHolder::Own(runtime::MathInstance());
     }
 

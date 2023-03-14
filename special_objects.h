@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 //Итератор для словаря (ассоциативного массива)
 class MapInstance;

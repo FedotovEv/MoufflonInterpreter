@@ -60,7 +60,8 @@ namespace runtime
         THRM_CREATE_PLUGIN_NOT_FOUND,
         THRM_LOAD_PLUGIN_LIST_NOT_FOUND,
         THRM_INCLUDE_INVALID_PARAMS,
-        THRM_NODE_NOT_ROOT
+        THRM_NODE_NOT_ROOT,
+        THRM_URGENT_TERMINATE
     };
 
     class ThrowMessages

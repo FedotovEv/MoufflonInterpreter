@@ -26,7 +26,7 @@ namespace ast
 
     runtime::ObjectHolder NewPlugin::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         return ObjectHolder::Own(runtime::PluginInstance());
     }
 } // namespace ast

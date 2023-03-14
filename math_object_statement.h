@@ -4,8 +4,8 @@ class NewMath : public Statement
 {
 public:
     NewMath(std::vector<std::unique_ptr<Statement>> args);
-    // Возвращает объект, содержащий значение типа MathInstance,
-    // представляющее собой созданный экземпляр математической коллекции.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° MathInstance,
+    // РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰РµРµ СЃРѕР±РѕР№ СЃРѕР·РґР°РЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ РјР°С‚РµРјР°С‚РёС‡РµСЃРєРѕР№ РєРѕР»Р»РµРєС†РёРё.
     runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 };
 

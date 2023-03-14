@@ -1,6 +1,7 @@
-﻿#include "statement.h"
+#include "statement.h"
 #include "throw_messages.h"
 #include "parse.h"
+#include "debug_context.h"
 
 #include <iostream>
 #include <sstream>
@@ -21,6 +22,7 @@ namespace ast
 {
     using runtime::Closure;
     using runtime::Context;
+    using runtime::DebugContext;
     using runtime::ObjectHolder;
 
     ObjectHolder DereferencePointerObject(const ObjectHolder& pointer_obj)
@@ -35,14 +37,93 @@ namespace ast
             return pointer_obj;
     }
 
-    void PrepareExecute(Statement* exec_obj_ptr, Context& context)
+    void PrepareExecute(Statement* exec_obj_ptr, Closure& closure, Context& context)
     {
+        if (DebugContext* dbg_context = dynamic_cast<DebugContext*>(&context))
+        { // Эти операции будут выполняться только при отладке, то есть если в качестве операнда context
+          // передана переменная типа DebugContext.
+            static bool is_wait_first_frame_command = false;
+            runtime::CommandGenus current_genus = exec_obj_ptr->GetCommandGenus();
+            runtime::DebugCallbackReason debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN;
+            
+            if (exec_obj_ptr->GetCommandGenus() == runtime::CommandGenus::CMD_GENUS_INITIALIZE)
+            {
+                dbg_context->GetCallStack().clear();
+                dbg_context->GetCallStack().push_back({}); // Здесь создаём запись о корневом стековом кадре
+                is_wait_first_frame_command = true;
+                return;
+            }
+
+            if (context.GetLastCommandDesc() != exec_obj_ptr->GetCommandDesc())
+            { // Исполнение перешло к следующей строке исходного текста
+                if (is_wait_first_frame_command)
+                { // Сохраняем информацию о положении первой исполняемой строки очередного стекового кадра.
+                  // Сама запись о кадре была создана ранее при выполнении команды рода MethodCall (она имеет род
+                  // runtime::CommandGenus::CMD_GENUS_CALL_METHOD).
+                    dbg_context->GetCallStack().back().first_command = exec_obj_ptr->GetCommandDesc();
+                    is_wait_first_frame_command = false;
+                }
+                // Сначала проверим наличие здесь (на этой новой строке) точек останова
+
+                // Если точек останова нет, возможно, выполняется тот или иной вид трассировки (пошагового исполнения)
+                switch (dbg_context->GetDebugMode())
+                {
+                case runtime::DebugExecutionMode::DEBUG_STEP_IN:
+                    // Исполнение до начала следующей строки исходника
+                    debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_IN;
+                    break;
+                case runtime::DebugExecutionMode::DEBUG_STEP_OUT:
+                    // Исполнение до начала следующей строки исходника, обходя все вызовы функций
+                    if (dbg_context->GetCallStack().size() <= dbg_context->GetDebugStackCounter())
+                        debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_OUT;
+                    break;
+                case runtime::DebugExecutionMode::DEBUG_EXIT_METHOD:
+                    // Запуск вплоть до оператора выхода из текущей функци
+                    if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
+                        current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+                        debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD;
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            if (debug_callback_reason != runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN)
+            { // Случилось какое-то отладочное событие, делаем отладочный звонок
+                if (dbg_context->GetDebugCallback())
+                    dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
+                        (debug_callback_reason, exec_obj_ptr, closure, context));
+                else
+                    dbg_context->SetDebugMode(runtime::DebugExecutionMode::DEBUG_NO_DEBUG);
+                dbg_context->SetDebugStackCounter(dbg_context->GetCallStack().size());
+            }
+
+            // Далее находятся операции, выполняющие ведение стека вызовов. Таких операций две:
+            // 1. Если встретилась какая-либо команда входа в функцию, создаём запись о новом стековом кадре.
+            // 2. Если наткнулись на команду выхода из функции, удаляем запись верхнего стекового кадра.
+            if (current_genus == runtime::CommandGenus::CMD_GENUS_CALL_METHOD)
+            {
+                runtime::CallStackEntry new_stack_rec;
+                new_stack_rec.call_command = exec_obj_ptr->GetCommandDesc();
+                dbg_context->GetCallStack().push_back(new_stack_rec);
+                is_wait_first_frame_command = true; // При следующем переходе к следующей строке будет захвачена
+                                                    // информация о первой исполняемой строке нового кадра.
+            }
+            else if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
+                     current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+            {
+                dbg_context->GetCallStack().pop_back();
+            }
+        }
+
         context.SetLastCommandDesc(exec_obj_ptr->GetCommandDesc());
+        if (context.IsTerminate())
+            ThrowRuntimeError(exec_obj_ptr, ThrowMessageNumber::THRM_URGENT_TERMINATE);
     }
 
     ObjectHolder Assignment::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         return closure[var_] = rv_->Execute(closure, context);
     }
 
@@ -56,7 +137,7 @@ namespace ast
 
     ObjectHolder IndirectAssignment::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder real_object = object_->Execute(closure, context);
         vector<ObjectHolder> real_args;
         for (auto& cur_arg_ptr : args_) // Вычисляем истинные значения аргументов метода
@@ -88,7 +169,7 @@ namespace ast
 
     ObjectHolder VariableValue::Execute(Closure& closure, [[maybe_unused]] Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         size_t i = 1;
         Closure* cur_closure_ptr = &closure;
         runtime::ClassInstance* cur_class_instance_ptr = nullptr;
@@ -107,7 +188,7 @@ namespace ast
                 if (cur_class_instance_ptr && cur_class_instance_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
                     context.GetExternalLinkage() && id_name.size())
                 {  // Вызов звонковой функции при чтении полей объекта "__external"
-                    variant<int, double, string> external_result = context.GetExternalLinkage()(
+                    runtime::LinkageReturn external_result = context.GetExternalLinkage()(
                                     runtime::LinkCallReason::CALL_REASON_READ_FIELD, id_name, {});
                     if (holds_alternative<int>(external_result))
                         return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
@@ -142,7 +223,7 @@ namespace ast
 
     ObjectHolder Print::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder result;
         if (name_.size())
         {
@@ -174,11 +255,13 @@ namespace ast
                            object_(move(object)),
                            method_(move(method)),
                            args_(move(args))
-    {}
+    {
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
+    }
 
     ObjectHolder MethodCall::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder real_object = object_->Execute(closure, context);
         vector<ObjectHolder> real_args;
         for (auto& cur_arg_ptr : args_)
@@ -205,7 +288,7 @@ namespace ast
                     cur_real_arg.Get()->Print(set_value_stream, context);
                     real_args_str.push_back(set_value_stream.str());
                 }
-                variant<int, double, string> external_result = context.GetExternalLinkage()(
+                runtime::LinkageReturn external_result = context.GetExternalLinkage()(
                     runtime::LinkCallReason::CALL_REASON_CALL_METHOD, method_, real_args_str);
                 if (holds_alternative<int>(external_result))
                     return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
@@ -227,7 +310,7 @@ namespace ast
 
     ObjectHolder Stringify::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder object_hold = argument_->Execute(closure, context);
         ostringstream ostr;
         if (object_hold)
@@ -244,7 +327,7 @@ namespace ast
      // В противном случае при вычислении выбрасывается runtime_error
     ObjectHolder Add::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -277,7 +360,7 @@ namespace ast
     // Если lhs и rhs - не числа, выбрасывается исключение runtime_error
     ObjectHolder Sub::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -294,7 +377,7 @@ namespace ast
 
     ObjectHolder Mult::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
 
@@ -311,7 +394,7 @@ namespace ast
 
     ObjectHolder Div::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
         runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
@@ -331,7 +414,7 @@ namespace ast
 
     ObjectHolder ModuloDiv::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
         runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
@@ -351,23 +434,24 @@ namespace ast
 
     ObjectHolder Compound::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         for (auto& cur_statement_ptr : comp_body_)
             cur_statement_ptr->Execute(closure, context);
         return {};
     }
 
-    std::vector<const Statement*> Compound::GetCompoundStatements()
-    {
-        std::vector<const Statement*> result;
-        for (auto& current_statement_unique : comp_body_)
-            result.push_back(current_statement_unique.get());
-        return result;
+    void Compound::AddStatement(std::unique_ptr<Statement> stmt)
+    { // Добавляет очередную инструкцию в конец составной инструкции
+        if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(stmt.get()))
+            last_body_command_desc_ =  compound_stmt_ptr->GetLastCommandDesc();           
+        else
+            last_body_command_desc_ =  stmt->GetCommandDesc();
+        comp_body_.push_back(std::move(stmt));
     }
 
     ObjectHolder Return::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         throw ReturnResult(statement_->Execute(closure, context));
     }
 
@@ -412,7 +496,7 @@ namespace ast
 
     ObjectHolder ReturnRef::Execute(Closure& closure, [[maybe_unused]] Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         if (dotted_ids_.size())
             return ExecuteForVariable(closure, context);
         else
@@ -421,13 +505,13 @@ namespace ast
 
     ObjectHolder Break::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         throw TerminateLoop(TerminateLoopReason::TERMINATE_LOOP_BREAK);
     }
 
     ObjectHolder Continue::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         throw TerminateLoop(TerminateLoopReason::TERMINATE_LOOP_CONTINUE);
     }
 
@@ -436,7 +520,7 @@ namespace ast
 
     ObjectHolder ClassDefinition::Execute(Closure& closure, [[maybe_unused]] Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         closure[cls_.TryAs<runtime::Class>()->GetName()] = cls_;
         return cls_;
     }
@@ -459,7 +543,7 @@ namespace ast
 
     ObjectHolder FieldAssignment::Execute(Closure& closure, Context& context)
     { // Присваивает полю object.field_name значение выражения rv
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ClassInstance* target_object_ptr = nullptr;
         ObjectHolder target_object_holder(object_.Execute(closure, context));
         if (target_object_holder)
@@ -486,7 +570,7 @@ namespace ast
 
     ObjectHolder IfElse::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         if (runtime::IsTrue(condition_->Execute(closure, context)))
             return if_body_->Execute(closure, context);
         else
@@ -502,7 +586,7 @@ namespace ast
 
     ObjectHolder While::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder result;
         while (runtime::IsTrue(condition_->Execute(closure, context)))
         {
@@ -526,7 +610,7 @@ namespace ast
 
     ObjectHolder Or::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder real_lhs = lhs_->Execute(closure, context);
         // Значение аргумента rhs вычисляется, только если значение lhs
         // после приведения к Bool равно False
@@ -540,7 +624,7 @@ namespace ast
 
     ObjectHolder And::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder real_lhs = lhs_->Execute(closure, context);
         // Значение аргумента rhs вычисляется, только если значение lhs
         // после приведения к Bool равно True
@@ -552,9 +636,127 @@ namespace ast
         return ObjectHolder::Own(runtime::Bool(false));
     }
 
+    ObjectHolder BitwiseOr::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
+        runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+
+        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+        {
+            runtime::Number result = *real_lhs.TryAs<runtime::Number>() | *real_rhs.TryAs<runtime::Number>();
+            return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (real_lhs.TryAs<runtime::String>() && real_rhs.TryAs<runtime::String>())
+        {
+            string real_str_lhs = real_lhs.TryAs<runtime::String>()->GetValue();
+            string real_str_rhs = real_rhs.TryAs<runtime::String>()->GetValue();
+            string result;
+            for (size_t i = 0; i < max(real_str_lhs.size(), real_str_rhs.size()); ++i)
+            {
+                char lhs_char = 0, rhs_char = 0;
+                if (i < real_str_lhs.size())
+                    lhs_char = real_str_lhs[i];
+                if (i < real_str_rhs.size())
+                    rhs_char = real_str_rhs[i];
+                result += lhs_char | rhs_char;
+            }
+            return ObjectHolder::Own<runtime::String>(result);
+        }
+        else
+        {
+            return ObjectHolder::Own(runtime::Bool(runtime::IsTrue(real_lhs) || runtime::IsTrue(real_rhs)));
+        }
+    }
+
+    ObjectHolder BitwiseAnd::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
+        runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+
+        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+        {
+            runtime::Number result = *real_lhs.TryAs<runtime::Number>() & *real_rhs.TryAs<runtime::Number>();
+            return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (real_lhs.TryAs<runtime::String>() && real_rhs.TryAs<runtime::String>())
+        {
+            string real_str_lhs = real_lhs.TryAs<runtime::String>()->GetValue();
+            string real_str_rhs = real_rhs.TryAs<runtime::String>()->GetValue();
+            string result;
+            for (size_t i = 0; i < max(real_str_lhs.size(), real_str_rhs.size()); ++i)
+            {
+                char lhs_char = 0, rhs_char = 0;
+                if (i < real_str_lhs.size())
+                    lhs_char = real_str_lhs[i];
+                if (i < real_str_rhs.size())
+                    rhs_char = real_str_rhs[i];
+                result += lhs_char & rhs_char;
+            }
+            return ObjectHolder::Own<runtime::String>(result);
+        }
+        else
+        {
+            return ObjectHolder::Own(runtime::Bool(runtime::IsTrue(real_lhs) && runtime::IsTrue(real_rhs)));
+        }
+    }
+
+    ObjectHolder BitwiseXor::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
+        runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+
+        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+        {
+            runtime::Number result = *real_lhs.TryAs<runtime::Number>() ^ *real_rhs.TryAs<runtime::Number>();
+            return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (real_lhs.TryAs<runtime::String>() && real_rhs.TryAs<runtime::String>())
+        {
+            string real_str_lhs = real_lhs.TryAs<runtime::String>()->GetValue();
+            string real_str_rhs = real_rhs.TryAs<runtime::String>()->GetValue();
+            string result;
+            for (size_t i = 0; i < max(real_str_lhs.size(), real_str_rhs.size()); ++i)
+            {
+                char lhs_char = 0, rhs_char = 0;
+                if (i < real_str_lhs.size())
+                    lhs_char = real_str_lhs[i];
+                if (i < real_str_rhs.size())
+                    rhs_char = real_str_rhs[i];
+                result += lhs_char ^ rhs_char;
+            }
+            return ObjectHolder::Own<runtime::String>(result);
+        }
+        else
+        {
+            return ObjectHolder::Own(runtime::Bool(runtime::IsTrue(real_lhs) != runtime::IsTrue(real_rhs)));
+        }
+    }
+
+    ObjectHolder Complement::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder real_arg = argument_->Execute(closure, context);
+
+        if (runtime::Number* real_arg_number_ptr = real_arg.TryAs<runtime::Number>())
+            return ObjectHolder::Own<runtime::Number>(~(*real_arg_number_ptr));
+        
+        if (runtime::String* real_arg_string_ptr = real_arg.TryAs<runtime::String>())
+        {
+            std::string result_str;
+            for (char c : real_arg_string_ptr->GetValue())
+                result_str += ~c;
+            return ObjectHolder::Own(runtime::String(std::move(result_str)));
+        }
+
+        return ObjectHolder::Own(runtime::Bool(!runtime::IsTrue(real_arg)));
+    }
+
     ObjectHolder Not::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         ObjectHolder real_arg = argument_->Execute(closure, context);
         return ObjectHolder::Own(runtime::Bool(!runtime::IsTrue(real_arg)));
     }
@@ -565,7 +767,7 @@ namespace ast
 
     ObjectHolder Comparison::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs = lhs_->Execute(closure, context);
         runtime::ObjectHolder real_rhs = rhs_->Execute(closure, context);
         return ObjectHolder::Own(runtime::Bool(cmp_(real_lhs, real_rhs, context)));
@@ -580,7 +782,7 @@ namespace ast
 
     ObjectHolder NewInstance::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         if (new_class_instance_.HasMethod(INIT_METHOD, args_.size()))
         {
             vector<ObjectHolder> actual_args;
@@ -592,11 +794,17 @@ namespace ast
     }
 
     MethodBody::MethodBody(std::unique_ptr<Statement>&& body) : body_(move(body))
-    {}
+    {
+        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
+        if (Compound* compound_body_ptr = dynamic_cast<Compound*>(body_.get()))
+            dummy_statement_->SetCommandDesc(compound_body_ptr->GetLastCommandDesc());
+        else
+            dummy_statement_->SetCommandDesc(body_->GetCommandDesc());
+    }
 
     ObjectHolder MethodBody::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, context);
+        PrepareExecute(this, closure, context);
         try
         {
             body_->Execute(closure, context);
@@ -605,6 +813,7 @@ namespace ast
         {
             return ret_result.ret_result_;
         }
+        PrepareExecute(dummy_statement_.get(), closure, context);
         return runtime::ObjectHolder::None();
     }
 }  // namespace ast
