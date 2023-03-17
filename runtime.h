@@ -326,9 +326,9 @@ namespace runtime
         T ImplGetValue() const
         {
             if (std::holds_alternative<int>(value_))
-                return std::get<int>(value_);
+                return static_cast<T>(std::get<int>(value_));
             else if (std::holds_alternative<double>(value_))
-                return std::get<double>(value_);
+                return static_cast<T>(std::get<double>(value_));
             else
                 return T(0);
         }
@@ -344,6 +344,8 @@ namespace runtime
     Number operator|(const Number& first_op, const Number& second_op);
     Number operator&(const Number& first_op, const Number& second_op);
     Number operator^(const Number& first_op, const Number& second_op);
+    Number operator<<(const Number& first_op, const Number& second_op);
+    Number operator>>(const Number& first_op, const Number& second_op);
     Number operator~(const Number& first_op);
     bool operator<(const Number& first_op, const Number& second_op);
     bool operator==(const Number& first_op, const Number& second_op);

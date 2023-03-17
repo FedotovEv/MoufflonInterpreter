@@ -30,6 +30,7 @@
 #include <wx/statbox.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
+#include <wx/stattext.h>
 
 #include "../redefine_.h"
 
@@ -93,23 +94,33 @@
 #define wxID_BREAK_OFF 1055
 #define wxID_TOOL_CREATE_WATCH 1056
 #define wxID_TOOL_DELETE_WATCH 1057
-#define wxID_DEBUGGER_OUTPUT_WINDOW 1058
-#define wxID_DEBUGGER_STATUSBAR 1059
-#define wxID_DEBUGGER_MENUBAR 1060
-#define wxID_MENU_DEBUG_SAVE_OUTPUT 1061
-#define wxID_MENU_DEBUG_SAVE_OUTPUT_AS 1062
-#define wxID_MENU_DEBUG_CLEAR_WINDOW 1063
-#define wxID_MENU_DEBUG_CLOSE_WINDOW 1064
-#define wxID_DEBUGGER_TOOLBAR 1065
-#define wxID_SAVE_DEBUG_OUTPUT 1066
-#define wxID_SAVE_AS_DEBUG_OUTPUT 1067
-#define wxID_DEBUG_CLEAR_WINDOW 1068
-#define wxID_DEBUG_CLOSE_WINDOW 1069
-#define wxID_DEBUG_OUTPUT_TEXT 1070
-#define wxID_CONFIG_DIALOG 1071
-#define wxID_CONFIG_SOURCE_CODE 1072
-#define wxID_SOURCE_UTF8 1073
-#define wxID_SOURCE_SAVE_IN_PROJECT 1074
+#define wxID_MENU_MODULE_NAME 1058
+#define wxID_MENU_MODULE_ACTIVE 1059
+#define wxID_MENU_MODULE_MAIN 1060
+#define wxID_MENU_EDIT_MODULE 1061
+#define wxID_DEBUGGER_OUTPUT_WINDOW 1062
+#define wxID_DEBUGGER_STATUSBAR 1063
+#define wxID_DEBUGGER_MENUBAR 1064
+#define wxID_MENU_DEBUG_SAVE_OUTPUT 1065
+#define wxID_MENU_DEBUG_SAVE_OUTPUT_AS 1066
+#define wxID_MENU_DEBUG_CLEAR_WINDOW 1067
+#define wxID_MENU_DEBUG_CLOSE_WINDOW 1068
+#define wxID_DEBUGGER_TOOLBAR 1069
+#define wxID_SAVE_DEBUG_OUTPUT 1070
+#define wxID_SAVE_AS_DEBUG_OUTPUT 1071
+#define wxID_DEBUG_CLEAR_WINDOW 1072
+#define wxID_DEBUG_CLOSE_WINDOW 1073
+#define wxID_DEBUG_OUTPUT_TEXT 1074
+#define wxID_CONFIG_DIALOG 1075
+#define wxID_CONFIG_SOURCE_CODE 1076
+#define wxID_SOURCE_UTF8 1077
+#define wxID_SOURCE_SAVE_IN_PROJECT 1078
+#define wxID_EDIT_MODULE_PROPS_DIALOG 1079
+#define wxID_MODULE_ID_STAT 1080
+#define wxID_MODULE_PATH_STAT 1081
+#define wxID_MODULE_NAME_EDIT 1082
+#define wxID_MODULE_ACTIVE_FLAG 1083
+#define wxID_MODULE_MAIN_FLAG 1084
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class MainDebuggerWindow
@@ -152,11 +163,16 @@ class MainDebuggerWindow : public wxFrame
 		wxToolBarToolBase* ToolCreateWatch;
 		wxToolBarToolBase* ToolDeleteWatch;
 		wxToolBarToolBase* ToolHelp;
+		wxMenu* EditModuleMenu;
+		wxMenuItem* MenuModuleName;
+		wxMenuItem* MenuModuleIsActive;
+		wxMenuItem* MenuModuleIsMain;
 
 		// Virtual event handlers, override them in your derived class
 		virtual void MainDebuggerWindowOnClose( wxCloseEvent& event ) { event.Skip(); }
 		virtual void ModuleListOnListBox( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ModuleListOnListBoxDClick( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ModuleListOnRightDown( wxMouseEvent& event ) { event.Skip(); }
 		virtual void SourceViewerOnKeyDown( wxKeyEvent& event ) { event.Skip(); }
 		virtual void SourceViewerOnLeftDown( wxMouseEvent& event ) { event.Skip(); }
 		virtual void SourceViewerOnRightDown( wxMouseEvent& event ) { event.Skip(); }
@@ -216,6 +232,9 @@ class MainDebuggerWindow : public wxFrame
 		virtual void ToolBreakpointOnOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ToolBreakpointOffOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ToolHelpOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ModuleIsActiveOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ModuleIsMainOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
+		virtual void EditModuleOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 
 
 	public:
@@ -227,6 +246,11 @@ class MainDebuggerWindow : public wxFrame
 		MainDebuggerWindow( wxWindow* parent, wxWindowID id = wxID_MAIN_WINDOW, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 553,360 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 
 		~MainDebuggerWindow();
+
+		void MainDebuggerWindowOnContextMenu( wxMouseEvent &event )
+		{
+			this->PopupMenu( EditModuleMenu, event.GetPosition() );
+		}
 
 };
 
@@ -276,8 +300,8 @@ class ConfigDialog : public wxDialog
 	private:
 
 	protected:
-		wxCheckBox* SourceUtf8;
-		wxCheckBox* SourceFullSave;
+		wxCheckBox* SourceIsUtf8;
+		wxCheckBox* SourceIsFullSave;
 		wxButton* SaveConfig;
 		wxButton* CancelConfig;
 		wxButton* RestoreCurrentConfig;
@@ -295,6 +319,44 @@ class ConfigDialog : public wxDialog
 		ConfigDialog( wxWindow* parent, wxWindowID id = wxID_CONFIG_DIALOG, const wxString& title = _("Настройка программы"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( -1,-1 ), long style = wxCAPTION|wxDEFAULT_DIALOG_STYLE );
 
 		~ConfigDialog();
+
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Class EditModulePropsDialog
+///////////////////////////////////////////////////////////////////////////////
+class EditModulePropsDialog : public wxDialog
+{
+	private:
+
+	protected:
+		wxStaticText* m_staticText3;
+		wxStaticText* ModuleId;
+		wxStaticText* m_staticText4;
+		wxStaticText* ModulePath;
+		wxStaticText* m_staticText1;
+		wxTextCtrl* ModuleName;
+		wxCheckBox* ModuleIsActive;
+		wxCheckBox* ModuleIsMain;
+		wxButton* SaveNewModuleProps;
+		wxButton* CancelEditModuleProps;
+		wxButton* ResetModuleProps;
+		wxButton* DeleteModule;
+
+		// Virtual event handlers, override them in your derived class
+		virtual void EditModulePropsDialogOnClose( wxCloseEvent& event ) { event.Skip(); }
+		virtual void EditModulePropsDialogOnInitDialog( wxInitDialogEvent& event ) { event.Skip(); }
+		virtual void SaveNewModulePropsOnButtonClick( wxCommandEvent& event ) { event.Skip(); }
+		virtual void CancelEditModulePropsOnButtonClick( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ResetModulePropsOnButtonClick( wxCommandEvent& event ) { event.Skip(); }
+		virtual void DeleteModuleOnButtonClick( wxCommandEvent& event ) { event.Skip(); }
+
+
+	public:
+
+		EditModulePropsDialog( wxWindow* parent, wxWindowID id = wxID_EDIT_MODULE_PROPS_DIALOG, const wxString& title = _("Свойства модуля"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxCAPTION|wxDEFAULT_DIALOG_STYLE );
+
+		~EditModulePropsDialog();
 
 };
 

@@ -243,6 +243,38 @@ namespace runtime
         }
     }
     
+    Number operator<<(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() || second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() << second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double first_temp_double = first_op.GetDoubleValue();
+            uint64_t result_uint = (*reinterpret_cast<uint64_t*>(&first_temp_double) <<
+                                    second_op.GetIntValue());
+            return Number(*reinterpret_cast<double*>(&result_uint));
+        }
+    }
+
+    Number operator>>(const Number& first_op, const Number& second_op)
+    {
+        if (first_op.IsInt() || second_op.IsInt())
+        {
+            int int_result = first_op.GetIntValue() >> second_op.GetIntValue();
+            return Number(int_result);
+        }
+        else
+        {
+            double first_temp_double = first_op.GetDoubleValue();
+            uint64_t result_uint = (*reinterpret_cast<uint64_t*>(&first_temp_double) >>
+                second_op.GetIntValue());
+            return Number(*reinterpret_cast<double*>(&result_uint));
+        }
+    }
+
     Number operator~(const Number& first_op)
     {
         if (first_op.IsInt())

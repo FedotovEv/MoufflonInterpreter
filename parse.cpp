@@ -32,7 +32,7 @@ namespace
 
         string stem = filename.substr(path_margin + 1, point_pos - path_margin - 1);
         string ext;
-        if (point_pos < filename.size())
+        if (point_pos < static_cast<int>(filename.size()))
             ext = filename.substr(point_pos);
         return {stem, ext};
     }
@@ -109,11 +109,8 @@ namespace
         unique_ptr<ast::Statement> ParseProgram()
         {
             auto result = exec_factory_.Create(ast::Compound());
-            // Перед началом действительных команд вставим инициализирующий псевдооператор.
-            auto init_psevdoexec = exec_factory_.Create(ast::Compound());
-            init_psevdoexec->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
-            result->AddStatement(move(init_psevdoexec));
-
+            // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
+            result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
             while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
@@ -276,11 +273,55 @@ namespace
         }
 
         // Далее следуют функции, образующие синтаксический анализатор арифметических выражений
-        // Expr -> Adder ['+'/'-' Adder]*
+        // Expr -> BitwiseOperand ['&'/'|'/'^' BitwiseOperand]*
         unique_ptr<ast::Statement> ParseExpression()  // NOLINT
-        { // Эта функция разбирает арифметическое выражение на операции самого низкого приоритета - сложение
-          // и вычитание. Результат же её работы - исполняемый узел, вычисляющий данное арифметическое
-          // выражение целиком. Отсюда и название  - ParseExpression().
+        { // Эта функция разбирает арифметическое выражение на операции самого низкого приоритета -
+          // побитово-логические бинарные выражения - побитовое И (&), побитовое ИЛИ (|) и побитовое
+          // "ИСКЛЮЧАЮЩЕЕ ИЛИ" (xor, ^). Результат же её работы - исполняемый узел, вычисляющий данное
+          // арифметическое выражение целиком. Отсюда и название  - ParseExpression().
+            unique_ptr<ast::Statement> result = ParseBitwiseOperand();
+            while (lexer_.CurrentToken() == '&' || lexer_.CurrentToken() == '|' ||
+                   lexer_.CurrentToken() == '^')
+            {
+                char op = lexer_.CurrentToken().As<ITokenType::Char>().value;
+                lexer_.NextToken();
+
+                if (op == '&')
+                    result = exec_factory_.Create(ast::BitwiseAnd(std::move(result), ParseBitwiseOperand()));
+                else if (op == '|')
+                    result = exec_factory_.Create(ast::BitwiseOr(std::move(result), ParseBitwiseOperand()));
+                else // op == '^'
+                    result = exec_factory_.Create(ast::BitwiseXor(std::move(result), ParseBitwiseOperand()));
+            }
+            return result;
+        }
+
+        // BitwiseOperand -> ShiftOperand ["<<"/">>" ShiftOperand]*
+        unique_ptr<ast::Statement> ParseBitwiseOperand()  // NOLINT
+        { // Вот эта функция уже разбирает арифметическое выражение на операции более высокого приоритета -
+          // побитовые сдвиги влево и вправо. Результат же её работы - исполняемый узел, могущий служить
+          // операндом для низкоприоритетных побитово-логических операций. Отсюда и название -
+          //  - ParseBitwiseOperand().
+            unique_ptr<ast::Statement> result = ParseShiftOperand();
+            while (lexer_.CurrentToken().Is<parse::token_type::ShiftLeft>() ||
+                   lexer_.CurrentToken().Is<parse::token_type::ShiftRight>())
+            {
+                bool is_op_shift_left = lexer_.CurrentToken().Is<parse::token_type::ShiftLeft>();
+                lexer_.NextToken();
+
+                if (is_op_shift_left)
+                    result = exec_factory_.Create(ast::ShiftLeft(std::move(result), ParseShiftOperand()));
+                else
+                    result = exec_factory_.Create(ast::ShiftRight(std::move(result), ParseShiftOperand()));
+            }
+            return result;
+        }
+
+        // ShiftOperand -> Adderr ['+'/'-' Adder]*
+        unique_ptr<ast::Statement> ParseShiftOperand()  // NOLINT
+        { // Данная функция разлагает арифметическое выражение на операции ещё более высокого приоритета -
+          // сложение и вычитание. Результат же её работы - исполняемый узел, могущий служить операндом для
+          // битовых сдвигов. Отсюда и название  - ParseShiftOperand().
             unique_ptr<ast::Statement> result = ParseAdder();
             while (lexer_.CurrentToken() == '+' || lexer_.CurrentToken() == '-')
             {
@@ -297,10 +338,10 @@ namespace
 
         // Adder -> Mult ['*'/'/'/'%' Mult]*
         unique_ptr<ast::Statement> ParseAdder()  // NOLINT
-        { // Объектом обработки данной функции являются уже более приоритетные операции - умножение, деление
-          // и модульное деление (получение остатка от деления). В целом же формируемый ей узел может являться
-          // операндом для операций более низкого приоритета (сложения и вычитания), то есть быть слагаемым.
-          // Из этого следует и название - ParseAdder().
+        { // Объектом обработки данной функции являются операции следующей ступени приоритета - умножение,
+          // деление и модульное деление (получение остатка от деления). В целом же формируемый ей узел может
+          // являться операндом для операций более низкого приоритета (сложения и вычитания), то есть быть
+          // слагаемым. Из этого следует и название - ParseAdder().
             unique_ptr<ast::Statement> result = ParseMult();
             while (lexer_.CurrentToken() == '*' || lexer_.CurrentToken() == '/' ||
                    lexer_.CurrentToken() == '%')

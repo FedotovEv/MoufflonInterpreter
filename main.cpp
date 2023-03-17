@@ -771,28 +771,63 @@ r = wa_object.get_invalid_ref(3, 4)
 
     void TestBitwiseOps()
     {
-        {
+        { // Проверка побитовых операций над целыми числами
             istringstream istr(R"--(
 x = 5
 print x, ~x, 2 * ~x, ~(2 * x)
 y = 3.1415925
 print y, ~y, 2 * ~y, ~(2 * y)
+z1 = 235
+z2 = 12345
+print z1 & z2, z1 | z2, z1 ^ z2, z2 & z1, z2 | z1, z2 ^ z1, z2 ^ z2
+# В Муфлоне система приоритета побитовых операций отличается от C++
+# Расположенное ниже выражение эквивалентно следующему на C/C++:
+# int z3 = ((45 + 89 & 35 * 98 + 32) | (123 - 101)) & (101 ^ 123);
+z3 = 45 + 89 & 35 * 98 + 32 | (123 - 101) & (101 ^ 123)
+print z3
+# Для получения подобия такого выражения на C/C++
+# int z4 = 45 + 89 & 35 * 98 + 32 | (123 - 101) & (101 ^ 123);
+# средствами Муфлона следует расставить скобки:
+z4 = (45 + 89 & 35 * 98 + 32) | ((123 - 101) & (101 ^ 123))
+print z4
 )--");
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            ASSERT_EQUAL(ostr.str(), "5 -6 -12 -11\n3.14159 -1.4292 -2.85841 -0.714602\n");
+            string proper_result = "5 -6 -12 -11\n3.14159 -1.4292 -2.85841 -0.714602\n";
+            proper_result += "41 12539 12498 41 12539 12498 0\n22\n150\n";
+            ASSERT_EQUAL(ostr.str(), proper_result);
         }
 
-        {
+        {  // Теперь испытаем побитовые операции над строками
             istringstream istr(R"--(
-s = "qwerty"
-print ~s
+s1 = "\x01\x10\x23\x32\x00\xff"
+print ~s1
+s2 = "\xFF\xFE\x73\x37\x02\x88"
+print s1 & s2
+print s1 | s2
+print s1 ^ s2
 )--");
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            string qq = ostr.str();
-            //cout << ostr.str() << endl;
-            //ASSERT_EQUAL(ostr.str(), "5 -6 -12 -11\n3.14159 -1.4292 -2.85841 -0.714602\n");
+            string proper_result = "\xfe\xef\xdc\xcd\xff\0\n\x01\x10\x23\x32\0\x88\n"s;
+            proper_result += "\xff\xfe\x73\x37\x02\xff\n"s;
+            proper_result += "\xfe\xee\x50\x05\x02\x77\n"s;
+            ASSERT_EQUAL(ostr.str(), proper_result);
+        }
+    }
+
+    void TestShiftOps()
+    {
+        { // Проверка сдвигов целых чисел
+            istringstream istr(R"--(
+x = 254
+print x << 1, x << 2, x >> 1, x >> 2
+y = 4
+print x << y, x << y + 1, x >> y, x >> y - 1
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "508 1016 127 63\n4064 8128 15 31\n");
         }
     }
 
@@ -821,6 +856,7 @@ print ~s
         RUN_TEST(tr, TestImportBinaryModule);
         RUN_TEST(tr, TestIncludes);
         RUN_TEST(tr, TestBitwiseOps);
+        RUN_TEST(tr, TestShiftOps);
     }
 }  // namespace
 

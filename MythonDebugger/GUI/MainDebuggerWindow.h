@@ -2,7 +2,7 @@
 #define __MainDebuggerWindow__
 
 #include "MythonDebuggerGui.h"
-#include "../redefine_.h""
+#include "../redefine_.h"
 
 class MainDebuggerWindowImpl : public MainDebuggerWindow
 {
@@ -10,6 +10,7 @@ protected:
 	// Handlers for MainDebuggerWindow events.
 	void ModuleListOnListBox( wxCommandEvent& event );
 	void ModuleListOnListBoxDClick( wxCommandEvent& event );
+    void ModuleListOnRightDown(wxMouseEvent& event);
 	void SourceViewerOnKeyDown( wxKeyEvent& event );
 	void SourceViewerOnLeftDown( wxMouseEvent& event );
 	void SourceViewerOnRightDown( wxMouseEvent& event );
@@ -71,6 +72,9 @@ protected:
 	void ToolHelpOnToolClicked(wxCommandEvent& event);
     void DebugEventHandler(wxCommandEvent& event);
     void MainDebuggerWindowOnClose(wxCloseEvent& event);
+    void ModuleIsActiveOnMenuSelection(wxCommandEvent& event);
+    void ModuleIsMainOnMenuSelection(wxCommandEvent& event);
+    void EditModuleOnMenuSelection(wxCommandEvent& event);
 
 public:
 	MainDebuggerWindowImpl(wxWindow* parent, DebuggerProject& debugger_project);
@@ -80,6 +84,12 @@ private:
     static const int MARKER_SIMPLE_BREAK_POINT = 6; // Маркёр обычной точки останова
     static const int MARKER_COND_BREAK_POINT = 7; // Маркёр условной точки останова
     static const int MARKER_BOOKMARK = 8; // Маркёр для обозначения закладок
+    
+    wxString msgbox_msg_title = _("Сообщение");
+    wxString msgbox_err_title = _("Ошибка");
+    wxString msgbox_warning_title = _("Предупреждение");
+    wxString msgbox_open_err_title = _("Ошибка при открытии проекта");
+    wxString msgbox_save_err_title = _("Ошибка при записи");
 
     wxString main_debugger_window_name_;
     // Контроллер отладки, который мы будем использовать для работы

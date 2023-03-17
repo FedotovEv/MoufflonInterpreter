@@ -2,6 +2,7 @@
 #include "../MythonDebugger.h"
 #include "MainDebuggerWindow.h"
 #include "ConfigDialog.h"
+#include "EditModulePropsDialog.h"
 
 #include <iostream>
 #include <fstream>
@@ -34,7 +35,7 @@ MainDebuggerWindowImpl::MainDebuggerWindowImpl(wxWindow* parent, DebuggerProject
     {
         pair<bool, wxString> load_result = DoLoadProject(this_app->options_data.option_filename[0]);
         if (!load_result.first)
-            wxMessageBox(load_result.second, _("Ошибка при открытии проекта"));
+            wxMessageBox(load_result.second, msgbox_open_err_title);
     }
 }
 
@@ -49,10 +50,9 @@ int MainDebuggerWindowImpl::ScanSelectionByModuleId(int module_id)
 {
     for (unsigned int i = 0; i < ModuleList->GetCount(); ++i)
     {
-        ModuleDescClientData* short_module_desc_ptr =
-            static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(i));
-    
-        if (short_module_desc_ptr->GetModuleDesc().module_id == module_id)
+        ModuleDescClientData* module_client_data_ptr =
+            static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(i));    
+        if (module_client_data_ptr->GetModuleDesc().module_id == module_id)
             return i;
     }
 
@@ -62,8 +62,7 @@ int MainDebuggerWindowImpl::ScanSelectionByModuleId(int module_id)
 void MainDebuggerWindowImpl::SetViewerModuleText(int new_selection)
 {
     MythonDebuggerApp* this_app = static_cast<MythonDebuggerApp*>(wxTheApp);
-    if (new_selection == ModuleList->GetSelection())
-        return;
+
     if (new_selection < 0)
         new_selection = wxNOT_FOUND;
     if (new_selection >= static_cast<int>(ModuleList->GetCount()))
@@ -74,29 +73,42 @@ void MainDebuggerWindowImpl::SetViewerModuleText(int new_selection)
             new_selection = wxNOT_FOUND;
     }
 
+    ModuleDescClientData* module_client_data_ptr = nullptr;
+    int new_module_id_ = wxNOT_FOUND;
+    if (new_selection != wxNOT_FOUND)
+    {
+        module_client_data_ptr = static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(new_selection));
+        new_module_id_ = module_client_data_ptr->GetModuleDesc().module_id;
+    }
+    if (new_module_id_ == current_module_id_)
+        return;
+
+    current_module_id_ = new_module_id_;
     SourceViewer->MarkerDeleteAll(MARKER_CURRENT_POINT);
     SourceViewer->SetReadOnly(false);
     SourceViewer->ClearAll();
     SourceViewer->SetReadOnly(true);
-    ModuleList->SetSelection(new_selection);
-    if (new_selection == wxNOT_FOUND || new_selection < 0)
+    if (new_selection != ModuleList->GetSelection())
+        ModuleList->SetSelection(new_selection);
+    if (new_selection == wxNOT_FOUND || new_module_id_ == wxNOT_FOUND || !module_client_data_ptr)
+    {
+        MainWindowStatusBar->SetStatusText(_("Нет"), 0);
         return;
+    }
 
-    ModuleDescClientData* short_module_desc_ptr =
-        static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(new_selection));
-    string set_module_name = short_module_desc_ptr->GetModuleDesc().module_name;
-    current_module_id_ = short_module_desc_ptr->GetModuleDesc().module_id;
-
-    const LexerInputExImpl::ModuleDescType* full_module_desc_ptr =
-        this_app->debugger_project.GetLexerInputStream().GetModuleDescriptor(set_module_name);
-    if (!full_module_desc_ptr)
-        return;
+    const LexerInputExImpl::ModuleDescType& module_desc = module_client_data_ptr->GetModuleDesc();
+    wxString set_status_text = module_desc.module_name + ':' + to_string(current_module_id_);
+    if (module_desc.module_is_active)
+        set_status_text += _(":Активный");
+    if (module_desc.module_is_main)
+        set_status_text += _(":Главный");
+    MainWindowStatusBar->SetStatusText(set_status_text, 0);
 
     SourceViewer->SetReadOnly(false);
     if (this_app->options_data.is_source_utf8)
-        SourceViewer->SetText(wxString::FromUTF8(full_module_desc_ptr->module_body.c_str()));
+        SourceViewer->SetText(wxString::FromUTF8(module_desc.module_body.c_str()));
     else
-        SourceViewer->SetText(full_module_desc_ptr->module_body);
+        SourceViewer->SetText(module_desc.module_body);
     SourceViewer->SetReadOnly(true);
 
     if (current_point_.module_id == current_module_id_ && current_point_.module_string_number >= 0)
@@ -111,7 +123,7 @@ bool MainDebuggerWindowImpl::CheckProjectModifyStatus()
         return true;
 
     if (wxMessageBox(_("В проект вносились изменения.\nПри продолжении операции они будут утеряны.\nПродолжать?"),
-                     _("Предупреждение"), wxYES_NO) == wxYES)
+                     msgbox_warning_title, wxYES_NO) == wxYES)
     {
         this_app->debugger_project.ClearChangeFlag();
         return true;
@@ -127,7 +139,7 @@ bool MainDebuggerWindowImpl::CheckDebugInProcess()
     if (!debug_thread_.joinable())
         return true;
     if (wxMessageBox(_("В данный момент выполняется отладка.\nОстановить?"),
-        _("Предупреждение"), wxYES_NO) != wxYES)
+                     msgbox_warning_title, wxYES_NO) != wxYES)
         return false;
     debug_controller_.CommitCommand(DebugController::ControllerCommand::CONTROL_TERMINATE_PROGRAM);
     debug_thread_.join();
@@ -136,9 +148,17 @@ bool MainDebuggerWindowImpl::CheckDebugInProcess()
 
 string MainDebuggerWindowImpl::FormatListBoxItem(const LexerInputExImpl::ModuleDescType& module_desc)
 {
-    string zpt = " : ";
-    return to_string(module_desc.module_id) + zpt + module_desc.module_name +
-           zpt + module_desc.module_path.string();
+    const string zpt = " : ";
+    string list_string_result = to_string(module_desc.module_id) + zpt + module_desc.module_name +
+           zpt + module_desc.module_path.string() + ':';
+    if (module_desc.module_is_active)
+        list_string_result += 'V';
+    else
+        list_string_result += 'U';
+    if (module_desc.module_is_main)
+        list_string_result += ":M"s;
+
+    return list_string_result;
 }
 
 void MainDebuggerWindowImpl::FillProjectListBox()
@@ -150,7 +170,8 @@ void MainDebuggerWindowImpl::FillProjectListBox()
     ModuleList->Clear();
     for (const LexerInputExImpl::ModuleDescType& module_desc : lexer_input)
         ModuleList->Append(FormatListBoxItem(module_desc), new ModuleDescClientData(module_desc));
-
+    
+    current_module_id_ = wxNOT_FOUND;
     SetViewerModuleText(0);
 }
 
@@ -161,7 +182,7 @@ pair<bool, wxString> MainDebuggerWindowImpl::DoLoadProject(const wxString& proje
     pugi::xml_parse_result result = doc.load_file(project_filename.ToStdString().c_str());
 
     if (!result)
-        return { false, _("Ошибка при разборе xml-файла:") + wxString(result.description(), wxConvUTF8) };
+        return {false, _("Ошибка при разборе xml-файла:") + wxString(result.description(), wxConvUTF8)};
 
     bool is_signature_correct = false;
     pugi::xml_node signature_node = doc.child("moufflon-project");
@@ -173,7 +194,7 @@ pair<bool, wxString> MainDebuggerWindowImpl::DoLoadProject(const wxString& proje
     }
 
     if (!is_signature_correct)
-        return { false, _("Ошибка в формате файла") };
+        return {false, _("Ошибка в формате файла")};
 
     this_app->debugger_project.Clear();
     pugi::xml_node modules_node = doc.child("modules");
@@ -187,6 +208,8 @@ pair<bool, wxString> MainDebuggerWindowImpl::DoLoadProject(const wxString& proje
             current_module_desc.module_name = current_module_node.child("module_name").text().as_string();
             current_module_desc.module_path = current_module_node.child("module_path").text().as_string();
             pugi::xml_node module_body_node = current_module_node.child("module_body");
+            current_module_desc.module_is_active = current_module_node.child("module_is_active");
+            current_module_desc.module_is_main = current_module_node.child("module_is_main");
             if (module_body_node)
             { // Тело модуля хранится прямо в проекте. Получим его оттуда.
                 current_module_desc.module_body = module_body_node.text().as_string();
@@ -202,7 +225,7 @@ pair<bool, wxString> MainDebuggerWindowImpl::DoLoadProject(const wxString& proje
             }
             // Добавляем к проекту новый сформированный модуль
             this_app->debugger_project.GetLexerInputStream()
-                .SetModuleDescriptor(move(current_module_desc));
+                .SetModuleWithBody(move(current_module_desc));
         }
     }
 
@@ -259,17 +282,67 @@ pair<bool, wxString> MainDebuggerWindowImpl::DoLoadProject(const wxString& proje
     this_app->debugger_project.SetProjectPath(project_filename.ToStdString());
     SetWindowLabel();
     FillProjectListBox();
+    this_app->debugger_project.ClearChangeFlag();
     return {true, {}};
 }
 
-void MainDebuggerWindowImpl::ModuleListOnListBox( wxCommandEvent& event )
+void MainDebuggerWindowImpl::ModuleListOnListBox(wxCommandEvent& event)
 {
-// TODO: Implement ModuleListOnListBox
+    SetViewerModuleText(ModuleList->GetSelection());
 }
 
-void MainDebuggerWindowImpl::ModuleListOnListBoxDClick( wxCommandEvent& event )
+void MainDebuggerWindowImpl::ModuleListOnListBoxDClick(wxCommandEvent& event)
 {
-// TODO: Implement ModuleListOnListBoxDClick
+    if (ModuleList->GetSelection() == wxNOT_FOUND)
+        return;
+
+    if (debug_thread_.joinable())
+    {
+        wxMessageBox(_("Выполняется отладка. Редактирование проекта невозможно."), msgbox_msg_title);
+        return;
+    }
+
+    MythonDebuggerApp* this_app = static_cast<MythonDebuggerApp*>(wxTheApp);
+    ModuleDescClientData* module_client_data_ptr =
+        static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(ModuleList->GetSelection()));
+    string old_module_name = module_client_data_ptr->GetModuleDesc().module_name;
+    EditModulePropsDialogImpl edit_module_dialog(this, module_client_data_ptr->GetModuleDesc());
+
+    switch (edit_module_dialog.ShowModal())
+    {
+    case EditModulePropsDialogImpl::EDIT_MODULE_PROPS_OK:
+        if (edit_module_dialog.GetNewModuleDesc().module_name != old_module_name)
+            debug_controller_.GetInputLexer().RenameIncludeModule(old_module_name,
+                               edit_module_dialog.GetNewModuleDesc().module_name);
+        debug_controller_.GetInputLexer().FixModuleDesc(edit_module_dialog.GetNewModuleDesc());
+        FillProjectListBox();
+        break;
+    case EditModulePropsDialogImpl::EDIT_MODULE_PROPS_DELETE:
+        debug_controller_.GetInputLexer().EraseIncludeModule(old_module_name);
+        FillProjectListBox();
+        break;
+    case EditModulePropsDialogImpl::EDIT_MODULE_PROPS_CANCEL:
+        [[fallthrough]];
+    default:
+        break;
+    }
+    return;
+}
+
+void MainDebuggerWindowImpl::ModuleListOnRightDown(wxMouseEvent& event)
+{
+    if (ModuleList->GetSelection() == wxNOT_FOUND || debug_thread_.joinable())
+        return;
+    ModuleDescClientData* module_client_data_ptr =
+        static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(ModuleList->GetSelection()));
+    if (!module_client_data_ptr)
+        return;
+
+    MenuModuleName->Enable(false);
+    MenuModuleName->SetItemLabel(module_client_data_ptr->GetModuleDesc().module_name);
+    MenuModuleIsActive->Check(module_client_data_ptr->GetModuleDesc().module_is_active);
+    MenuModuleIsMain->Check(module_client_data_ptr->GetModuleDesc().module_is_main);
+    PopupMenu(EditModuleMenu);
 }
 
 void MainDebuggerWindowImpl::SourceViewerOnKeyDown(wxKeyEvent& event)
@@ -345,7 +418,7 @@ void MainDebuggerWindowImpl::FileLoadProjectOnMenuSelection(wxCommandEvent& even
 
     pair<bool, wxString> load_result = DoLoadProject(load_file_dialog.GetPath());
     if (!load_result.first)
-        wxMessageBox(load_result.second, _("Ошибка при открытии проекта"));
+        wxMessageBox(load_result.second, msgbox_open_err_title);
 }
 
 void MainDebuggerWindowImpl::FileSaveProjectOnMenuSelection(wxCommandEvent& event)
@@ -373,6 +446,10 @@ void MainDebuggerWindowImpl::FileSaveProjectOnMenuSelection(wxCommandEvent& even
             // Затем к корневому узлу стыкуется узел, содержащий маршрут файла модуля
             pugi::xml_node current_path_node = current_module_node.append_child("module_path");
             current_path_node.append_child(pugi::node_pcdata).set_value(current_module_desc.module_path.string().c_str());
+            if (current_module_desc.module_is_active)
+                current_module_node.append_child("module_is_active");
+            if (current_module_desc.module_is_main)
+                current_module_node.append_child("module_is_main");
             if (this_app->options_data.is_save_module_body)
             { // Если включён соответствующий режим, сохраняем также и тело модуля
                 // К корневому узлу стыкуется узел, содержащий ранее считанное из файл тело модуля
@@ -436,7 +513,8 @@ void MainDebuggerWindowImpl::FileSaveProjectOnMenuSelection(wxCommandEvent& even
     
     string project_path = this_app->debugger_project.GetProjectPath().string();
     if (!doc.save_file(project_path.c_str()))
-        wxMessageBox(_("Произошла ошибка при записи файла ") + project_path, _("Ошибка при записи"));
+        wxMessageBox(_("Произошла ошибка при записи файла ") + project_path, msgbox_save_err_title);
+    this_app->debugger_project.ClearChangeFlag();
 }
 
 void MainDebuggerWindowImpl::FileSaveAsProjectOnMenuSelection(wxCommandEvent& event)
@@ -769,6 +847,53 @@ void MainDebuggerWindowImpl::ToolBreakpointOffOnToolClicked( wxCommandEvent& eve
 void MainDebuggerWindowImpl::ToolHelpOnToolClicked(wxCommandEvent& event)
 {
     HelpIndexOnMenuSelection(event);
+}
+
+void MainDebuggerWindowImpl::ModuleIsActiveOnMenuSelection(wxCommandEvent& event)
+{
+    if (debug_thread_.joinable())
+        return;
+    MythonDebuggerApp* this_app = static_cast<MythonDebuggerApp*>(wxTheApp);
+    ModuleDescClientData* module_client_data_ptr =
+        static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(ModuleList->GetSelection()));
+    const LexerInputExImpl::ModuleDescType& old_module_desc = module_client_data_ptr->GetModuleDesc();
+    int save_selection = ModuleList->GetSelection();
+
+    LexerInputExImpl::ModuleDescType new_module_desc;
+    new_module_desc.module_id = old_module_desc.module_id;
+    new_module_desc.module_name = old_module_desc.module_name;
+    new_module_desc.module_is_active = MenuModuleIsActive->IsChecked();
+    new_module_desc.module_is_main = old_module_desc.module_is_main;
+    debug_controller_.GetInputLexer().FixModuleDesc(new_module_desc);
+    FillProjectListBox();
+    SetViewerModuleText(save_selection);
+}
+
+void MainDebuggerWindowImpl::ModuleIsMainOnMenuSelection(wxCommandEvent& event)
+{
+    if (debug_thread_.joinable())
+        return;
+    MythonDebuggerApp* this_app = static_cast<MythonDebuggerApp*>(wxTheApp);
+    ModuleDescClientData* module_client_data_ptr =
+        static_cast<ModuleDescClientData*>(ModuleList->GetClientObject(ModuleList->GetSelection()));
+    const LexerInputExImpl::ModuleDescType& old_module_desc = module_client_data_ptr->GetModuleDesc();
+    int save_selection = ModuleList->GetSelection();
+
+    LexerInputExImpl::ModuleDescType new_module_desc;
+    new_module_desc.module_id = old_module_desc.module_id;
+    new_module_desc.module_name = old_module_desc.module_name;
+    new_module_desc.module_is_active = old_module_desc.module_is_active;
+    new_module_desc.module_is_main = MenuModuleIsMain->IsChecked();
+    debug_controller_.GetInputLexer().FixModuleDesc(new_module_desc);
+    FillProjectListBox();
+    SetViewerModuleText(save_selection);
+}
+
+void MainDebuggerWindowImpl::EditModuleOnMenuSelection(wxCommandEvent& event)
+{
+    if (debug_thread_.joinable())
+        return;
+    ModuleListOnListBoxDClick(event);
 }
 
 void MainDebuggerWindowImpl::IndicateControllerResult(DebugController::ControllerResult& current_debug_result)

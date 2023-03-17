@@ -300,6 +300,26 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 
 	MainWindowToolBar->Realize();
 
+	EditModuleMenu = new wxMenu();
+	MenuModuleName = new wxMenuItem( EditModuleMenu, wxID_MENU_MODULE_NAME, wxString( _("Anonymous") ) , _("Имя текущего модуля"), wxITEM_NORMAL );
+	EditModuleMenu->Append( MenuModuleName );
+
+	EditModuleMenu->AppendSeparator();
+
+	MenuModuleIsActive = new wxMenuItem( EditModuleMenu, wxID_MENU_MODULE_ACTIVE, wxString( _("Активен") ) , _("Модуль активен"), wxITEM_CHECK );
+	EditModuleMenu->Append( MenuModuleIsActive );
+
+	MenuModuleIsMain = new wxMenuItem( EditModuleMenu, wxID_MENU_MODULE_MAIN, wxString( _("Главный") ) , _("Модуль главный (стартовый)"), wxITEM_CHECK );
+	EditModuleMenu->Append( MenuModuleIsMain );
+
+	EditModuleMenu->AppendSeparator();
+
+	wxMenuItem* EditModule;
+	EditModule = new wxMenuItem( EditModuleMenu, wxID_MENU_EDIT_MODULE, wxString( _("Редактировать") ) , _("Вызов диалога редактирования"), wxITEM_NORMAL );
+	EditModuleMenu->Append( EditModule );
+
+	this->Connect( wxEVT_RIGHT_DOWN, wxMouseEventHandler( MainDebuggerWindow::MainDebuggerWindowOnContextMenu ), NULL, this );
+
 
 	this->Centre( wxBOTH );
 
@@ -307,6 +327,7 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( MainDebuggerWindow::MainDebuggerWindowOnClose ) );
 	ModuleList->Connect( wxEVT_COMMAND_LISTBOX_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleListOnListBox ), NULL, this );
 	ModuleList->Connect( wxEVT_COMMAND_LISTBOX_DOUBLECLICKED, wxCommandEventHandler( MainDebuggerWindow::ModuleListOnListBoxDClick ), NULL, this );
+	ModuleList->Connect( wxEVT_RIGHT_DOWN, wxMouseEventHandler( MainDebuggerWindow::ModuleListOnRightDown ), NULL, this );
 	SourceViewer->Connect( wxEVT_KEY_DOWN, wxKeyEventHandler( MainDebuggerWindow::SourceViewerOnKeyDown ), NULL, this );
 	SourceViewer->Connect( wxEVT_LEFT_DOWN, wxMouseEventHandler( MainDebuggerWindow::SourceViewerOnLeftDown ), NULL, this );
 	SourceViewer->Connect( wxEVT_RIGHT_DOWN, wxMouseEventHandler( MainDebuggerWindow::SourceViewerOnRightDown ), NULL, this );
@@ -366,6 +387,9 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 	this->Connect( ToolBreakpointOn->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOnOnToolClicked ) );
 	this->Connect( ToolBreakpointOff->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOffOnToolClicked ) );
 	this->Connect( ToolHelp->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolHelpOnToolClicked ) );
+	EditModuleMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleIsActiveOnMenuSelection ), this, MenuModuleIsActive->GetId());
+	EditModuleMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleIsMainOnMenuSelection ), this, MenuModuleIsMain->GetId());
+	EditModuleMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::EditModuleOnMenuSelection ), this, EditModule->GetId());
 }
 
 MainDebuggerWindow::~MainDebuggerWindow()
@@ -374,6 +398,7 @@ MainDebuggerWindow::~MainDebuggerWindow()
 	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( MainDebuggerWindow::MainDebuggerWindowOnClose ) );
 	ModuleList->Disconnect( wxEVT_COMMAND_LISTBOX_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleListOnListBox ), NULL, this );
 	ModuleList->Disconnect( wxEVT_COMMAND_LISTBOX_DOUBLECLICKED, wxCommandEventHandler( MainDebuggerWindow::ModuleListOnListBoxDClick ), NULL, this );
+	ModuleList->Disconnect( wxEVT_RIGHT_DOWN, wxMouseEventHandler( MainDebuggerWindow::ModuleListOnRightDown ), NULL, this );
 	SourceViewer->Disconnect( wxEVT_KEY_DOWN, wxKeyEventHandler( MainDebuggerWindow::SourceViewerOnKeyDown ), NULL, this );
 	SourceViewer->Disconnect( wxEVT_LEFT_DOWN, wxMouseEventHandler( MainDebuggerWindow::SourceViewerOnLeftDown ), NULL, this );
 	SourceViewer->Disconnect( wxEVT_RIGHT_DOWN, wxMouseEventHandler( MainDebuggerWindow::SourceViewerOnRightDown ), NULL, this );
@@ -404,6 +429,7 @@ MainDebuggerWindow::~MainDebuggerWindow()
 	this->Disconnect( ToolBreakpointOff->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOffOnToolClicked ) );
 	this->Disconnect( ToolHelp->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolHelpOnToolClicked ) );
 
+	delete EditModuleMenu;
 }
 
 OutputDebuggerWindow::OutputDebuggerWindow( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxFrame( parent, id, title, pos, size, style )
@@ -493,11 +519,11 @@ ConfigDialog::ConfigDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	wxStaticBoxSizer* ConfigSourceCode;
 	ConfigSourceCode = new wxStaticBoxSizer( new wxStaticBox( this, wxID_CONFIG_SOURCE_CODE, _("Исходники") ), wxVERTICAL );
 
-	SourceUtf8 = new wxCheckBox( ConfigSourceCode->GetStaticBox(), wxID_SOURCE_UTF8, _("В UTF-8"), wxDefaultPosition, wxDefaultSize, 0 );
-	ConfigSourceCode->Add( SourceUtf8, 0, wxALL, 5 );
+	SourceIsUtf8 = new wxCheckBox( ConfigSourceCode->GetStaticBox(), wxID_SOURCE_UTF8, _("В UTF-8"), wxDefaultPosition, wxDefaultSize, 0 );
+	ConfigSourceCode->Add( SourceIsUtf8, 0, wxALL, 5 );
 
-	SourceFullSave = new wxCheckBox( ConfigSourceCode->GetStaticBox(), wxID_SOURCE_SAVE_IN_PROJECT, _("Сохранять в проекте"), wxDefaultPosition, wxDefaultSize, 0 );
-	ConfigSourceCode->Add( SourceFullSave, 0, wxALL, 5 );
+	SourceIsFullSave = new wxCheckBox( ConfigSourceCode->GetStaticBox(), wxID_SOURCE_SAVE_IN_PROJECT, _("Сохранять в проекте"), wxDefaultPosition, wxDefaultSize, 0 );
+	ConfigSourceCode->Add( SourceIsFullSave, 0, wxALL, 5 );
 
 
 	bSizer7->Add( ConfigSourceCode, 1, wxEXPAND, 5 );
@@ -540,5 +566,105 @@ ConfigDialog::~ConfigDialog()
 	SaveConfig->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ConfigDialog::SaveConfigOnButtonClick ), NULL, this );
 	CancelConfig->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ConfigDialog::CancelConfigOnButtonClick ), NULL, this );
 	RestoreCurrentConfig->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ConfigDialog::RestoreCurrentConfigOnButtonClick ), NULL, this );
+
+}
+
+EditModulePropsDialog::EditModulePropsDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+{
+	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+
+	wxBoxSizer* bSizer6;
+	bSizer6 = new wxBoxSizer( wxVERTICAL );
+
+	wxBoxSizer* bSizer10;
+	bSizer10 = new wxBoxSizer( wxHORIZONTAL );
+
+	m_staticText3 = new wxStaticText( this, wxID_ANY, _("Идентификатор:"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText3->Wrap( -1 );
+	bSizer10->Add( m_staticText3, 0, wxALL, 5 );
+
+	ModuleId = new wxStaticText( this, wxID_MODULE_ID_STAT, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	ModuleId->Wrap( -1 );
+	bSizer10->Add( ModuleId, 1, wxALL, 5 );
+
+
+	bSizer6->Add( bSizer10, 1, wxALIGN_CENTER_HORIZONTAL, 5 );
+
+	wxBoxSizer* bSizer11;
+	bSizer11 = new wxBoxSizer( wxHORIZONTAL );
+
+	m_staticText4 = new wxStaticText( this, wxID_ANY, _("Маршрут:"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText4->Wrap( -1 );
+	bSizer11->Add( m_staticText4, 0, wxALL, 5 );
+
+	ModulePath = new wxStaticText( this, wxID_MODULE_PATH_STAT, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	ModulePath->Wrap( -1 );
+	bSizer11->Add( ModulePath, 0, wxALL, 5 );
+
+
+	bSizer6->Add( bSizer11, 1, wxALIGN_CENTER_HORIZONTAL, 5 );
+
+	wxBoxSizer* bSizer7;
+	bSizer7 = new wxBoxSizer( wxHORIZONTAL );
+
+	m_staticText1 = new wxStaticText( this, wxID_ANY, _("Имя модуля:"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText1->Wrap( -1 );
+	bSizer7->Add( m_staticText1, 0, wxALL, 5 );
+
+	ModuleName = new wxTextCtrl( this, wxID_MODULE_NAME_EDIT, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer7->Add( ModuleName, 0, wxALL, 5 );
+
+
+	bSizer6->Add( bSizer7, 1, wxALIGN_CENTER_HORIZONTAL, 5 );
+
+	ModuleIsActive = new wxCheckBox( this, wxID_MODULE_ACTIVE_FLAG, _("Активен"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer6->Add( ModuleIsActive, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5 );
+
+	ModuleIsMain = new wxCheckBox( this, wxID_MODULE_MAIN_FLAG, _("Главный (стартовый) модуль"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer6->Add( ModuleIsMain, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5 );
+
+	wxBoxSizer* bSizer8;
+	bSizer8 = new wxBoxSizer( wxHORIZONTAL );
+
+	SaveNewModuleProps = new wxButton( this, wxID_ANY, _("Принять"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer8->Add( SaveNewModuleProps, 0, wxALL, 5 );
+
+	CancelEditModuleProps = new wxButton( this, wxID_ANY, _("Отменить"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer8->Add( CancelEditModuleProps, 0, wxALL, 5 );
+
+	ResetModuleProps = new wxButton( this, wxID_ANY, _("Сбросить"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer8->Add( ResetModuleProps, 0, wxALL, 5 );
+
+	DeleteModule = new wxButton( this, wxID_ANY, _("Удалить"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer8->Add( DeleteModule, 0, wxALL, 5 );
+
+
+	bSizer6->Add( bSizer8, 1, wxEXPAND, 5 );
+
+
+	this->SetSizer( bSizer6 );
+	this->Layout();
+	bSizer6->Fit( this );
+
+	this->Centre( wxBOTH );
+
+	// Connect Events
+	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( EditModulePropsDialog::EditModulePropsDialogOnClose ) );
+	this->Connect( wxEVT_INIT_DIALOG, wxInitDialogEventHandler( EditModulePropsDialog::EditModulePropsDialogOnInitDialog ) );
+	SaveNewModuleProps->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::SaveNewModulePropsOnButtonClick ), NULL, this );
+	CancelEditModuleProps->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::CancelEditModulePropsOnButtonClick ), NULL, this );
+	ResetModuleProps->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::ResetModulePropsOnButtonClick ), NULL, this );
+	DeleteModule->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::DeleteModuleOnButtonClick ), NULL, this );
+}
+
+EditModulePropsDialog::~EditModulePropsDialog()
+{
+	// Disconnect Events
+	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( EditModulePropsDialog::EditModulePropsDialogOnClose ) );
+	this->Disconnect( wxEVT_INIT_DIALOG, wxInitDialogEventHandler( EditModulePropsDialog::EditModulePropsDialogOnInitDialog ) );
+	SaveNewModuleProps->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::SaveNewModulePropsOnButtonClick ), NULL, this );
+	CancelEditModuleProps->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::CancelEditModulePropsOnButtonClick ), NULL, this );
+	ResetModuleProps->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::ResetModulePropsOnButtonClick ), NULL, this );
+	DeleteModule->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( EditModulePropsDialog::DeleteModuleOnButtonClick ), NULL, this );
 
 }

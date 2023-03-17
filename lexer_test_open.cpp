@@ -78,7 +78,7 @@ void TestStrings() {
 }
 
 void TestOperations() {
-    istringstream input("+-*/= > < != == <> <= >="s);
+    istringstream input("+-*/= > < != == <> <= << >= >>"s);
     Lexer lexer(input);
 
     ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Char{'+'}));
@@ -93,7 +93,9 @@ void TestOperations() {
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'<'}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'>'}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::LessOrEq{}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::ShiftLeft{}));
     ASSERT_EQUAL(lexer.NextToken(), Token(token_type::GreaterOrEq{}));
+    ASSERT_EQUAL(lexer.NextToken(), Token(token_type::ShiftRight{}));
 }
 
 void TestIndentsAndNewlines() {

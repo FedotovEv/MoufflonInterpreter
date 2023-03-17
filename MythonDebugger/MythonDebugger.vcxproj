@@ -158,6 +158,7 @@
     <ClInclude Include="DebuggerDataStruct.h" />
     <ClInclude Include="DebuggerExecutor.h" />
     <ClInclude Include="GUI\ConfigDialog.h" />
+    <ClInclude Include="GUI\EditModulePropsDialog.h" />
     <ClInclude Include="GUI\MainDebuggerWindow.h" />
     <ClInclude Include="GUI\MythonDebuggerGui.h" />
     <ClInclude Include="GUI\OutputDebuggerWindow.h" />
@@ -177,6 +178,7 @@
     <ClCompile Include="DebuggerDataStruct.cpp" />
     <ClCompile Include="DebuggerExecutor.cpp" />
     <ClCompile Include="GUI\ConfigDialog.cpp" />
+    <ClCompile Include="GUI\EditModulePropsDialog.cpp" />
     <ClCompile Include="GUI\MainDebuggerWindow.cpp" />
     <ClCompile Include="GUI\MythonDebuggerGui.cpp" />
     <ClCompile Include="GUI\OutputDebuggerWindow.cpp" />

@@ -40,7 +40,9 @@ namespace parse
          {"=="s, token_type::Eq{}},
          {"!="s, token_type::NotEq{}},
          {"<="s, token_type::LessOrEq{}},
-         {">="s, token_type::GreaterOrEq{}}
+         {">="s, token_type::GreaterOrEq{}},
+         {"<<"s, token_type::ShiftLeft{}},
+         {">>"s, token_type::ShiftRight{}}
         };
 
     enum class TokenTypeId
@@ -354,6 +356,8 @@ namespace parse
         UNVALUED_OUTPUT(NotEq);
         UNVALUED_OUTPUT(LessOrEq);
         UNVALUED_OUTPUT(GreaterOrEq);
+        UNVALUED_OUTPUT(ShiftLeft);
+        UNVALUED_OUTPUT(ShiftRight);
         UNVALUED_OUTPUT(None);
         UNVALUED_OUTPUT(True);
         UNVALUED_OUTPUT(False);

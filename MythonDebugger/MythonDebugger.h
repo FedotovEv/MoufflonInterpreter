@@ -23,37 +23,27 @@ wxDECLARE_EVENT(DEBUG_EVENT_TYPE, wxCommandEvent);
 
 #define FULLVERSION_STRING "0.0.2.30"
 
-struct ModuleDescShort
-{
-    int module_id;
-    std::string module_name;
-    std::filesystem::path module_path;
-};
-
 class ModuleDescClientData : public wxClientData
 {
 public:
-    ModuleDescClientData(const LexerInputExImpl::ModuleDescType& module_desc)
-    {
-        module_short_desc_.module_id = module_desc.module_id;
-        module_short_desc_.module_name = module_desc.module_name;
-        module_short_desc_.module_path = module_desc.module_path;
-    }
+    ModuleDescClientData(const LexerInputExImpl::ModuleDescType& module_desc) :
+        module_desc_(module_desc)
+    {}
 
-    const ModuleDescShort& GetModuleDesc() const
+    const LexerInputExImpl::ModuleDescType& GetModuleDesc() const
     {
-        return module_short_desc_;
+        return module_desc_;
     }
 
 private:
-    ModuleDescShort module_short_desc_;
+    const LexerInputExImpl::ModuleDescType& module_desc_;
 };
 
 class BreakpointDescClientData : public wxClientData
 {
 public:
-    BreakpointDescClientData(BreakpointsContainer::BreakpointDescType breakpoint_desc) :
-        breakpoint_desc_(std::move(breakpoint_desc))
+    BreakpointDescClientData(const BreakpointsContainer::BreakpointDescType& breakpoint_desc) :
+        breakpoint_desc_(breakpoint_desc)
     {}
 
     const BreakpointsContainer::BreakpointDescType& GetBreakpointDesc() const
@@ -62,7 +52,23 @@ public:
     }
 
 private:
-    BreakpointsContainer::BreakpointDescType breakpoint_desc_;
+    const BreakpointsContainer::BreakpointDescType& breakpoint_desc_;
+};
+
+class WatchDescClientData : public wxClientData
+{
+public:
+    WatchDescClientData(const WatchesContainer::WatchDescType& watch_desc) :
+        watch_desc_(watch_desc)
+    {}
+
+    const WatchesContainer::WatchDescType& GetWatchDesc() const
+    {
+        return watch_desc_;
+    }
+
+private:
+    const WatchesContainer::WatchDescType& watch_desc_;
 };
 
 struct LanguageDescriptType

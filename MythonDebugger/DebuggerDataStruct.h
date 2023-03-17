@@ -29,6 +29,8 @@ public:
         std::string module_name;
         std::filesystem::path module_path;        
         std::string module_body;
+        bool module_is_active = true;
+        bool module_is_main = false;
     };
 
     struct StackType
@@ -68,16 +70,15 @@ public:
     void AddIncludeModule(const std::string& module_name, const std::string& module_body,
                           const std::filesystem::path& module_path = {});
 
+    bool EraseIncludeModule(const std::string& module_name);
+    bool RenameIncludeModule(const std::string& old_module_name, const std::string& new_module_name);
     const ModuleDescType* GetModuleDescriptor(const std::string& module_name) const;
     const ModuleDescType* GetModuleDescriptor(size_t module_number) const;
-    bool SetModuleDescriptor(ModuleDescType module_desc);
+    bool SetModuleWithBody(ModuleDescType module_desc);
+    bool FixModuleDesc(const LexerInputExImpl::ModuleDescType& module_desc);
 
-    LexerInputExImpl& SetMainModuleName(const std::string& main_module_name)
-    {
-        main_module_name_ = main_module_name;
-        return *this;
-    }
-
+    void UnmainCurrentMainModule();
+    LexerInputExImpl& SetMainModuleName(const std::string& main_module_name);
     std::string GetMainModuleName()
     {
         return main_module_name_;
@@ -160,6 +161,8 @@ private:
     bool is_auto_scan_include_modules_ = false;
     bool is_include_map_changed_ = false;
 
+    inline static const char* EMPTY_MODULE_NAME_ERR = "Пустое имя модуля";
+    inline static const char* SPACES_SYMBS_STR = " \t\n\r";
     inline static int last_module_id_ = 0;
 
 public:

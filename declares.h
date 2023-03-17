@@ -45,7 +45,7 @@ namespace runtime
     struct ProgramCommandDescriptor
     {
         int module_id = -1;
-        int module_string_number = -1;
+        int module_string_number = 0;
 
         bool operator==(const ProgramCommandDescriptor& other)
         {

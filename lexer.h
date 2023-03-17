@@ -60,6 +60,8 @@ namespace parse
         struct NotEq {};     // Лексема «!=»
         struct LessOrEq {};  // Лексема «<=»
         struct GreaterOrEq {};  // Лексема «>=»
+        struct ShiftLeft {};    // Лексема «<<»
+        struct ShiftRight {};   // Лексема «>>»
         struct None {};         // Лексема «None»
         struct True {};         // Лексема «True»
         struct False {};        // Лексема «False»
@@ -74,8 +76,8 @@ namespace parse
                        token_type::Print, token_type::Import, token_type::Include,
                        token_type::Indent, token_type::Dedent, token_type::And, token_type::Or,
                        token_type::Not, token_type::Eq, token_type::NotEq, token_type::LessOrEq,
-                       token_type::GreaterOrEq, token_type::None, token_type::True,
-                       token_type::False, token_type::Eof>;
+                       token_type::GreaterOrEq, token_type::ShiftLeft, token_type::ShiftRight,
+                       token_type::None, token_type::True, token_type::False, token_type::Eof>;
 
     struct Token : TokenBase
     {
@@ -252,6 +254,7 @@ namespace parse
         void IncludeSwitchTo(std::string include_arg)
         {
             input_.IncludeSwitchTo(include_arg);
+            --current_command_desc_.module_string_number;
         }
 
     private:

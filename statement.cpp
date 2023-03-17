@@ -50,8 +50,9 @@ namespace ast
             {
                 dbg_context->GetCallStack().clear();
                 dbg_context->GetCallStack().push_back({}); // Здесь создаём запись о корневом стековом кадре
-                is_wait_first_frame_command = true;
-                return;
+                dbg_context->GetCallStack().back().call_command = exec_obj_ptr->GetCommandDesc();
+                dbg_context->GetCallStack().back().first_command = exec_obj_ptr->GetCommandDesc();
+                is_wait_first_frame_command = false;
             }
 
             if (context.GetLastCommandDesc() != exec_obj_ptr->GetCommandDesc())
@@ -296,6 +297,8 @@ namespace ast
                     return runtime::ObjectHolder::Own(runtime::Number(get<double>(external_result)));
                 else if (holds_alternative<string>(external_result))
                     return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
+                else
+                    return runtime::ObjectHolder::None();
             }
             else
             {
@@ -606,6 +609,94 @@ namespace ast
         }
 
         return result;
+    }
+
+    ObjectHolder ShiftLeft::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder real_lhs = lhs_->Execute(closure, context);
+        ObjectHolder real_rhs = rhs_->Execute(closure, context);
+
+        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+        {
+            runtime::Number result = *real_lhs.TryAs<runtime::Number>() << *real_rhs.TryAs<runtime::Number>();
+            return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (real_lhs.TryAs<runtime::String>())
+        {
+            string str_result;
+            if (real_rhs.TryAs<runtime::String>())
+            {
+                const string& rhs_str = real_rhs.TryAs<runtime::String>()->GetValue();
+                size_t i = 0;
+                for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
+                {
+                    if (i < rhs_str.size())
+                        str_result += c << rhs_str[i++];
+                    else
+                        str_result += c;
+                }
+            }
+            else if (real_rhs.TryAs<runtime::Number>())
+            {
+                unsigned char shift_cnt = real_rhs.TryAs<runtime::Number>()->GetIntValue();
+                for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
+                    str_result += c << shift_cnt;
+            }
+            else
+            {
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
+            }
+            return ObjectHolder::Own<runtime::String>(move(str_result));
+        }
+        else
+        {
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
+        }
+    }
+
+    ObjectHolder ShiftRight::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder real_lhs = lhs_->Execute(closure, context);
+        ObjectHolder real_rhs = rhs_->Execute(closure, context);
+
+        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
+        {
+            runtime::Number result = *real_lhs.TryAs<runtime::Number>() >> *real_rhs.TryAs<runtime::Number>();
+            return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (real_lhs.TryAs<runtime::String>())
+        {
+            string str_result;
+            if (real_rhs.TryAs<runtime::String>())
+            {
+                const string& rhs_str = real_rhs.TryAs<runtime::String>()->GetValue();
+                size_t i = 0;
+                for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
+                {
+                    if (i < rhs_str.size())
+                        str_result += c >> rhs_str[i++];
+                    else
+                        str_result += c;
+                }
+            }
+            else if (real_rhs.TryAs<runtime::Number>())
+            {
+                unsigned char shift_cnt = real_rhs.TryAs<runtime::Number>()->GetIntValue();
+                for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
+                    str_result += c >> shift_cnt;
+            }
+            else
+            {
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
+            }
+            return ObjectHolder::Own<runtime::String>(move(str_result));
+        }
+        else
+        {
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
+        }
     }
 
     ObjectHolder Or::Execute(Closure& closure, Context& context)

@@ -40,7 +40,9 @@ LexerInputExImpl::LexerInputExImpl(initializer_list<pair<string, string>> module
 { // Первый элемент пары - имя модуля, второй элемент - его тело.
     for (const auto& current_module_pair : module_list)
     {
-        if (!include_map_.size())
+        if (current_module_pair.first.find_first_not_of(SPACES_SYMBS_STR) == string::npos)
+            throw runtime_error(EMPTY_MODULE_NAME_ERR);
+        if (main_module_name_.empty())
             main_module_name_ = current_module_pair.first;
 
         ModuleDescType module_desc;
@@ -48,12 +50,13 @@ LexerInputExImpl::LexerInputExImpl(initializer_list<pair<string, string>> module
         module_desc.module_name = current_module_pair.first;
         module_desc.module_path.clear();
         module_desc.module_body = current_module_pair.second;
+        module_desc.module_is_active = true;
+        module_desc.module_is_main = (current_module_pair.first == main_module_name_);
 
         include_map_[current_module_pair.first] = move(module_desc);
     }
     is_include_map_changed_ = true;
 }
-
 
 LexerInputExImpl& LexerInputExImpl::operator=(const LexerInputExImpl& other)
 {
@@ -91,7 +94,9 @@ LexerInputExImpl& LexerInputExImpl::operator=(LexerInputExImpl&& other)
 void LexerInputExImpl::AddIncludeModule(const string& module_name, const string& module_body,
                                         const path& module_path)
 {
-    if (!include_map_.size())
+    if (module_name.find_first_not_of(SPACES_SYMBS_STR) == string::npos)
+        throw runtime_error(EMPTY_MODULE_NAME_ERR);
+    if (main_module_name_.empty())
         main_module_name_ = module_name;
 
     ModuleDescType module_desc;
@@ -99,9 +104,41 @@ void LexerInputExImpl::AddIncludeModule(const string& module_name, const string&
     module_desc.module_name = module_name;
     module_desc.module_path = module_path / path(module_name);
     module_desc.module_body = module_body;
+    module_desc.module_is_active = true;
+    module_desc.module_is_main = (module_name == main_module_name_);
 
     include_map_[module_name] = move(module_desc);
     is_include_map_changed_ = true;
+}
+
+bool LexerInputExImpl::EraseIncludeModule(const std::string& module_name)
+{
+    if (!include_map_.count(module_name))
+        return false;
+    if (main_module_name_ == module_name)
+        main_module_name_.clear();
+    return include_map_.erase(module_name);
+}
+
+bool LexerInputExImpl::RenameIncludeModule(const std::string& old_module_name, const std::string& new_module_name)
+{
+    if (!include_map_.count(old_module_name))
+        return false;
+
+    ModuleDescType& old_module_desc = include_map_[old_module_name];
+    ModuleDescType new_module_desc;
+
+    new_module_desc.module_id = old_module_desc.module_id;
+    new_module_desc.module_name = new_module_name;
+    new_module_desc.module_path = move(old_module_desc.module_path);
+    new_module_desc.module_is_active = old_module_desc.module_is_active;
+    new_module_desc.module_is_main = old_module_desc.module_is_main;
+    new_module_desc.module_body = move(old_module_desc.module_body);
+    if (main_module_name_ == old_module_name)
+        main_module_name_ = new_module_name;
+    include_map_.erase(old_module_name);
+    include_map_[new_module_name] = move(new_module_desc);
+    return true;
 }
 
 void LexerInputExImpl::IncludeSwitchTo(string include_arg)
@@ -142,11 +179,15 @@ void LexerInputExImpl::IncludeSwitchTo(string include_arg)
         module_desc.module_name = include_arg;
         module_desc.module_path = move(test_module_path);
         module_desc.module_body = move(module_data);
+        module_desc.module_is_active = true;
+        module_desc.module_is_main = false;
 
         include_map_[include_arg] = move(module_desc);
         is_include_map_changed_ = true;
     }
 
+    if (!include_map_[include_arg].module_is_active)
+        throw ParseError("Модуль "s + include_arg + " не активен");
     // В том случае, если устанавливаемый модуль не является стартовым, сохраним состояние выбывающего модуля в стеке
     if (current_module_name_.size())
         include_stack_.push_back({current_module_name_, current_position_, command_desc_ptr_->module_string_number});
@@ -180,13 +221,66 @@ const LexerInputExImpl::ModuleDescType* LexerInputExImpl::GetModuleDescriptor(si
     }
 }
 
-bool LexerInputExImpl::SetModuleDescriptor(LexerInputExImpl::ModuleDescType module_desc)
-{
+void LexerInputExImpl::UnmainCurrentMainModule()
+{ // Снимаем существующий главный модуль с его поста. Чиновника - в отставку!
+    if (!main_module_name_.empty() && include_map_.count(main_module_name_))
+    {
+        include_map_.at(main_module_name_).module_is_main = false;
+        main_module_name_.clear();
+    }
+}
+
+bool LexerInputExImpl::SetModuleWithBody(LexerInputExImpl::ModuleDescType module_desc)
+{ // Функция-член добавляет (или заменяет существующий) модуль вместе с его телом
     string include_map_key = module_desc.module_name;
+    if (module_desc.module_is_main)
+    { // Если устанавливается новый стартовый (главный) модуль - удаляем это свойство у уже существующего.
+        UnmainCurrentMainModule();
+        main_module_name_ = module_desc.module_name;
+    }
+
     bool is_insert = include_map_.insert_or_assign(include_map_key, move(module_desc)).second;
     InitStreamStatus();
     is_include_map_changed_ = true;
     return is_insert;
+}
+
+bool LexerInputExImpl::FixModuleDesc(const LexerInputExImpl::ModuleDescType& new_module_desc)
+{ // Функция член исправляет поля описателя существующего модуля, кроме полей тела и маршрута
+  // (тело модуля здесь не меняется, поэтому маршрут к его файлу тоже оставим в неприкосновенности).
+    if (!include_map_.count(new_module_desc.module_name))
+        return false;
+    ModuleDescType& old_module_desc = include_map_[new_module_desc.module_name];
+
+    if (old_module_desc.module_is_main && !new_module_desc.module_is_main)
+    { // Снимаем главенство с модуля
+        UnmainCurrentMainModule();
+        old_module_desc.module_is_main = false;
+    }
+    else if (!old_module_desc.module_is_main && new_module_desc.module_is_main)
+    { // Делаем модуль главным
+        UnmainCurrentMainModule();
+        main_module_name_ = new_module_desc.module_name;
+        old_module_desc.module_is_main = true;
+    }
+
+    old_module_desc.module_id = new_module_desc.module_id;
+    old_module_desc.module_is_active = new_module_desc.module_is_active;
+    return true;
+}
+
+LexerInputExImpl& LexerInputExImpl::SetMainModuleName(const std::string& main_module_name)
+{    
+    UnmainCurrentMainModule(); // Устанавливается новый стартовый (главный) модуль - сначала
+                               // удаляем это свойство у уже существующего.
+    if (include_map_.count(main_module_name))
+    { // Если модуль с указанным именем существует - делаем его главным.
+      // Иначе система останется без точки запуска.
+        main_module_name_ = main_module_name;
+        include_map_.at(main_module_name_).module_is_main = true;
+    }
+
+    return *this;
 }
 
 int LexerInputExImpl::get()
