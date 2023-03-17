@@ -30,6 +30,33 @@ namespace runtime
 
 void TestParseProgram(TestRunner& tr);
 
+string ConvertLinkageToString(const runtime::LinkageValue& link_val)
+{
+    if (holds_alternative<string>(link_val))
+    {
+        return get<string>(link_val);
+    }
+    else if (holds_alternative<bool>(link_val))
+    {
+        if (get<bool>(link_val))
+            return "True";
+        else
+            return "False";
+    }
+    else if (holds_alternative<int>(link_val))
+    {
+        return to_string(get<int>(link_val));
+    }
+    else if (holds_alternative<double>(link_val))
+    {
+        return to_string(get<double>(link_val));
+    }
+    else
+    {
+        return {};
+    }
+}
+
 class LexerInputExImpl : public parse::LexerInputEx
 { // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных
 public:
@@ -353,12 +380,13 @@ exts.inner_method(4)
     
         ostringstream ostr;
         auto lambda_link = [&ostr](runtime::LinkCallReason what_reason, const string& field_name,
-                                   const vector<string>& argument_value) -> runtime::LinkageReturn
+                                   const vector<runtime::LinkageValue>& argument_value) -> runtime::LinkageValue
                             {
                                 switch (what_reason)
                                 {
                                     case runtime::LinkCallReason::CALL_REASON_WRITE_FIELD:
-                                        ostr << field_name << " = " << argument_value[0] << endl;
+                                        ostr << field_name << " = "
+                                             << ConvertLinkageToString(argument_value[0]) << endl;
                                         return {};
                                     case runtime::LinkCallReason::CALL_REASON_READ_FIELD:
                                         ostr << "Reading " << field_name << endl;

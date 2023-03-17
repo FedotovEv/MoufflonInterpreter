@@ -16,6 +16,42 @@ namespace
     const string ADD_METHOD = "__add__"s;
     const string INIT_METHOD = "__init__"s;
     const string EXTERNAL_LINK_CLASS_NAME = "__external"s;
+
+    runtime::LinkageValue ConvertToLinkageValue(const runtime::ObjectHolder& input_object)
+    {
+        if (runtime::Bool* bool_ptr = input_object.TryAs<runtime::Bool>())
+        {
+            return bool_ptr->GetValue();
+        }
+        else if (runtime::Number* number_ptr = input_object.TryAs<runtime::Number>())
+        {
+            if (number_ptr->IsInt())
+                return number_ptr->GetIntValue();
+            else if (number_ptr->IsDouble())
+                return number_ptr->GetDoubleValue();
+        }
+        else if (runtime::String* string_ptr = input_object.TryAs<runtime::String>())
+        {
+            return string_ptr->GetValue();
+        }
+        return {};
+    }
+
+    runtime::ObjectHolder ConvertToObject(const runtime::LinkageValue& link_value)
+    {
+        if (std::holds_alternative<std::monostate>(link_value))
+            return runtime::ObjectHolder::None();
+        else if (std::holds_alternative<bool>(link_value))
+            return runtime::ObjectHolder::Own(runtime::Bool(std::get<bool>(link_value)));
+        else if (std::holds_alternative<int>(link_value))
+            return runtime::ObjectHolder::Own(runtime::Number(std::get<int>(link_value)));
+        else if (std::holds_alternative<double>(link_value))
+            return runtime::ObjectHolder::Own(runtime::Number(std::get<double>(link_value)));
+        else if (std::holds_alternative<std::string>(link_value))
+            return runtime::ObjectHolder::Own(runtime::String(std::get<std::string>(link_value)));
+        else
+            return runtime::ObjectHolder::None();
+    }
 }  // namespace
 
 namespace ast
@@ -189,14 +225,8 @@ namespace ast
                 if (cur_class_instance_ptr && cur_class_instance_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
                     context.GetExternalLinkage() && id_name.size())
                 {  // Вызов звонковой функции при чтении полей объекта "__external"
-                    runtime::LinkageReturn external_result = context.GetExternalLinkage()(
-                                    runtime::LinkCallReason::CALL_REASON_READ_FIELD, id_name, {});
-                    if (holds_alternative<int>(external_result))
-                        return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
-                    else if (holds_alternative<double>(external_result))
-                        return runtime::ObjectHolder::Own(runtime::Number(get<double>(external_result)));
-                    else if (holds_alternative<string>(external_result))
-                        return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
+                    return ConvertToObject(context.GetExternalLinkage()
+                        (runtime::LinkCallReason::CALL_REASON_READ_FIELD, id_name, {}));
                 }
                 else
                 {
@@ -281,24 +311,12 @@ namespace ast
         {  // Требуется вызвать метод объекта общего типа (определенного программно)
             if (real_class_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME && context.GetExternalLinkage())
             {  // Вызов звонковой функции при вызове метода объекта "__external"
-                vector<string> real_args_str;
-                ostringstream set_value_stream;
+                vector<runtime::LinkageValue> real_args_lv;
                 for (auto& cur_real_arg : real_args)
-                {
-                    set_value_stream.clear();
-                    cur_real_arg.Get()->Print(set_value_stream, context);
-                    real_args_str.push_back(set_value_stream.str());
-                }
-                runtime::LinkageReturn external_result = context.GetExternalLinkage()(
-                    runtime::LinkCallReason::CALL_REASON_CALL_METHOD, method_, real_args_str);
-                if (holds_alternative<int>(external_result))
-                    return runtime::ObjectHolder::Own(runtime::Number(get<int>(external_result)));
-                else if (holds_alternative<double>(external_result))
-                    return runtime::ObjectHolder::Own(runtime::Number(get<double>(external_result)));
-                else if (holds_alternative<string>(external_result))
-                    return runtime::ObjectHolder::Own(runtime::String(get<string>(external_result)));
-                else
-                    return runtime::ObjectHolder::None();
+                    real_args_lv.push_back(ConvertToLinkageValue(cur_real_arg));
+
+                return ConvertToObject(context.GetExternalLinkage()
+                    (runtime::LinkCallReason::CALL_REASON_CALL_METHOD, method_, real_args_lv));
             }
             else
             {
@@ -555,12 +573,10 @@ namespace ast
             ObjectHolder value_holder = rv_->Execute(closure, context);
             if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME && 
                 context.GetExternalLinkage() && field_name_.size() && value_holder)
-                {
-                    ostringstream set_value_stream;
-                    value_holder->Print(set_value_stream, context);
-                    context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD,
-                                                 field_name_, {set_value_stream.str()});
-                }
+            { // Вызов звонковой функции при записи полей объекта "__external"
+                context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD,
+                                             field_name_, {ConvertToLinkageValue(value_holder)});
+            }
             return (target_object_ptr->Fields())[field_name_] = move(value_holder);
         }
         return {};
