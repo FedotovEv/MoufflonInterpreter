@@ -21,7 +21,7 @@
 
 wxDECLARE_EVENT(DEBUG_EVENT_TYPE, wxCommandEvent);
 
-#define FULLVERSION_STRING "0.0.2.30"
+#define FULLVERSION_STRING "0.0.3.40"
 
 class ModuleDescClientData : public wxClientData
 {

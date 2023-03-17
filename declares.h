@@ -38,9 +38,9 @@ namespace runtime
         CALL_REASON_CALL_METHOD
     };
 
-    using LinkageReturn = std::variant<int, double, std::string>;
-    using LinkageFunction = std::function<LinkageReturn(LinkCallReason, const std::string&,
-        const std::vector<std::string>&)>;
+    using LinkageValue = std::variant<std::monostate, bool, int, double, std::string>;
+    using LinkageFunction = std::function<LinkageValue(LinkCallReason, const std::string&,
+                                                       const std::vector<LinkageValue>&)>;
 
     struct ProgramCommandDescriptor
     {
