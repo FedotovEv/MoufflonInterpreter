@@ -306,8 +306,8 @@ namespace runtime
 
     void ClassInstance::Print(std::ostream& os, Context& context)
     {
-        if (HasMethod("__str__", 0))
-            Call("__str__", {}, context)->Print(os, context);
+        if (HasMethod(STR_FUNCTION_METHOD, 0))
+            Call(STR_FUNCTION_METHOD, {}, context)->Print(os, context);
         else
             os << this;
     }

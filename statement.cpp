@@ -87,9 +87,12 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                 break;
             case runtime::DebugExecutionMode::DEBUG_EXIT_METHOD:
                 // Запуск вплоть до оператора выхода из текущей функци
-                if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
-                    current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
-                    debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD;
+                if (dbg_context->GetCallStack().size() <= dbg_context->GetDebugStackCounter())
+                {
+                    if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
+                        current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+                        debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD;
+                }
                 break;
             default:
                 break;
@@ -109,10 +112,9 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
         if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
             current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
         { // Здесь удаляется запись о выбывающем стековом кадре при исполнении команды выхода из метода
-            if (dbg_context->GetCallStack().size())
-                dbg_context->GetCallStack().pop_back();
-            else
-                assert(false);
+            dbg_context->GetCallStack().pop_back();
+            if (debug_callback_reason != runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN)
+                dbg_context->DecDebugStackCounter();
         }
     }
 
@@ -925,10 +927,13 @@ namespace ast
     MethodBody::MethodBody(std::unique_ptr<Statement>&& body) : body_(move(body))
     {
         dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
+        runtime::ProgramCommandDescriptor after_body_command_desc;
         if (Compound* compound_body_ptr = dynamic_cast<Compound*>(body_.get()))
-            dummy_statement_->SetCommandDesc(compound_body_ptr->GetLastCommandDesc());
+            after_body_command_desc = compound_body_ptr->GetLastCommandDesc();
         else
-            dummy_statement_->SetCommandDesc(body_->GetCommandDesc());
+            after_body_command_desc = body_->GetCommandDesc();
+        ++after_body_command_desc.module_string_number;
+        dummy_statement_->SetCommandDesc(after_body_command_desc);
     }
 
     ObjectHolder MethodBody::Execute(Closure& closure, Context& context)

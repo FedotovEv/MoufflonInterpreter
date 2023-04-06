@@ -68,6 +68,12 @@ namespace runtime
             debug_exec_stack_counter_ = debug_exec_stack_counter;
         }
 
+        void DecDebugStackCounter()
+        {
+            if (debug_exec_stack_counter_)
+                --debug_exec_stack_counter_;
+        }
+
         void Clear()
         {
             SimpleContext::Clear();

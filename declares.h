@@ -32,6 +32,7 @@ const std::string INIT_METHOD = "__init__";
 const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
 const std::string EQUAL_CMP_METHOD = "__eq__";
 const std::string LESS_CMP_METHOD = "__lt__";
+const std::string STR_FUNCTION_METHOD = "__str__";
 
 namespace runtime
 {
