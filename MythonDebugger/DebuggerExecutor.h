@@ -144,6 +144,7 @@ public:
     }
 
     ControllerResult GetResult();
+    void Clear();
 
 private:
 

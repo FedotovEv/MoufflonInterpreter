@@ -4,7 +4,6 @@
 #include <cassert>
 #include <optional>
 #include <sstream>
-#include <stdarg.h>
 
 using namespace std;
 
@@ -335,7 +334,9 @@ namespace runtime
     }
 
     ClassInstance::ClassInstance(const Class& cls) : my_class_(cls)
-    {}
+    {
+        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
+    }
 
     ObjectHolder ClassInstance::Call(const std::string& method_name,
                                      const std::vector<ObjectHolder>& actual_args,
@@ -352,6 +353,8 @@ namespace runtime
         for (const string& formal_param_name : method_ptr->formal_params)
             method_closure[formal_param_name] = *actual_args_it++;
     
+        dummy_statement_->info_data_ptr = &method_name;
+        PrepareExecute(dummy_statement_.get(), method_closure, context);
         return method_ptr->body->Execute(method_closure, context);
     }
 
@@ -454,9 +457,9 @@ namespace runtime
         if (!lhs && !rhs)
             return true;
 
-        if (ClassInstance* lhs_inst_ptr = lhs.TryAs<ClassInstance>())
-            if (lhs_inst_ptr->HasMethod("__eq__", 1))
-                return IsTrue(lhs_inst_ptr->Call("__eq__", {rhs}, context));
+        if (CommonClassInstance* lhs_inst_ptr = lhs.TryAs<ClassInstance>())
+            if (lhs_inst_ptr->HasMethod(EQUAL_CMP_METHOD, 1))
+                return IsTrue(lhs_inst_ptr->Call(EQUAL_CMP_METHOD, {rhs}, context));
 
         ThrowRuntimeError(context, ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_EQUAL);
     }
@@ -472,9 +475,9 @@ namespace runtime
         if (lhs.TryAs<Bool>() && rhs.TryAs<Bool>())
             return lhs.TryAs<Bool>()->GetValue() < rhs.TryAs<Bool>()->GetValue();
 
-        if (ClassInstance * lhs_inst_ptr = lhs.TryAs<ClassInstance>())
-            if (lhs_inst_ptr->HasMethod("__lt__", 1))
-                return IsTrue(lhs_inst_ptr->Call("__lt__", {rhs}, context));
+        if (CommonClassInstance * lhs_inst_ptr = lhs.TryAs<ClassInstance>())
+            if (lhs_inst_ptr->HasMethod(LESS_CMP_METHOD, 1))
+                return IsTrue(lhs_inst_ptr->Call(LESS_CMP_METHOD, {rhs}, context));
 
         ThrowRuntimeError(context, ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_LESS);
     }
@@ -498,5 +501,4 @@ namespace runtime
     {
         return !Less(lhs, rhs, context);
     }
-
 }  // namespace runtime

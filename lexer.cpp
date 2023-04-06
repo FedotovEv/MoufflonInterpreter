@@ -26,6 +26,7 @@ namespace parse
          {"and"s, token_type::And{}},
          {"or"s, token_type::Or{}},
          {"not"s, token_type::Not{}},
+         {"xor"s, token_type::Xor{}},
          {"None"s, token_type::None{}},
          {"True"s, token_type::True{}},
          {"False"s, token_type::False{}}
@@ -352,6 +353,7 @@ namespace parse
         UNVALUED_OUTPUT(And);
         UNVALUED_OUTPUT(Or);
         UNVALUED_OUTPUT(Not);
+        UNVALUED_OUTPUT(Xor);
         UNVALUED_OUTPUT(Eq);
         UNVALUED_OUTPUT(NotEq);
         UNVALUED_OUTPUT(LessOrEq);

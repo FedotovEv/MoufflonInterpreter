@@ -210,6 +210,10 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 	WatchCreate = new wxMenuItem( symbol_menu, wxID_CREATE_WATCH, wxString( _("Добавить слежение") ) + wxT('\t') + wxT("Ctrl-F7"), _("Создаёт новый элемент слежения за символом"), wxITEM_NORMAL );
 	symbol_menu->Append( WatchCreate );
 
+	wxMenuItem* WatchFromSymbolList;
+	WatchFromSymbolList = new wxMenuItem( symbol_menu, wxID_CREATE_WATCH_FROM_SYMB, wxString( _("Установить слежение") ) + wxT('\t') + wxT("Ctrl-Alt-F7"), _("Создаёт новый элемент слежения из текущего символа таблицы символов"), wxITEM_NORMAL );
+	symbol_menu->Append( WatchFromSymbolList );
+
 	wxMenuItem* WatchDelete;
 	WatchDelete = new wxMenuItem( symbol_menu, wxID_DELETE_WATCH, wxString( _("Удалить слежение") ) + wxT('\t') + wxT("Alt-F7"), _("Удаляет существующий элемент слежения"), wxITEM_NORMAL );
 	symbol_menu->Append( WatchDelete );
@@ -292,6 +296,8 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 
 	ToolCreateWatch = MainWindowToolBar->AddTool( wxID_TOOL_CREATE_WATCH, wxEmptyString, wxArtProvider::GetBitmap( wxART_ADD_BOOKMARK, wxART_TOOLBAR ), wxNullBitmap, wxITEM_NORMAL, _("Установить наблюдение"), _("Создать элемент наблюдения над состоянием символа"), NULL );
 
+	ToolWatchFromSymbolList = MainWindowToolBar->AddTool( wxID_TOOL_WATCH_FROM_SYMB, wxEmptyString, wxArtProvider::GetBitmap( wxART_PLUS, wxART_TOOLBAR ), wxNullBitmap, wxITEM_NORMAL, _("Создать слежение из текущего символа таблицы"), _("Установить слежение за текущим символом таблицы символов"), NULL );
+
 	ToolDeleteWatch = MainWindowToolBar->AddTool( wxID_TOOL_DELETE_WATCH, wxEmptyString, wxArtProvider::GetBitmap( wxART_DEL_BOOKMARK, wxART_TOOLBAR ), wxNullBitmap, wxITEM_NORMAL, _("Снять наблюдение с символа"), _("Удаляет существующий элемент наблюдения над символом"), NULL );
 
 	MainWindowToolBar->AddSeparator();
@@ -363,6 +369,7 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 	breakpoint_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::BreakpointDisableAllOnMenuSelection ), this, BreakpointDisableAll->GetId());
 	breakpoint_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::BreakpointToggleOnMenuSelection ), this, BreakpointToggle->GetId());
 	symbol_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::WatchCreateOnMenuSelection ), this, WatchCreate->GetId());
+	symbol_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::WatchFromSymbolListOnMenuSelection ), this, WatchFromSymbolList->GetId());
 	symbol_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::WatchDeleteOnMenuSelection ), this, WatchDelete->GetId());
 	symbol_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::SymbolsSaveOnMenuSelection ), this, SymbolsSave->GetId());
 	help_menu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::HelpIndexOnMenuSelection ), this, HelpIndex->GetId());
@@ -386,6 +393,9 @@ MainDebuggerWindow::MainDebuggerWindow( wxWindow* parent, wxWindowID id, const w
 	this->Connect( ToolToggleBreakpoint->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolToggleBreakpointOnToolClicked ) );
 	this->Connect( ToolBreakpointOn->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOnOnToolClicked ) );
 	this->Connect( ToolBreakpointOff->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOffOnToolClicked ) );
+	this->Connect( ToolCreateWatch->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolCreateWatchOnToolClicked ) );
+	this->Connect( ToolWatchFromSymbolList->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolWatchFromSymbolListOnToolClicked ) );
+	this->Connect( ToolDeleteWatch->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolDeleteWatchOnToolClicked ) );
 	this->Connect( ToolHelp->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolHelpOnToolClicked ) );
 	EditModuleMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleIsActiveOnMenuSelection ), this, MenuModuleIsActive->GetId());
 	EditModuleMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( MainDebuggerWindow::ModuleIsMainOnMenuSelection ), this, MenuModuleIsMain->GetId());
@@ -427,6 +437,9 @@ MainDebuggerWindow::~MainDebuggerWindow()
 	this->Disconnect( ToolToggleBreakpoint->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolToggleBreakpointOnToolClicked ) );
 	this->Disconnect( ToolBreakpointOn->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOnOnToolClicked ) );
 	this->Disconnect( ToolBreakpointOff->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolBreakpointOffOnToolClicked ) );
+	this->Disconnect( ToolCreateWatch->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolCreateWatchOnToolClicked ) );
+	this->Disconnect( ToolWatchFromSymbolList->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolWatchFromSymbolListOnToolClicked ) );
+	this->Disconnect( ToolDeleteWatch->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolDeleteWatchOnToolClicked ) );
 	this->Disconnect( ToolHelp->GetId(), wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler( MainDebuggerWindow::ToolHelpOnToolClicked ) );
 
 	delete EditModuleMenu;

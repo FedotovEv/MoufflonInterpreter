@@ -56,6 +56,7 @@ namespace parse
         struct And {};       // Лексема «and»
         struct Or {};        // Лексема «or»
         struct Not {};       // Лексема «not»
+        struct Xor {};       // Лексема «xor»
         struct Eq {};        // Лексема «==»
         struct NotEq {};     // Лексема «!=»
         struct LessOrEq {};  // Лексема «<=»
@@ -74,7 +75,8 @@ namespace parse
                        token_type::While, token_type::Break, token_type::Continue,
                        token_type::Def, token_type::Newline,
                        token_type::Print, token_type::Import, token_type::Include,
-                       token_type::Indent, token_type::Dedent, token_type::And, token_type::Or,
+                       token_type::Indent, token_type::Dedent,
+                       token_type::And, token_type::Or, token_type::Xor,
                        token_type::Not, token_type::Eq, token_type::NotEq, token_type::LessOrEq,
                        token_type::GreaterOrEq, token_type::ShiftLeft, token_type::ShiftRight,
                        token_type::None, token_type::True, token_type::False, token_type::Eof>;

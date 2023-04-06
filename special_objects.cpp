@@ -61,7 +61,8 @@ namespace ast
 namespace runtime
 {
     const unordered_map<string_view, ArrayInstance::ArrayCallMethod> ArrayInstance::array_method_table_
-    { {"get"sv, &ArrayInstance::MethodGet},
+    {   
+        {"get"sv, &ArrayInstance::MethodGet},
         {"Get"sv, &ArrayInstance::MethodGet},
         {"get_array_dimensions"sv, &ArrayInstance::MethodGetArrayDimensions},
         {"GetArrayDimensions"sv, &ArrayInstance::MethodGetArrayDimensions},
@@ -77,6 +78,26 @@ namespace runtime
         {"Back"sv, &ArrayInstance::MethodBack},
         {"pop_back"sv, &ArrayInstance::MethodPopBack},
         {"PopBack"sv, &ArrayInstance::MethodPopBack}
+    };
+
+    const unordered_map<string_view, pair<size_t, size_t>> ArrayInstance::array_method_argument_count_
+    {   
+        {"get"sv, {0, UINT_MAX}},
+        {"Get"sv, {0, UINT_MAX}},
+        {"get_array_dimensions"sv, {0, 0}},
+        {"GetArrayDimensions"sv, {0, 0}},
+        {"get_dimension_count"sv, {1, 1}},
+        {"GetDimensionCount"sv, {1, 1}},
+        {"resize"sv, {0, UINT_MAX}},
+        {"Resize"sv, {0, UINT_MAX}},
+        {"clear"sv, {0, 0}},
+        {"Clear"sv, {0, 0}},
+        {"push_back"sv, {1, 1}},
+        {"PushBack"sv, {1, 1}},
+        {"back"sv, {0, 0}},
+        {"Back"sv, {0, 0}},
+        {"pop_back"sv, {0, 0}},
+        {"PopBack"sv, {0, 0}}
     };
 
     const unordered_map<string_view, MapInstance::MapCallMethod> MapInstance::map_method_table_
@@ -107,6 +128,36 @@ namespace runtime
         {"IsIteratorEnd"sv, &MapInstance::MethodIsIteratorEnd},
         {"release"sv, &MapInstance::MethodRelease},
         {"Release"sv, &MapInstance::MethodRelease}
+    };
+
+    const unordered_map<string_view, pair<size_t, size_t>> MapInstance::map_method_argument_count_
+    {
+        {"insert"sv, {1, 1}},
+        {"Insert"sv, {1, 1}},
+        {"find"sv, {1, 1}},
+        {"Find"sv, {1, 1}},
+        {"erase"sv, {1, 1}},
+        {"Erase"sv, {1, 1}},
+        {"contains"sv, {1, 1}},
+        {"Contains"sv, {1, 1}},
+        {"clear"sv, {0, 0}},
+        {"Clear"sv, {0, 0}},
+        {"begin"sv, {0, 0}},
+        {"Begin"sv, {0, 0}},
+        {"previous"sv, {1, 1}},
+        {"Previous"sv, {1, 1}},
+        {"next"sv, {1, 1}},
+        {"Next"sv, {1, 1}},
+        {"key"sv, {1, 1}},
+        {"Key"sv, {1, 1}},
+        {"value"sv, {1, 1}},
+        {"Value"sv, {1, 1}},
+        {"is_iterator_begin"sv, {1, 1}},
+        {"IsIteratorBegin"sv, {1, 1}},
+        {"is_iterator_end"sv, {1, 1}},
+        {"IsIteratorEnd"sv, {1, 1}},
+        {"release"sv, {0, 0}},
+        {"Release"sv, {0, 0}}
     };
 
     int MapInstance::last_iterator_pack_serial_ = 0;
@@ -353,6 +404,20 @@ namespace runtime
             return (this->*array_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool ArrayInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (array_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = array_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                   argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     MapIterator::MapIterator(MapInstance & map_instance, map<string, ObjectHolder> & map_storage) :
@@ -605,5 +670,19 @@ namespace runtime
             return (this->*map_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool MapInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (map_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = map_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                   argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
     }
 } //namespace runtime

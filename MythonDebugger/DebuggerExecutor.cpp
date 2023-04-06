@@ -77,6 +77,15 @@ DebugController::ControllerResult DebugController::GetResult()
         return {};
 }
 
+void DebugController::Clear()
+{
+    debugger_project_.Clear();
+    debug_context_.Clear();
+    controller_comand_ = ControllerCommand::CONTROL_UNKNOWN;
+    controller_status_ = ControllerStatus{};
+    controller_result_ = std::monostate{};
+}
+
 runtime::DebugExecutionMode DebugController::DebugCallbackImpl(runtime::DebugCallbackReason call_reason,
                 runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context)
 {

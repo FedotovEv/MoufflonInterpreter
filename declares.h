@@ -27,6 +27,12 @@
 
 #define ZERO_TOLERANCE 0.000000001
 
+const std::string ADD_METHOD = "__add__";
+const std::string INIT_METHOD = "__init__";
+const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
+const std::string EQUAL_CMP_METHOD = "__eq__";
+const std::string LESS_CMP_METHOD = "__lt__";
+
 namespace runtime
 {
     using NumberValue = std::variant<int, double>;
@@ -59,4 +65,4 @@ namespace runtime
                    module_string_number != other.module_string_number;
         }
     };
-} // namespace return
+} // namespace runtime

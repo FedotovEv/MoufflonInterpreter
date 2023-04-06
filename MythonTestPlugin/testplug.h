@@ -67,8 +67,11 @@ namespace runtime
 
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                           Context& context) override;
+        bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
     private:
         static const std::unordered_map<std::string_view, PluginCallMethod> plugin_method_table_;
+        static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> plugin_method_argument_count_;
 
         // Обработчики методов класса двоичного дополнения МУФЛОНа
         ObjectHolder MethodTestAddAll(const std::string& method, const std::vector<ObjectHolder>& actual_args,

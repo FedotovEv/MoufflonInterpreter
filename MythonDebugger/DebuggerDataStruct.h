@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <iterator>
 #include <filesystem>
+#include <unordered_set>
 
 using namespace std::literals;
 
@@ -52,7 +53,7 @@ public:
         is_include_map_changed_(other.is_include_map_changed_)
     {}
 
-    LexerInputExImpl(LexerInputExImpl&& other) :
+    LexerInputExImpl(LexerInputExImpl&& other) noexcept:
         include_map_(std::move(other.include_map_)),
         main_module_name_(std::move(other.main_module_name_)),
         search_modules_path_(std::move(other.search_modules_path_)),
@@ -381,8 +382,10 @@ public:
 
     const WatchDescType* GetWatchDescriptor(int watch_id) const;
     const WatchDescType* GetWatchDescriptor(size_t watch_number) const;
+    int AddWatchDescriptor(WatchDescType watch_desc);
     bool SetWatchDescriptor(WatchDescType watch_desc);
-
+    bool EraseWatchDescriptor(int watch_id);
+    void Clear();
     bool IsWatchListChanged() const
     {
         return is_watch_list_changed_;
@@ -393,15 +396,17 @@ public:
         is_watch_list_changed_ = false;
     }
 
-    void Clear()
+private:
+    int AllocId();
+    void FreeId(int what_id)
     {
-        watch_descs_.clear();
-        is_watch_list_changed_ = false;
+        free_ids_.insert(what_id);
     }
 
-private:
     std::unordered_map<int, WatchDescType> watch_descs_;
     bool is_watch_list_changed_ = false;
+    std::unordered_set<int> free_ids_;
+    int last_used_id_ = 0;
 
 public:
     class iterator: public std::iterator<std::forward_iterator_tag, WatchDescType>
@@ -474,7 +479,7 @@ public:
         return iterator(*this, true);
     }
 
-    bool erase(iterator& watch_iterator)
+    void erase(iterator& watch_iterator)
     {
         watch_descs_.erase(watch_iterator.watch_iter_);
         is_watch_list_changed_ = true;

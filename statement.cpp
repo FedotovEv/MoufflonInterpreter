@@ -6,17 +6,123 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <cassert>
 
 using namespace std;
 using runtime::ThrowMessageNumber;
 using runtime::ThrowMessages;
+using runtime::Closure;
+using runtime::Context;
+using runtime::DebugContext;
+using runtime::ObjectHolder;
+
+void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context& context)
+{
+    if (DebugContext* dbg_context = dynamic_cast<DebugContext*>(&context))
+    { // Эти операции будут выполняться только при отладке, то есть если в качестве операнда context
+      // передана переменная типа DebugContext.
+        static bool is_wait_first_frame_command = false;
+        // last_command - дескриптор последней корректной исполненной команды
+        static runtime::ProgramCommandDescriptor last_command{-1, -1};
+
+        runtime::CommandGenus current_genus = exec_obj_ptr->GetCommandGenus();
+        const runtime::ProgramCommandDescriptor& current_command = exec_obj_ptr->GetCommandDesc();
+        runtime::DebugCallbackReason debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN;
+
+        if (current_genus == runtime::CommandGenus::CMD_GENUS_CALL_METHOD)
+        { // Это пседокоманда-уведомление от функции ClassInstance::Call, вызывающей какой-либо метод
+          // пользовательского (не встроенного) класса. Создаём запись о новом стековом кадре. Она пока будет
+          // неполна, но позже будет дополнена при исполнении первой команды тела вызванного метода.            
+            runtime::CallStackEntry new_stack_rec;
+            new_stack_rec.call_command = last_command;
+            new_stack_rec.info_data = *static_cast<runtime::PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr;
+            dbg_context->GetCallStack().push_back(new_stack_rec);
+            is_wait_first_frame_command = true; // При следующем переходе к следующей строке будет захвачена
+                                                // информация о первой исполняемой строке нового кадра.
+            return;
+        }
+
+        if (current_genus == runtime::CommandGenus::CMD_GENUS_INITIALIZE)
+        {
+            dbg_context->GetCallStack().clear();
+            dbg_context->GetCallStack().push_back({}); // Здесь создаём запись о корневом стековом кадре
+            runtime::CallStackEntry& call_stack_entry = dbg_context->GetCallStack().back();
+            call_stack_entry.call_command = current_command;
+            call_stack_entry.first_command = current_command;
+            call_stack_entry.closure_ptr = &closure;
+            call_stack_entry.info_data = "root";
+            is_wait_first_frame_command = false;
+        }
+
+        if (current_genus != runtime::CommandGenus::CMD_GENUS_CALL_METHOD &&
+            current_command.module_string_number >= 0)
+        {
+            last_command = current_command;
+        }
+
+        if (context.GetLastCommandDesc() != current_command)
+        { // Исполнение перешло к следующей строке исходного текста
+            if (is_wait_first_frame_command)
+            { // Сохраняем информацию о положении первой исполняемой строки очередного стекового кадра.
+              // Сама запись о кадре была создана ранее при выполнении функции ClassInstance::Call, вызывающей
+              // какой-либо метод класса. Эта функция посылает уведомление о своём исполнении в виде псевдокоманды
+              // рода runtime::CommandGenus::CMD_GENUS_CALL_METHOD.
+                dbg_context->GetCallStack().back().first_command = current_command;
+                dbg_context->GetCallStack().back().closure_ptr = &closure;
+                is_wait_first_frame_command = false;
+            }
+            // Сначала проверим наличие здесь (на этой новой строке) точек останова
+
+            // Если точек останова нет, возможно, выполняется тот или иной вид трассировки (пошагового исполнения)
+            switch (dbg_context->GetDebugMode())
+            {
+            case runtime::DebugExecutionMode::DEBUG_STEP_IN:
+                // Исполнение до начала следующей строки исходника
+                debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_IN;
+                break;
+            case runtime::DebugExecutionMode::DEBUG_STEP_OUT:
+                // Исполнение до начала следующей строки исходника, обходя все вызовы функций
+                if (dbg_context->GetCallStack().size() <= dbg_context->GetDebugStackCounter())
+                    debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_OUT;
+                break;
+            case runtime::DebugExecutionMode::DEBUG_EXIT_METHOD:
+                // Запуск вплоть до оператора выхода из текущей функци
+                if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
+                    current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+                    debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD;
+                break;
+            default:
+                break;
+            }
+        }
+
+        if (debug_callback_reason != runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN)
+        { // Случилось какое-то отладочное событие, делаем отладочный звонок
+            if (dbg_context->GetDebugCallback())
+                dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
+                    (debug_callback_reason, exec_obj_ptr, closure, context));
+            else
+                dbg_context->SetDebugMode(runtime::DebugExecutionMode::DEBUG_NO_DEBUG);
+            dbg_context->SetDebugStackCounter(dbg_context->GetCallStack().size());
+        }
+
+        if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
+            current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+        { // Здесь удаляется запись о выбывающем стековом кадре при исполнении команды выхода из метода
+            if (dbg_context->GetCallStack().size())
+                dbg_context->GetCallStack().pop_back();
+            else
+                assert(false);
+        }
+    }
+
+    context.SetLastCommandDesc(exec_obj_ptr->GetCommandDesc());
+    if (context.IsTerminate())
+        ThrowRuntimeError(exec_obj_ptr, ThrowMessageNumber::THRM_URGENT_TERMINATE);
+}
 
 namespace
 {
-    const string ADD_METHOD = "__add__"s;
-    const string INIT_METHOD = "__init__"s;
-    const string EXTERNAL_LINK_CLASS_NAME = "__external"s;
-
     runtime::LinkageValue ConvertToLinkageValue(const runtime::ObjectHolder& input_object)
     {
         if (runtime::Bool* bool_ptr = input_object.TryAs<runtime::Bool>())
@@ -56,11 +162,6 @@ namespace
 
 namespace ast
 {
-    using runtime::Closure;
-    using runtime::Context;
-    using runtime::DebugContext;
-    using runtime::ObjectHolder;
-
     ObjectHolder DereferencePointerObject(const ObjectHolder& pointer_obj)
     {
         runtime::PointerObject* pointer_ptr = pointer_obj.TryAs<runtime::PointerObject>();
@@ -71,91 +172,6 @@ namespace ast
                 return ObjectHolder::None();
         else
             return pointer_obj;
-    }
-
-    void PrepareExecute(Statement* exec_obj_ptr, Closure& closure, Context& context)
-    {
-        if (DebugContext* dbg_context = dynamic_cast<DebugContext*>(&context))
-        { // Эти операции будут выполняться только при отладке, то есть если в качестве операнда context
-          // передана переменная типа DebugContext.
-            static bool is_wait_first_frame_command = false;
-            runtime::CommandGenus current_genus = exec_obj_ptr->GetCommandGenus();
-            runtime::DebugCallbackReason debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN;
-            
-            if (exec_obj_ptr->GetCommandGenus() == runtime::CommandGenus::CMD_GENUS_INITIALIZE)
-            {
-                dbg_context->GetCallStack().clear();
-                dbg_context->GetCallStack().push_back({}); // Здесь создаём запись о корневом стековом кадре
-                dbg_context->GetCallStack().back().call_command = exec_obj_ptr->GetCommandDesc();
-                dbg_context->GetCallStack().back().first_command = exec_obj_ptr->GetCommandDesc();
-                is_wait_first_frame_command = false;
-            }
-
-            if (context.GetLastCommandDesc() != exec_obj_ptr->GetCommandDesc())
-            { // Исполнение перешло к следующей строке исходного текста
-                if (is_wait_first_frame_command)
-                { // Сохраняем информацию о положении первой исполняемой строки очередного стекового кадра.
-                  // Сама запись о кадре была создана ранее при выполнении команды рода MethodCall (она имеет род
-                  // runtime::CommandGenus::CMD_GENUS_CALL_METHOD).
-                    dbg_context->GetCallStack().back().first_command = exec_obj_ptr->GetCommandDesc();
-                    is_wait_first_frame_command = false;
-                }
-                // Сначала проверим наличие здесь (на этой новой строке) точек останова
-
-                // Если точек останова нет, возможно, выполняется тот или иной вид трассировки (пошагового исполнения)
-                switch (dbg_context->GetDebugMode())
-                {
-                case runtime::DebugExecutionMode::DEBUG_STEP_IN:
-                    // Исполнение до начала следующей строки исходника
-                    debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_IN;
-                    break;
-                case runtime::DebugExecutionMode::DEBUG_STEP_OUT:
-                    // Исполнение до начала следующей строки исходника, обходя все вызовы функций
-                    if (dbg_context->GetCallStack().size() <= dbg_context->GetDebugStackCounter())
-                        debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_STEP_OUT;
-                    break;
-                case runtime::DebugExecutionMode::DEBUG_EXIT_METHOD:
-                    // Запуск вплоть до оператора выхода из текущей функци
-                    if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
-                        current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
-                        debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD;
-                    break;
-                default:
-                    break;
-                }
-            }
-
-            if (debug_callback_reason != runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN)
-            { // Случилось какое-то отладочное событие, делаем отладочный звонок
-                if (dbg_context->GetDebugCallback())
-                    dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
-                        (debug_callback_reason, exec_obj_ptr, closure, context));
-                else
-                    dbg_context->SetDebugMode(runtime::DebugExecutionMode::DEBUG_NO_DEBUG);
-                dbg_context->SetDebugStackCounter(dbg_context->GetCallStack().size());
-            }
-
-            // Далее находятся операции, выполняющие ведение стека вызовов. Таких операций две:
-            // 1. Если встретилась какая-либо команда входа в функцию, создаём запись о новом стековом кадре.
-            // 2. Если наткнулись на команду выхода из функции, удаляем запись верхнего стекового кадра.
-            if (current_genus == runtime::CommandGenus::CMD_GENUS_CALL_METHOD)
-            {
-                runtime::CallStackEntry new_stack_rec;
-                new_stack_rec.call_command = exec_obj_ptr->GetCommandDesc();
-                dbg_context->GetCallStack().push_back(new_stack_rec);
-                is_wait_first_frame_command = true; // При следующем переходе к следующей строке будет захвачена
-                                                    // информация о первой исполняемой строке нового кадра.
-            }
-            else if (current_genus == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD ||
-                     current_genus == runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
-            {
-                dbg_context->GetCallStack().pop_back();
-            }
-        }
-
-        context.SetLastCommandDesc(exec_obj_ptr->GetCommandDesc());
-        if (context.IsTerminate())
-            ThrowRuntimeError(exec_obj_ptr, ThrowMessageNumber::THRM_URGENT_TERMINATE);
     }
 
     ObjectHolder Assignment::Execute(Closure& closure, Context& context)
@@ -286,9 +302,7 @@ namespace ast
                            object_(move(object)),
                            method_(move(method)),
                            args_(move(args))
-    {
-        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
-    }
+    {}
 
     ObjectHolder MethodCall::Execute(Closure& closure, Context& context)
     {
@@ -364,7 +378,7 @@ namespace ast
         }
         else if (real_lhs.TryAs<runtime::ClassInstance>())
         {
-            runtime::ClassInstance *lhs_class_ptr = real_lhs.TryAs<runtime::ClassInstance>();
+            runtime::CommonClassInstance *lhs_class_ptr = real_lhs.TryAs<runtime::ClassInstance>();
             if (lhs_class_ptr->HasMethod(ADD_METHOD, 1))
                 return lhs_class_ptr->Call(ADD_METHOD, {real_rhs}, context);
             else
@@ -741,6 +755,14 @@ namespace ast
             return ObjectHolder::Own(runtime::Bool(runtime::IsTrue(real_rhs)));
         }
         return ObjectHolder::Own(runtime::Bool(false));
+    }
+
+    ObjectHolder Xor::Execute(Closure& closure, Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        bool bool_lhs = runtime::IsTrue(lhs_->Execute(closure, context));
+        bool bool_rhs = runtime::IsTrue(rhs_->Execute(closure, context));
+        return ObjectHolder::Own(runtime::Bool(bool_lhs != bool_rhs));
     }
 
     ObjectHolder BitwiseOr::Execute(Closure& closure, Context& context)

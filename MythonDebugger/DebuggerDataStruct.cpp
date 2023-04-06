@@ -420,10 +420,52 @@ const WatchesContainer::WatchDescType*
     }
 }
 
+void WatchesContainer::Clear()
+{
+    free_ids_.clear();
+    last_used_id_ = 0;
+    watch_descs_.clear();
+    is_watch_list_changed_ = false;
+}
+
+int WatchesContainer::AllocId()
+{
+    if (free_ids_.size())
+    {
+        int allocated_id = *free_ids_.begin();
+        free_ids_.erase(allocated_id);
+        return allocated_id;
+    }
+    else
+    {
+        return ++last_used_id_;
+    }
+}
+
 bool WatchesContainer::SetWatchDescriptor(WatchesContainer::WatchDescType watch_desc)
 {
     int watch_desc_key = watch_desc.watch_id;
     bool is_insert = watch_descs_.insert_or_assign(watch_desc_key, move(watch_desc)).second;
     is_watch_list_changed_ = true;
     return is_insert;
+}
+
+int WatchesContainer::AddWatchDescriptor(WatchesContainer::WatchDescType watch_desc)
+{
+    int allocated_id = AllocId();
+    watch_desc.watch_id = allocated_id;
+    watch_descs_.insert({allocated_id, move(watch_desc)});
+    is_watch_list_changed_ = true;
+    return allocated_id;
+}
+
+bool WatchesContainer::EraseWatchDescriptor(int watch_id)
+{
+    if (watch_descs_.erase(watch_id))
+    {
+        FreeId(watch_id);
+        is_watch_list_changed_ = true;
+        return true;
+    }
+    return false;
 }

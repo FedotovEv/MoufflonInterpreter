@@ -61,6 +61,34 @@ namespace runtime
         {"Round"sv, &MathInstance::MethodRound}
     };
 
+    const unordered_map<string_view, pair<size_t, size_t>> MathInstance::math_method_argument_count_
+    {
+        {"abs"sv, {1, 1}},
+        {"Abs"sv, {1, 1}},
+        {"pow"sv, {2, 2}},
+        {"Pow"sv, {2, 2}},
+        {"sqrt"sv, {1, 1}},
+        {"Sqrt"sv, {1, 1}},
+        {"sin"sv, {1, 1}},
+        {"Sin"sv, {1, 1}},
+        {"cos"sv, {1, 1}},
+        {"Cos"sv, {1, 1}},
+        {"atan"sv, {1, 1}},
+        {"Atan"sv, {1, 1}},
+        {"atan2"sv, {2, 2}},
+        {"Atan2"sv, {2, 2}},
+        {"log"sv, {1, 1}},
+        {"Log"sv, {1, 1}},
+        {"exp"sv, {1, 1}},
+        {"Exp"sv, {1, 1}},
+        {"floor"sv, {1, 1}},
+        {"Floor"sv, {1, 1}},
+        {"ceil"sv, {1, 1}},
+        {"Ceil"sv, {1, 1}},
+        {"round"sv, {1, 1}},
+        {"Round"sv, {1, 1}}
+    };
+
     void MathInstance::Print(ostream& os, Context& context)
     {
         os << "Math:";
@@ -206,11 +234,25 @@ namespace runtime
     }
 
     ObjectHolder MathInstance::Call(const string& method_name,
-                            const vector<ObjectHolder>& actual_args, Context& context)
+                                    const vector<ObjectHolder>& actual_args, Context& context)
     {
         if (math_method_table_.count(method_name))
             return (this->*math_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool MathInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (math_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = math_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                   argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
     }
 } //namespace runtime

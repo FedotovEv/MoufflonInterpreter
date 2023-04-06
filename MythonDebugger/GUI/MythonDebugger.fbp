@@ -58,16 +58,16 @@
             <property name="window_style">wxTAB_TRAVERSAL</property>
             <property name="xrc_skip_sizer">1</property>
             <event name="OnClose">MainDebuggerWindowOnClose</event>
-            <object class="wxBoxSizer" expanded="1">
+            <object class="wxBoxSizer" expanded="0">
                 <property name="minimum_size"></property>
                 <property name="name">bSizer1</property>
                 <property name="orient">wxHORIZONTAL</property>
                 <property name="permission">none</property>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxEXPAND</property>
                     <property name="proportion">1</property>
-                    <object class="wxListBox" expanded="1">
+                    <object class="wxListBox" expanded="0">
                         <property name="BottomDockable">1</property>
                         <property name="LeftDockable">1</property>
                         <property name="RightDockable">1</property>
@@ -129,11 +129,11 @@
                         <event name="OnRightDown">ModuleListOnRightDown</event>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxEXPAND</property>
                     <property name="proportion">2</property>
-                    <object class="wxStyledTextCtrl" expanded="1">
+                    <object class="wxStyledTextCtrl" expanded="0">
                         <property name="BottomDockable">1</property>
                         <property name="LeftDockable">1</property>
                         <property name="RightDockable">1</property>
@@ -199,20 +199,20 @@
                         <event name="OnRightDown">SourceViewerOnRightDown</event>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxEXPAND</property>
                     <property name="proportion">1</property>
-                    <object class="wxBoxSizer" expanded="1">
+                    <object class="wxBoxSizer" expanded="0">
                         <property name="minimum_size"></property>
                         <property name="name">bSizer2</property>
                         <property name="orient">wxVERTICAL</property>
                         <property name="permission">none</property>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxEXPAND</property>
                             <property name="proportion">1</property>
-                            <object class="wxListBox" expanded="1">
+                            <object class="wxListBox" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -273,11 +273,11 @@
                                 <event name="OnListBoxDClick">BreakPointsListOnListBoxDClick</event>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxEXPAND</property>
                             <property name="proportion">1</property>
-                            <object class="wxListBox" expanded="1">
+                            <object class="wxListBox" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -338,11 +338,11 @@
                                 <event name="OnListBoxDClick">SymbolsListOnListBoxDClick</event>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxEXPAND</property>
                             <property name="proportion">1</property>
-                            <object class="wxListBox" expanded="1">
+                            <object class="wxListBox" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -429,7 +429,7 @@
                 <property name="window_name"></property>
                 <property name="window_style"></property>
             </object>
-            <object class="wxMenuBar" expanded="1">
+            <object class="wxMenuBar" expanded="0">
                 <property name="bg"></property>
                 <property name="context_help"></property>
                 <property name="context_menu">1</property>
@@ -450,11 +450,11 @@
                 <property name="window_extra_style"></property>
                 <property name="window_name"></property>
                 <property name="window_style"></property>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Файл</property>
                     <property name="name">file_menu</property>
                     <property name="permission">public</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -468,7 +468,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">CreateProjectOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -482,7 +482,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">FileLoadProjectOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -496,7 +496,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">FileSaveProjectOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -510,11 +510,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">FileSaveAsProjectOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator8</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -528,11 +528,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">FileAddOneFileOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator1</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -547,11 +547,11 @@
                         <event name="OnMenuSelection">FileExitProgramOnMenuSelection</event>
                     </object>
                 </object>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Вид</property>
                     <property name="name">view_menu</property>
                     <property name="permission">protected</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -565,7 +565,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">ViewOutputWindowOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -579,18 +579,18 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">ViewConfigOnMenuSelection</event>
                     </object>
-                    <object class="submenu" expanded="1">
+                    <object class="submenu" expanded="0">
                         <property name="bitmap"></property>
                         <property name="label">Доступные языки</property>
                         <property name="name">ViewAvailLanguages</property>
                         <property name="permission">protected</property>
                     </object>
                 </object>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Трассировка</property>
                     <property name="name">trace_menu</property>
                     <property name="permission">public</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -604,7 +604,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceRunWithDebugOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -618,11 +618,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceRunFreeOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator9</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -636,7 +636,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceInOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -650,7 +650,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceOutOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -664,7 +664,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceToCursorOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -678,11 +678,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceExitFromMethodOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator2</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -696,7 +696,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">TraceStopProgramOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -711,11 +711,11 @@
                         <event name="OnMenuSelection">TraceFinishProgramOnMenuSelection</event>
                     </object>
                 </object>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Точки останова</property>
                     <property name="name">breakpoint_menu</property>
                     <property name="permission">protected</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap">Load From File; </property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -729,7 +729,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointCreateOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -743,7 +743,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointCreateConditionalOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -757,7 +757,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointDeleteOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -771,11 +771,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointDeleteAllOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator3</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -789,7 +789,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointOnOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -803,7 +803,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointOffOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -817,7 +817,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointEnableAllOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -831,11 +831,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">BreakpointDisableAllOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator4</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -850,11 +850,11 @@
                         <event name="OnMenuSelection">BreakpointToggleOnMenuSelection</event>
                     </object>
                 </object>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Символы</property>
                     <property name="name">symbol_menu</property>
                     <property name="permission">public</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -868,7 +868,21 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">WatchCreateOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
+                        <property name="bitmap"></property>
+                        <property name="checked">0</property>
+                        <property name="enabled">1</property>
+                        <property name="help">Создаёт новый элемент слежения из текущего символа таблицы символов</property>
+                        <property name="id">wxID_CREATE_WATCH_FROM_SYMB</property>
+                        <property name="kind">wxITEM_NORMAL</property>
+                        <property name="label">Установить слежение</property>
+                        <property name="name">WatchFromSymbolList</property>
+                        <property name="permission">none</property>
+                        <property name="shortcut">Ctrl-Alt-F7</property>
+                        <property name="unchecked_bitmap"></property>
+                        <event name="OnMenuSelection">WatchFromSymbolListOnMenuSelection</event>
+                    </object>
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -882,11 +896,11 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">WatchDeleteOnMenuSelection</event>
                     </object>
-                    <object class="separator" expanded="1">
+                    <object class="separator" expanded="0">
                         <property name="name">m_separator7</property>
                         <property name="permission">none</property>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -901,11 +915,11 @@
                         <event name="OnMenuSelection">SymbolsSaveOnMenuSelection</event>
                     </object>
                 </object>
-                <object class="wxMenu" expanded="1">
+                <object class="wxMenu" expanded="0">
                     <property name="label">Помощь</property>
                     <property name="name">help_menu</property>
                     <property name="permission">public</property>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -919,7 +933,7 @@
                         <property name="unchecked_bitmap"></property>
                         <event name="OnMenuSelection">HelpIndexOnMenuSelection</event>
                     </object>
-                    <object class="wxMenuItem" expanded="1">
+                    <object class="wxMenuItem" expanded="0">
                         <property name="bitmap"></property>
                         <property name="checked">0</property>
                         <property name="enabled">1</property>
@@ -935,7 +949,7 @@
                     </object>
                 </object>
             </object>
-            <object class="wxToolBar" expanded="1">
+            <object class="wxToolBar" expanded="0">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
                 <property name="RightDockable">1</property>
@@ -991,7 +1005,7 @@
                 <property name="window_extra_style"></property>
                 <property name="window_name"></property>
                 <property name="window_style"></property>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_NEW; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_CREATE_PROJECT</property>
@@ -1003,7 +1017,7 @@
                     <property name="tooltip">Создать новый проект</property>
                     <event name="OnToolClicked">ToolCreateProjectOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_FILE_OPEN; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_OPEN_PROJECT</property>
@@ -1015,7 +1029,7 @@
                     <property name="tooltip">Открыть файл проекта</property>
                     <event name="OnToolClicked">ToolOpenProjectOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_SAVE_PROJECT</property>
@@ -1027,7 +1041,7 @@
                     <property name="tooltip">Сохранить проект</property>
                     <event name="OnToolClicked">ToolSaveProjectOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE_AS; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_SAVE_PROJECT_AS</property>
@@ -1039,10 +1053,10 @@
                     <property name="tooltip">Сохранить проект под другим именем</property>
                     <event name="OnToolClicked">ToolSaveAsProjectOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_PLUS; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_ADD_ONE_FILE</property>
@@ -1054,10 +1068,10 @@
                     <property name="tooltip">Добавить исходный файл к проекту</property>
                     <event name="OnToolClicked">ToolAddOneFileOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_QUIT; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_EXIT_PROGRAM</property>
@@ -1069,10 +1083,10 @@
                     <property name="tooltip">Выход из программы</property>
                     <event name="OnToolClicked">ToolExitProgramOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_GOTO_LAST; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_RUN_DEBUG</property>
@@ -1084,7 +1098,7 @@
                     <property name="tooltip">Запуск под отладкой</property>
                     <event name="OnToolClicked">ToolRunWithDebugOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_GO_FORWARD; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_RUN_FREE</property>
@@ -1096,10 +1110,10 @@
                     <property name="tooltip">Запуск без отладки</property>
                     <event name="OnToolClicked">ToolRunFreeOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_GO_TO_PARENT; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_TRACE_IN</property>
@@ -1111,7 +1125,7 @@
                     <property name="tooltip">Выполнить с заходом</property>
                     <event name="OnToolClicked">ToolTraceInOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_REDO; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_TRACE_OUT</property>
@@ -1123,7 +1137,7 @@
                     <property name="tooltip">Выполнить с обходом</property>
                     <event name="OnToolClicked">ToolTraceOutOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_GO_UP; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TRACE_TO_CURSOR</property>
@@ -1135,7 +1149,7 @@
                     <property name="tooltip">Исполнять до курсора</property>
                     <event name="OnToolClicked">ToolTraceToCursorOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_UNDO; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_EXIT_FROM_METHOD</property>
@@ -1147,10 +1161,10 @@
                     <property name="tooltip">Выйти из функции</property>
                     <event name="OnToolClicked">ToolExitFromMethodOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_CROSS_MARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_STOP_PROGRAM</property>
@@ -1162,7 +1176,7 @@
                     <property name="tooltip">Приостановка программы</property>
                     <event name="OnToolClicked">ToolStopProgramOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_DELETE; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_FINISH_PROGRAM</property>
@@ -1174,10 +1188,10 @@
                     <property name="tooltip">Завершить программу</property>
                     <event name="OnToolClicked">ToolFinishProgramOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_ADD_BOOKMARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_CREATE_BREAK</property>
@@ -1189,7 +1203,7 @@
                     <property name="tooltip">Создание точки останова</property>
                     <event name="OnToolClicked">ToolCreateBreakpointOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_DEL_BOOKMARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_DELETE_BREAK</property>
@@ -1201,7 +1215,7 @@
                     <property name="tooltip">Удаление текущей точки останова</property>
                     <event name="OnToolClicked">ToolDeleteBreakpointOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_GO_TO_PARENT; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_TOGGLE_BREAK</property>
@@ -1213,10 +1227,10 @@
                     <property name="tooltip">Переброс точки останова</property>
                     <event name="OnToolClicked">ToolToggleBreakpointOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_TICK_MARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_BREAK_ON</property>
@@ -1228,7 +1242,7 @@
                     <property name="tooltip">Включение точки останова</property>
                     <event name="OnToolClicked">ToolBreakpointOnOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_CROSS_MARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_BREAK_OFF</property>
@@ -1240,10 +1254,10 @@
                     <property name="tooltip">Выключение точки останова</property>
                     <event name="OnToolClicked">ToolBreakpointOffOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_ADD_BOOKMARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_CREATE_WATCH</property>
@@ -1253,8 +1267,21 @@
                     <property name="permission">protected</property>
                     <property name="statusbar">Создать элемент наблюдения над состоянием символа</property>
                     <property name="tooltip">Установить наблюдение</property>
+                    <event name="OnToolClicked">ToolCreateWatchOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
+                    <property name="bitmap">Load From Art Provider; wxART_PLUS; wxART_TOOLBAR</property>
+                    <property name="context_menu">0</property>
+                    <property name="id">wxID_TOOL_WATCH_FROM_SYMB</property>
+                    <property name="kind">wxITEM_NORMAL</property>
+                    <property name="label"></property>
+                    <property name="name">ToolWatchFromSymbolList</property>
+                    <property name="permission">protected</property>
+                    <property name="statusbar">Установить слежение за текущим символом таблицы символов</property>
+                    <property name="tooltip">Создать слежение из текущего символа таблицы</property>
+                    <event name="OnToolClicked">ToolWatchFromSymbolListOnToolClicked</event>
+                </object>
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_DEL_BOOKMARK; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_TOOL_DELETE_WATCH</property>
@@ -1264,11 +1291,12 @@
                     <property name="permission">protected</property>
                     <property name="statusbar">Удаляет существующий элемент наблюдения над символом</property>
                     <property name="tooltip">Снять наблюдение с символа</property>
+                    <event name="OnToolClicked">ToolDeleteWatchOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_HELP; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_HELP</property>
@@ -1281,11 +1309,11 @@
                     <event name="OnToolClicked">ToolHelpOnToolClicked</event>
                 </object>
             </object>
-            <object class="wxMenu" expanded="1">
+            <object class="wxMenu" expanded="0">
                 <property name="label"></property>
                 <property name="name">EditModuleMenu</property>
                 <property name="permission">protected</property>
-                <object class="wxMenuItem" expanded="1">
+                <object class="wxMenuItem" expanded="0">
                     <property name="bitmap"></property>
                     <property name="checked">0</property>
                     <property name="enabled">1</property>
@@ -1298,11 +1326,11 @@
                     <property name="shortcut"></property>
                     <property name="unchecked_bitmap"></property>
                 </object>
-                <object class="separator" expanded="1">
+                <object class="separator" expanded="0">
                     <property name="name">m_separator10</property>
                     <property name="permission">none</property>
                 </object>
-                <object class="wxMenuItem" expanded="1">
+                <object class="wxMenuItem" expanded="0">
                     <property name="bitmap"></property>
                     <property name="checked">0</property>
                     <property name="enabled">1</property>
@@ -1316,7 +1344,7 @@
                     <property name="unchecked_bitmap"></property>
                     <event name="OnMenuSelection">ModuleIsActiveOnMenuSelection</event>
                 </object>
-                <object class="wxMenuItem" expanded="1">
+                <object class="wxMenuItem" expanded="0">
                     <property name="bitmap"></property>
                     <property name="checked">0</property>
                     <property name="enabled">1</property>
@@ -1330,11 +1358,11 @@
                     <property name="unchecked_bitmap"></property>
                     <event name="OnMenuSelection">ModuleIsMainOnMenuSelection</event>
                 </object>
-                <object class="separator" expanded="1">
+                <object class="separator" expanded="0">
                     <property name="name">m_separator91</property>
                     <property name="permission">none</property>
                 </object>
-                <object class="wxMenuItem" expanded="1">
+                <object class="wxMenuItem" expanded="0">
                     <property name="bitmap"></property>
                     <property name="checked">0</property>
                     <property name="enabled">1</property>
@@ -1350,7 +1378,7 @@
                 </object>
             </object>
         </object>
-        <object class="Frame" expanded="1">
+        <object class="Frame" expanded="0">
             <property name="aui_managed">0</property>
             <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
             <property name="bg"></property>
@@ -1379,7 +1407,7 @@
             <property name="window_style">wxTAB_TRAVERSAL</property>
             <property name="xrc_skip_sizer">1</property>
             <event name="OnClose">OutputDebuggerWindowOnClose</event>
-            <object class="wxStatusBar" expanded="1">
+            <object class="wxStatusBar" expanded="0">
                 <property name="bg"></property>
                 <property name="context_help"></property>
                 <property name="context_menu">1</property>
@@ -1402,7 +1430,7 @@
                 <property name="window_name"></property>
                 <property name="window_style"></property>
             </object>
-            <object class="wxMenuBar" expanded="1">
+            <object class="wxMenuBar" expanded="0">
                 <property name="bg"></property>
                 <property name="context_help"></property>
                 <property name="context_menu">1</property>
@@ -1489,7 +1517,7 @@
                     </object>
                 </object>
             </object>
-            <object class="wxToolBar" expanded="1">
+            <object class="wxToolBar" expanded="0">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
                 <property name="RightDockable">1</property>
@@ -1545,7 +1573,7 @@
                 <property name="window_extra_style"></property>
                 <property name="window_name"></property>
                 <property name="window_style"></property>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_SAVE_DEBUG_OUTPUT</property>
@@ -1557,7 +1585,7 @@
                     <property name="tooltip"></property>
                     <event name="OnToolClicked">ToolDebugOutputSaveOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_FILE_SAVE_AS; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_SAVE_AS_DEBUG_OUTPUT</property>
@@ -1569,7 +1597,7 @@
                     <property name="tooltip"></property>
                     <event name="OnToolClicked">ToolDebugOutputSaveAsOnToolClicked</event>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_DELETE; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_DEBUG_CLEAR_WINDOW</property>
@@ -1581,10 +1609,10 @@
                     <property name="tooltip"></property>
                     <event name="OnToolClicked">ToolDebugClearWindowOnToolClicked</event>
                 </object>
-                <object class="toolSeparator" expanded="1">
+                <object class="toolSeparator" expanded="0">
                     <property name="permission">protected</property>
                 </object>
-                <object class="tool" expanded="1">
+                <object class="tool" expanded="0">
                     <property name="bitmap">Load From Art Provider; wxART_QUIT; wxART_TOOLBAR</property>
                     <property name="context_menu">0</property>
                     <property name="id">wxID_DEBUG_CLOSE_WINDOW</property>
@@ -1597,7 +1625,7 @@
                     <event name="OnToolClicked">ToolDebugCloseWindowOnToolClicked</event>
                 </object>
             </object>
-            <object class="wxBoxSizer" expanded="1">
+            <object class="wxBoxSizer" expanded="0">
                 <property name="minimum_size"></property>
                 <property name="name">bSizer3</property>
                 <property name="orient">wxVERTICAL</property>
@@ -1668,7 +1696,7 @@
                 </object>
             </object>
         </object>
-        <object class="Dialog" expanded="1">
+        <object class="Dialog" expanded="0">
             <property name="aui_managed">0</property>
             <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
             <property name="bg"></property>
@@ -2079,7 +2107,7 @@
                 </object>
             </object>
         </object>
-        <object class="Dialog" expanded="1">
+        <object class="Dialog" expanded="0">
             <property name="aui_managed">0</property>
             <property name="aui_manager_style">wxAUI_MGR_DEFAULT</property>
             <property name="bg"></property>
@@ -2108,25 +2136,25 @@
             <property name="window_style"></property>
             <event name="OnClose">EditModulePropsDialogOnClose</event>
             <event name="OnInitDialog">EditModulePropsDialogOnInitDialog</event>
-            <object class="wxBoxSizer" expanded="1">
+            <object class="wxBoxSizer" expanded="0">
                 <property name="minimum_size"></property>
                 <property name="name">bSizer6</property>
                 <property name="orient">wxVERTICAL</property>
                 <property name="permission">none</property>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxALIGN_CENTER_HORIZONTAL</property>
                     <property name="proportion">1</property>
-                    <object class="wxBoxSizer" expanded="1">
+                    <object class="wxBoxSizer" expanded="0">
                         <property name="minimum_size"></property>
                         <property name="name">bSizer10</property>
                         <property name="orient">wxHORIZONTAL</property>
                         <property name="permission">none</property>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxStaticText" expanded="1">
+                            <object class="wxStaticText" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2183,11 +2211,11 @@
                                 <property name="wrap">-1</property>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">1</property>
-                            <object class="wxStaticText" expanded="1">
+                            <object class="wxStaticText" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2246,20 +2274,20 @@
                         </object>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxALIGN_CENTER_HORIZONTAL</property>
                     <property name="proportion">1</property>
-                    <object class="wxBoxSizer" expanded="1">
+                    <object class="wxBoxSizer" expanded="0">
                         <property name="minimum_size"></property>
                         <property name="name">bSizer11</property>
                         <property name="orient">wxHORIZONTAL</property>
                         <property name="permission">none</property>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxStaticText" expanded="1">
+                            <object class="wxStaticText" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2316,11 +2344,11 @@
                                 <property name="wrap">-1</property>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxStaticText" expanded="1">
+                            <object class="wxStaticText" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2379,20 +2407,20 @@
                         </object>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxALIGN_CENTER_HORIZONTAL</property>
                     <property name="proportion">1</property>
-                    <object class="wxBoxSizer" expanded="1">
+                    <object class="wxBoxSizer" expanded="0">
                         <property name="minimum_size"></property>
                         <property name="name">bSizer7</property>
                         <property name="orient">wxHORIZONTAL</property>
                         <property name="permission">none</property>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxStaticText" expanded="1">
+                            <object class="wxStaticText" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2449,11 +2477,11 @@
                                 <property name="wrap">-1</property>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxTextCtrl" expanded="1">
+                            <object class="wxTextCtrl" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2515,11 +2543,11 @@
                         </object>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxALIGN_CENTER_HORIZONTAL|wxALL</property>
                     <property name="proportion">0</property>
-                    <object class="wxCheckBox" expanded="1">
+                    <object class="wxCheckBox" expanded="0">
                         <property name="BottomDockable">1</property>
                         <property name="LeftDockable">1</property>
                         <property name="RightDockable">1</property>
@@ -2579,11 +2607,11 @@
                         <property name="window_style"></property>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxALIGN_CENTER_HORIZONTAL|wxALL</property>
                     <property name="proportion">0</property>
-                    <object class="wxCheckBox" expanded="1">
+                    <object class="wxCheckBox" expanded="0">
                         <property name="BottomDockable">1</property>
                         <property name="LeftDockable">1</property>
                         <property name="RightDockable">1</property>
@@ -2643,20 +2671,20 @@
                         <property name="window_style"></property>
                     </object>
                 </object>
-                <object class="sizeritem" expanded="1">
+                <object class="sizeritem" expanded="0">
                     <property name="border">5</property>
                     <property name="flag">wxEXPAND</property>
                     <property name="proportion">1</property>
-                    <object class="wxBoxSizer" expanded="1">
+                    <object class="wxBoxSizer" expanded="0">
                         <property name="minimum_size"></property>
                         <property name="name">bSizer8</property>
                         <property name="orient">wxHORIZONTAL</property>
                         <property name="permission">none</property>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxButton" expanded="1">
+                            <object class="wxButton" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2726,11 +2754,11 @@
                                 <event name="OnButtonClick">SaveNewModulePropsOnButtonClick</event>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxButton" expanded="1">
+                            <object class="wxButton" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2800,11 +2828,11 @@
                                 <event name="OnButtonClick">CancelEditModulePropsOnButtonClick</event>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxButton" expanded="1">
+                            <object class="wxButton" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>
@@ -2874,11 +2902,11 @@
                                 <event name="OnButtonClick">ResetModulePropsOnButtonClick</event>
                             </object>
                         </object>
-                        <object class="sizeritem" expanded="1">
+                        <object class="sizeritem" expanded="0">
                             <property name="border">5</property>
                             <property name="flag">wxALL</property>
                             <property name="proportion">0</property>
-                            <object class="wxButton" expanded="1">
+                            <object class="wxButton" expanded="0">
                                 <property name="BottomDockable">1</property>
                                 <property name="LeftDockable">1</property>
                                 <property name="RightDockable">1</property>

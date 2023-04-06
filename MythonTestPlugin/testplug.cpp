@@ -10,8 +10,6 @@
 #include <fstream>
 #include <cstdio>
 
-#define ZERO_TOLERANCE 0.000001
-
 using namespace std;
 using namespace runtime;
 using namespace std;
@@ -60,6 +58,20 @@ namespace runtime
         {"Ston"sv, &PluginInstance::MethodTestSton},
         {"print_hello"sv, &PluginInstance::MethodTestPrintHello},
         {"PrintHello"sv, &PluginInstance::MethodTestPrintHello}
+    };
+
+    const std::unordered_map<std::string_view, pair<size_t, size_t>> PluginInstance::plugin_method_argument_count_
+    {
+        {"add_all"sv, {0, UINT_MAX}},
+        {"AddAll"sv, {0, UINT_MAX}},
+        {"find_zero"sv, {0, UINT_MAX}},
+        {"FindZero"sv, {0, UINT_MAX}},
+        {"find_char"sv, {2, 2}},
+        {"FindChar"sv, {2, 2}},
+        {"ston"sv, {1, 1}},
+        {"Ston"sv, {1, 1}},
+        {"print_hello"sv, {0, 0}},
+        {"PrintHello"sv, {0, 0}}
     };
 
     void PluginInstance::Print(ostream& os, Context& context)
@@ -171,5 +183,19 @@ namespace runtime
             return (this->*plugin_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool PluginInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (plugin_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = plugin_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                   argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
     }
 } //namespace runtime

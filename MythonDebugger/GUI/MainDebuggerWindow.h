@@ -47,6 +47,7 @@ protected:
 	void BreakpointToggleOnMenuSelection( wxCommandEvent& event );
 	void WatchCreateOnMenuSelection( wxCommandEvent& event );
 	void WatchDeleteOnMenuSelection( wxCommandEvent& event );
+    void WatchFromSymbolListOnMenuSelection(wxCommandEvent& event);
 	void SymbolsSaveOnMenuSelection( wxCommandEvent& event );
 	void HelpIndexOnMenuSelection( wxCommandEvent& event );
 	void HelpAboutOnMenuSelection( wxCommandEvent& event );
@@ -69,7 +70,10 @@ protected:
 	void ToolToggleBreakpointOnToolClicked(wxCommandEvent& event);
 	void ToolBreakpointOnOnToolClicked(wxCommandEvent& event);
 	void ToolBreakpointOffOnToolClicked(wxCommandEvent& event);
-	void ToolHelpOnToolClicked(wxCommandEvent& event);
+    void ToolCreateWatchOnToolClicked(wxCommandEvent& event);
+    void ToolWatchFromSymbolListOnToolClicked(wxCommandEvent& event);
+    void ToolDeleteWatchOnToolClicked(wxCommandEvent& event);
+    void ToolHelpOnToolClicked(wxCommandEvent& event);
     void DebugEventHandler(wxCommandEvent& event);
     void MainDebuggerWindowOnClose(wxCloseEvent& event);
     void ModuleIsActiveOnMenuSelection(wxCommandEvent& event);
@@ -84,12 +88,17 @@ private:
     static const int MARKER_SIMPLE_BREAK_POINT = 6; // Маркёр обычной точки останова
     static const int MARKER_COND_BREAK_POINT = 7; // Маркёр условной точки останова
     static const int MARKER_BOOKMARK = 8; // Маркёр для обозначения закладок
+    static const int MARKER_STACK_ENTRY_BEGIN = 9; // Маркёр указания первой исполняемой точки
+                                                   // выбранного стекового кадра.
     
-    wxString msgbox_msg_title = _("Сообщение");
-    wxString msgbox_err_title = _("Ошибка");
-    wxString msgbox_warning_title = _("Предупреждение");
-    wxString msgbox_open_err_title = _("Ошибка при открытии проекта");
-    wxString msgbox_save_err_title = _("Ошибка при записи");
+    wxString msgbox_msg_title;
+    wxString msgbox_err_title;
+    wxString msgbox_warning_title;
+    wxString msgbox_open_err_title;
+    wxString msgbox_save_err_title;
+    wxString msg_not_found;
+    wxString msg_unknown;
+    wxString msg_none;
 
     wxString main_debugger_window_name_;
     // Контроллер отладки, который мы будем использовать для работы
@@ -98,8 +107,11 @@ private:
     int current_module_id_ = wxNOT_FOUND; // id текущего модуля, загруженного в просмотрщик
     runtime::ProgramCommandDescriptor current_point_; // Текущая исполняемая строка (обновляется при останове
                                                       // отладчика по любой причине).
+     // Первая исполняемая строка текущего (выбранного с списке) стекового кадра
+    runtime::ProgramCommandDescriptor select_stack_entry_point_;
+    const runtime::Closure* current_closure_ptr_ = nullptr;
 
-    std::string FormatListBoxItem(const LexerInputExImpl::ModuleDescType& module_desc);
+    std::string FormatProjectListBoxItem(const LexerInputExImpl::ModuleDescType& module_desc);
     void FillProjectListBox();
     bool CheckProjectModifyStatus();
     bool CheckDebugInProcess();
@@ -109,6 +121,14 @@ private:
     int ScanSelectionByModuleId(int module_id);
     bool IsNextStepPossible();
     std::pair<bool, wxString> DoLoadProject(const wxString& project_filename);
+    wxString FormatSymbolsListBox(const runtime::Closure* closure_ptr, const std::string& symbol_name);
+    void FillSymbolListBox(const runtime::Closure* closure_ptr);
+    wxString FormatStackListBox(const runtime::CallStackEntry& stack_entry);
+    void FillStackListBox();
+    void SelectStackListLine(int new_stack_list_line, bool is_switch_module);
+    bool IsDebugStopped();
+    void ChewSymbToOut(std::string prefix, std::string symbol_name,
+                       const runtime::Closure* current_closure_ptr_, std::ostream& out);
 };
 
 #endif // __MainDebuggerWindow__

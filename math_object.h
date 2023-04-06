@@ -30,9 +30,11 @@ public:
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context) override;
+    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
 private:
     static const std::unordered_map<std::string_view, MathCallMethod> math_method_table_;
+    static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> math_method_argument_count_;
 
     // Обработчики методов класса "математическая коллекция"
     ObjectHolder MethodAbs(const std::string& method, const std::vector<ObjectHolder>& actual_args,

@@ -101,6 +101,36 @@ namespace runtime
         {"Error"sv, &PluginInstance::MethodFileError}
     };
 
+    const std::unordered_map<string_view, pair<size_t, size_t>> PluginInstance::plugin_method_argument_count_
+    {
+        {"open"sv, {1, 2}},
+        {"Open"sv, {1, 2}},
+        {"close"sv, {0, 0}},
+        {"Close"sv, {0, 0}},
+        {"read"sv, {1, 1}},
+        {"Read"sv, {1, 1}},
+        {"write"sv, {1, 1}},
+        {"Write"sv, {1, 1}},
+        {"seek"sv, {1, 2}},
+        {"Seek"sv, {1, 2}},
+        {"tell"sv, {0, 0}},
+        {"Tell"sv, {0, 0}},
+        {"rewind"sv, {0, 0}},
+        {"Rewind"sv, {0, 0}},
+        {"is_open"sv, {0, 0}},
+        {"IsOpen"sv, {0, 0}},
+        {"remove"sv, {1, 1}},
+        {"Remove"sv, {1, 1}},
+        {"rename"sv, {2, 2}},
+        {"Rename"sv, {2, 2}},
+        {"status"sv, {0, 0}},
+        {"Status"sv, {0, 0}},
+        {"eof"sv, {0, 0}},
+        {"Eof"sv, {0, 0}},
+        {"error"sv, {0, 0}},
+        {"Error"sv, {0, 0}}
+    };
+
     PluginInstance::PluginInstance(const std::string& filename, const std::string& filemode) :
                              filename_(filename), filemode_(filemode), file_handle_ptr_(nullptr), file_error_(0)
     {
@@ -340,5 +370,19 @@ namespace runtime
             return (this->*plugin_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool PluginInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (plugin_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = plugin_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
     }
 } //namespace runtime

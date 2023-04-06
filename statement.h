@@ -33,9 +33,6 @@ namespace ast
 
     using Statement = runtime::Executable;
 
-    void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(Statement* exec_obj_ptr, runtime::Closure& closure,
-                                                   runtime::Context& context);
-
     // Выражение, возвращающее значение типа T,
     // используется как основа для создания констант
     template <typename T>
@@ -437,6 +434,14 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
+    // Возвращает результат вычисления логической операции xor над lhs и rhs
+    class Xor : public BinaryOperation
+    {
+    public:
+        using BinaryOperation::BinaryOperation;
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
     // Возвращает результат вычисления логической операции not над единственным аргументом операции
     class Not : public UnaryOperation
     {
@@ -492,7 +497,7 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
         std::unique_ptr<Statement> body_;
-        std::unique_ptr<Statement> dummy_statement_ = std::make_unique<Compound>();
+        std::unique_ptr<runtime::PsevdoExecutable> dummy_statement_ = std::make_unique<runtime::PsevdoExecutable>();
     };
 
     // Выполняет инструкцию return с выражением statement

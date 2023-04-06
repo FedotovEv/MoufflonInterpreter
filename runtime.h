@@ -55,13 +55,6 @@ namespace runtime
         CMD_GENUS_INITIALIZE
     };
 
-    struct CallStackEntry
-    {
-        ProgramCommandDescriptor call_command; // Строка исходника, в которой находится
-                                               // точка вызова метода, создавшего данный стековый кадр.
-        ProgramCommandDescriptor first_command; // Строка первой исполняемой команды данного стекового кадра
-    };
-
     // Контекст исполнения инструкций Mython
     class MYTHLON_INTERPRETER_PUBLIC Context
     {
@@ -220,6 +213,16 @@ namespace runtime
     // Таблица символов, связывающая имя объекта с его значением
     using Closure = std::unordered_map<std::string, ObjectHolder>;
 
+    struct CallStackEntry
+    {
+        ProgramCommandDescriptor call_command; // Строка исходника, в которой находится
+                                               // точка вызова метода, создавшего данный стековый кадр.
+        ProgramCommandDescriptor first_command; // Строка первой исполняемой команды данного стекового кадра
+        Closure* closure_ptr = nullptr; // Указатель на таблицу символов стекового кадра (таблицу символов
+                                        // его головного метода).
+        std::string info_data; // Имя стекового кадра (например, имя метода, которому этот кадр принадлежит)
+    };
+
     // Проверяет, содержится ли в object значение, приводимое к True
     // Для отличных от нуля чисел, True и непустых строк возвращается true. В остальных случаях - false.
     bool IsTrue(const ObjectHolder& object);
@@ -370,6 +373,17 @@ namespace runtime
         std::unique_ptr<Executable> body;
     };
 
+    // Псевдокоманда для служебных целей (посылки уведомлений в ast::PrepareExecute)
+    struct PsevdoExecutable : public Executable
+    {
+        ObjectHolder Execute(Closure& closure, Context& context)
+        {
+            return ObjectHolder::None();
+        }
+
+        const std::string* info_data_ptr;
+    };
+
     // Класс
     class Class : public Object
     {
@@ -410,6 +424,7 @@ namespace runtime
     {
     public:
         void Print(std::ostream& os, Context& context) override = 0;
+        virtual bool HasMethod(const std::string& method_name, size_t argument_count) const = 0;
         virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                   Context& context) = 0;
         const void* GetPtr() const
@@ -445,7 +460,7 @@ namespace runtime
                           Context& context) override;
 
         // Возвращает true, если объект имеет метод method, принимающий argument_count параметров
-        [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count) const;
+        [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count) const override;
 
         // Возвращает ссылку на Closure, содержащий поля объекта
         [[nodiscard]] Closure& Fields();
@@ -457,6 +472,7 @@ namespace runtime
     private:
         const Class& my_class_;
         Closure closure_;
+        std::unique_ptr<PsevdoExecutable> dummy_statement_ = std::make_unique<PsevdoExecutable>();
     };
 
     void MYTHLON_INTERPRETER_PUBLIC CheckMethodParams(Context& context, const std::string& method_name,
@@ -580,3 +596,6 @@ namespace runtime
     [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
         RethrowRuntimeError(Context& context, std::runtime_error& orig_runtime_error);
 }  // namespace runtime
+
+void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure,
+                                               runtime::Context& context);

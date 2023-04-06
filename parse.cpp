@@ -70,6 +70,13 @@ namespace
             return result;
         }
 
+        template <typename T>
+        T CreateTemp(T object)
+        {
+            object.SetCommandDesc(lexer_.GetCurrentCommandDesc());
+            return object;
+        }
+
         void AddCommandDesc(ast::Statement* statement_ptr)
         {
             statement_ptr->SetCommandDesc(lexer_.GetCurrentCommandDesc());
@@ -143,6 +150,8 @@ namespace
 
             while (lexer_.CurrentToken().Is<ITokenType::Def>())
             {
+                // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
+                runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
                 runtime::Method m;
 
                 m.name = lexer_.ExpectNext<ITokenType::Id>().value;
@@ -159,7 +168,7 @@ namespace
                 lexer_.ExpectNext<ITokenType::Char>(':');
                 lexer_.NextToken();
 
-                m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()));  // NOLINT
+                m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()), def_desc);
 
                 result.push_back(std::move(m));
             }
@@ -239,8 +248,9 @@ namespace
                 if (id_list.empty())
                     return exec_factory_.Create(ast::Assignment(std::move(last_name), ParseTest()));
 
-                return exec_factory_.Create(ast::FieldAssignment(ast::VariableValue{std::move(id_list)},
-                                                                 std::move(last_name), ParseTest()));
+                return exec_factory_.Create(ast::FieldAssignment(
+                    exec_factory_.CreateTemp(ast::VariableValue{std::move(id_list)}),
+                    std::move(last_name), ParseTest()));
             }
             lexer_.Expect<ITokenType::Char>('(');
             lexer_.NextToken();
@@ -561,17 +571,29 @@ namespace
             return exec_factory_.Create(ast::While(std::move(condition), std::move(while_body)), while_desc);
         }
 
-        // LogicalExpr -> AndTest [OR AndTest]
+        // LogicalExpr -> XorTest [OR XorTest]
+        // XorTest -> AndTest [XOR AndTest]
         // AndTest -> NotTest [AND NotTest]
         // NotTest -> [NOT] NotTest
         //          | Comparison
         unique_ptr<ast::Statement> ParseTest()  // NOLINT
         {
-            auto result = ParseAndTest();
+            auto result = ParseXorTest();
             while (lexer_.CurrentToken().Is<ITokenType::Or>())
             {
                 lexer_.NextToken();
-                result = exec_factory_.Create(ast::Or(std::move(result), ParseAndTest()));
+                result = exec_factory_.Create(ast::Or(std::move(result), ParseXorTest()));
+            }
+            return result;
+        }
+
+        unique_ptr<ast::Statement> ParseXorTest()  // NOLINT
+        {
+            auto result = ParseAndTest();
+            while (lexer_.CurrentToken().Is<ITokenType::Xor>())
+            {
+                lexer_.NextToken();
+                result = exec_factory_.Create(ast::Xor(std::move(result), ParseAndTest()));
             }
             return result;
         }

@@ -21,7 +21,7 @@
 
 wxDECLARE_EVENT(DEBUG_EVENT_TYPE, wxCommandEvent);
 
-#define FULLVERSION_STRING "0.0.3.40"
+#define FULLVERSION_STRING "0.0.4.50"
 
 class ModuleDescClientData : public wxClientData
 {
@@ -55,20 +55,56 @@ private:
     const BreakpointsContainer::BreakpointDescType& breakpoint_desc_;
 };
 
-class WatchDescClientData : public wxClientData
+class SymbolDescClientData : public wxClientData
 {
 public:
-    WatchDescClientData(const WatchesContainer::WatchDescType& watch_desc) :
-        watch_desc_(watch_desc)
+    SymbolDescClientData(const WatchesContainer::WatchDescType* symbol_ptr) :
+        var_symbol_(symbol_ptr)
     {}
 
-    const WatchesContainer::WatchDescType& GetWatchDesc() const
+    SymbolDescClientData(const std::string &symbol_name) :
+        var_symbol_(symbol_name)
+    {}
+
+    bool is_watch() const
     {
-        return watch_desc_;
+        return std::holds_alternative<const WatchesContainer::WatchDescType*>(var_symbol_);
+    }
+
+    const WatchesContainer::WatchDescType* GetWatchDesc() const
+    {
+        if (std::holds_alternative<const WatchesContainer::WatchDescType*>(var_symbol_))
+            return std::get<const WatchesContainer::WatchDescType*>(var_symbol_);
+        else
+            return nullptr;
+    }
+
+    std::string GetSymbolName() const
+    {
+        if (std::holds_alternative<std::string>(var_symbol_))
+            return std::get<std::string>(var_symbol_);
+        else
+            return {};
     }
 
 private:
-    const WatchesContainer::WatchDescType& watch_desc_;
+    std::variant<std::string, const WatchesContainer::WatchDescType*> var_symbol_;
+};
+
+class StackEntryClientData : public wxClientData
+{
+public:
+    StackEntryClientData(const runtime::CallStackEntry& stack_entry) :
+        stack_entry_(stack_entry)
+    {}
+
+    const runtime::CallStackEntry& GetStackEntry() const
+    {
+        return stack_entry_;;
+    }
+
+private:
+    const runtime::CallStackEntry& stack_entry_;
 };
 
 struct LanguageDescriptType

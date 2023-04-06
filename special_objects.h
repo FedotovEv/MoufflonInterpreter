@@ -67,9 +67,11 @@ public:
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context) override;
+    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
 private:
     static const std::unordered_map<std::string_view, ArrayCallMethod> array_method_table_;
+    static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> array_method_argument_count_;
 
     // Обработчики методов класса "массив"
     ObjectHolder MethodGet(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -112,13 +114,17 @@ public:
      * contains(key) - проверка наличия элемента с ключом key.
      * clear() - очищает словарь, удаляя его содержимое.
      * begin() - возврат "итератора", указывающего на первый элемент массива.
+     * previous(iterator) - возвращает итератор, указывающий на элемент словаря, предшествующий iterator.
      * next(iterator) - возвращает итератор, указывающий на элемент словаря, следующий после iterator.
      * key(iterator) - возвращает ключ элемента, соответствующего iterator.
      * value(iterator) - чтение или изменение элемента, на который указывает iterator.
+     * is_iterator_begin(iterator) - возврат "истины", если итератор указывает на первый элемент словаря.
+     * is_iterator_end(iterator) -  возврат "истины", если итератор указывает _за_ последний элемент словаря.
      * release() - сообщает об окончании процесса перечисления элементов словаря
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context) override;
+    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
     int AllocIteratorPackSerial()
     {
         if (!is_in_iterator_mode_)
@@ -140,6 +146,7 @@ public:
 
 private:
     static const std::unordered_map<std::string_view, MapCallMethod> map_method_table_;
+    static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> map_method_argument_count_;
 
     // Обработчики методов класса "ассоциативный массив(словарь)"
     ObjectHolder MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args,

@@ -394,6 +394,8 @@ exts.inner_method(4)
                                     case runtime::LinkCallReason::CALL_REASON_CALL_METHOD:
                                         ostr << "Calling " << field_name << endl;
                                         return "executed"s;
+                                    default:
+                                        return {};
                                 }
                             };
     

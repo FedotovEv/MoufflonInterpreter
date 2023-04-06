@@ -69,58 +69,60 @@
 #define wxID_DISABLE_ALL_BREAK 1030
 #define wxID_GOTO_NEXT_BREAK 1031
 #define wxID_CREATE_WATCH 1032
-#define wxID_DELETE_WATCH 1033
-#define wxID_SAVE_SYMBOL_INFO 1034
-#define wxID_HELP_ABOUT 1035
-#define wxID_MAIN_TOOLBAR 1036
-#define wxID_TOOL_CREATE_PROJECT 1037
-#define wxID_TOOL_OPEN_PROJECT 1038
-#define wxID_TOOL_SAVE_PROJECT 1039
-#define wxID_TOOL_SAVE_PROJECT_AS 1040
-#define wxID_TOOL_ADD_ONE_FILE 1041
-#define wxID_TOOL_EXIT_PROGRAM 1042
-#define wxID_TOOL_RUN_DEBUG 1043
-#define wxID_TOOL_RUN_FREE 1044
-#define wxID_TOOL_TRACE_IN 1045
-#define wxID_TOOL_TRACE_OUT 1046
-#define wxID_TRACE_TO_CURSOR 1047
-#define wxID_TOOL_EXIT_FROM_METHOD 1048
-#define wxID_TOOL_STOP_PROGRAM 1049
-#define wxID_TOOL_FINISH_PROGRAM 1050
-#define wxID_TOOL_CREATE_BREAK 1051
-#define wxID_TOOL_DELETE_BREAK 1052
-#define wxID_TOOL_TOGGLE_BREAK 1053
-#define wxID_TOOL_BREAK_ON 1054
-#define wxID_BREAK_OFF 1055
-#define wxID_TOOL_CREATE_WATCH 1056
-#define wxID_TOOL_DELETE_WATCH 1057
-#define wxID_MENU_MODULE_NAME 1058
-#define wxID_MENU_MODULE_ACTIVE 1059
-#define wxID_MENU_MODULE_MAIN 1060
-#define wxID_MENU_EDIT_MODULE 1061
-#define wxID_DEBUGGER_OUTPUT_WINDOW 1062
-#define wxID_DEBUGGER_STATUSBAR 1063
-#define wxID_DEBUGGER_MENUBAR 1064
-#define wxID_MENU_DEBUG_SAVE_OUTPUT 1065
-#define wxID_MENU_DEBUG_SAVE_OUTPUT_AS 1066
-#define wxID_MENU_DEBUG_CLEAR_WINDOW 1067
-#define wxID_MENU_DEBUG_CLOSE_WINDOW 1068
-#define wxID_DEBUGGER_TOOLBAR 1069
-#define wxID_SAVE_DEBUG_OUTPUT 1070
-#define wxID_SAVE_AS_DEBUG_OUTPUT 1071
-#define wxID_DEBUG_CLEAR_WINDOW 1072
-#define wxID_DEBUG_CLOSE_WINDOW 1073
-#define wxID_DEBUG_OUTPUT_TEXT 1074
-#define wxID_CONFIG_DIALOG 1075
-#define wxID_CONFIG_SOURCE_CODE 1076
-#define wxID_SOURCE_UTF8 1077
-#define wxID_SOURCE_SAVE_IN_PROJECT 1078
-#define wxID_EDIT_MODULE_PROPS_DIALOG 1079
-#define wxID_MODULE_ID_STAT 1080
-#define wxID_MODULE_PATH_STAT 1081
-#define wxID_MODULE_NAME_EDIT 1082
-#define wxID_MODULE_ACTIVE_FLAG 1083
-#define wxID_MODULE_MAIN_FLAG 1084
+#define wxID_CREATE_WATCH_FROM_SYMB 1033
+#define wxID_DELETE_WATCH 1034
+#define wxID_SAVE_SYMBOL_INFO 1035
+#define wxID_HELP_ABOUT 1036
+#define wxID_MAIN_TOOLBAR 1037
+#define wxID_TOOL_CREATE_PROJECT 1038
+#define wxID_TOOL_OPEN_PROJECT 1039
+#define wxID_TOOL_SAVE_PROJECT 1040
+#define wxID_TOOL_SAVE_PROJECT_AS 1041
+#define wxID_TOOL_ADD_ONE_FILE 1042
+#define wxID_TOOL_EXIT_PROGRAM 1043
+#define wxID_TOOL_RUN_DEBUG 1044
+#define wxID_TOOL_RUN_FREE 1045
+#define wxID_TOOL_TRACE_IN 1046
+#define wxID_TOOL_TRACE_OUT 1047
+#define wxID_TRACE_TO_CURSOR 1048
+#define wxID_TOOL_EXIT_FROM_METHOD 1049
+#define wxID_TOOL_STOP_PROGRAM 1050
+#define wxID_TOOL_FINISH_PROGRAM 1051
+#define wxID_TOOL_CREATE_BREAK 1052
+#define wxID_TOOL_DELETE_BREAK 1053
+#define wxID_TOOL_TOGGLE_BREAK 1054
+#define wxID_TOOL_BREAK_ON 1055
+#define wxID_BREAK_OFF 1056
+#define wxID_TOOL_CREATE_WATCH 1057
+#define wxID_TOOL_WATCH_FROM_SYMB 1058
+#define wxID_TOOL_DELETE_WATCH 1059
+#define wxID_MENU_MODULE_NAME 1060
+#define wxID_MENU_MODULE_ACTIVE 1061
+#define wxID_MENU_MODULE_MAIN 1062
+#define wxID_MENU_EDIT_MODULE 1063
+#define wxID_DEBUGGER_OUTPUT_WINDOW 1064
+#define wxID_DEBUGGER_STATUSBAR 1065
+#define wxID_DEBUGGER_MENUBAR 1066
+#define wxID_MENU_DEBUG_SAVE_OUTPUT 1067
+#define wxID_MENU_DEBUG_SAVE_OUTPUT_AS 1068
+#define wxID_MENU_DEBUG_CLEAR_WINDOW 1069
+#define wxID_MENU_DEBUG_CLOSE_WINDOW 1070
+#define wxID_DEBUGGER_TOOLBAR 1071
+#define wxID_SAVE_DEBUG_OUTPUT 1072
+#define wxID_SAVE_AS_DEBUG_OUTPUT 1073
+#define wxID_DEBUG_CLEAR_WINDOW 1074
+#define wxID_DEBUG_CLOSE_WINDOW 1075
+#define wxID_DEBUG_OUTPUT_TEXT 1076
+#define wxID_CONFIG_DIALOG 1077
+#define wxID_CONFIG_SOURCE_CODE 1078
+#define wxID_SOURCE_UTF8 1079
+#define wxID_SOURCE_SAVE_IN_PROJECT 1080
+#define wxID_EDIT_MODULE_PROPS_DIALOG 1081
+#define wxID_MODULE_ID_STAT 1082
+#define wxID_MODULE_PATH_STAT 1083
+#define wxID_MODULE_NAME_EDIT 1084
+#define wxID_MODULE_ACTIVE_FLAG 1085
+#define wxID_MODULE_MAIN_FLAG 1086
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class MainDebuggerWindow
@@ -161,6 +163,7 @@ class MainDebuggerWindow : public wxFrame
 		wxToolBarToolBase* ToolBreakpointOn;
 		wxToolBarToolBase* ToolBreakpointOff;
 		wxToolBarToolBase* ToolCreateWatch;
+		wxToolBarToolBase* ToolWatchFromSymbolList;
 		wxToolBarToolBase* ToolDeleteWatch;
 		wxToolBarToolBase* ToolHelp;
 		wxMenu* EditModuleMenu;
@@ -208,6 +211,7 @@ class MainDebuggerWindow : public wxFrame
 		virtual void BreakpointDisableAllOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void BreakpointToggleOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void WatchCreateOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
+		virtual void WatchFromSymbolListOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void WatchDeleteOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void SymbolsSaveOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void HelpIndexOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
@@ -231,6 +235,9 @@ class MainDebuggerWindow : public wxFrame
 		virtual void ToolToggleBreakpointOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ToolBreakpointOnOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ToolBreakpointOffOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ToolCreateWatchOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ToolWatchFromSymbolListOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
+		virtual void ToolDeleteWatchOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ToolHelpOnToolClicked( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ModuleIsActiveOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
 		virtual void ModuleIsMainOnMenuSelection( wxCommandEvent& event ) { event.Skip(); }
