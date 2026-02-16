@@ -11,7 +11,7 @@ namespace runtime
         DEBUG_CALLBACK_STEP_IN,
         DEBUG_CALLBACK_STEP_OUT,
         DEBUG_CALLBACK_EXIT_METHOD,
-        DEBUG_CALLBACK_BREAPOINT
+        DEBUG_CALLBACK_BREAKPOINT
     };
 
     enum class DebugExecutionMode

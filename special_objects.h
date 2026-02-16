@@ -1,6 +1,6 @@
 #pragma once
 
-//Итератор для словаря (ассоциативного массива)
+// Итератор для словаря (ассоциативного массива).
 class MapInstance;
 class MapIterator : public Object
 {
@@ -66,8 +66,13 @@ public:
      * pop_back() - удаляет из массива последний элемент
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                      Context& context) override;
+                      Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
+    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    {
+        return "array";
+    }
 
 private:
     static const std::unordered_map<std::string_view, ArrayCallMethod> array_method_table_;
@@ -123,8 +128,14 @@ public:
      * release() - сообщает об окончании процесса перечисления элементов словаря
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                      Context& context) override;
+                      Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
+    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    {
+        return "map";
+    }
+
     int AllocIteratorPackSerial()
     {
         if (!is_in_iterator_mode_)
@@ -183,3 +194,72 @@ private:
     static int last_iterator_pack_serial_;
 };
 
+class CoroutineInstance : public CommonClassInstance
+{
+public:
+    using CoroutineCallMethod = ObjectHolder(CoroutineInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
+                                                                   Context&);
+    CoroutineInstance(ClassInstance* class_instance, const runtime::Method* method, Closure& closure);
+    CoroutineInstance(const CoroutineInstance&) = delete;
+    CoroutineInstance(CoroutineInstance&&) = default;
+    CoroutineInstance& operator=(const CoroutineInstance&) = delete;
+    CoroutineInstance& operator=(CoroutineInstance&&) = default;
+
+    void Print(std::ostream& os, Context& context) override;
+    /*
+     * Вызывает у объекта-состояния сопрограммы метод method, передавая ему actual_args параметров.
+     * Параметр context задаёт контекст для выполнения метода. Если метод method не относится к тем,
+     * которые поддерживает массив, метод выбрасывает исключение runtime_error.
+     * Набор методов, обеспечиваемых объектом-статусом исполнения сопрограммы, следующий:
+     resume() - возобновляет сопрограмму с её последней точки приостановки.
+     is_started() - возвращает "ИСТИНУ", если сопрограмма хотя бы один раз запускалась (возобновлялась)
+                    после создания данного объекта (то есть после ее инициализирующего вызова).
+     is_awaiting() - возвращает "ИСТИНУ", если сопрограмма приостановлена (не завершена) и в настоящий момент
+                     ее работу можно возобновить вызовом resume() повторно.
+     value() - результат последнего вызова сопрограммы.     
+     */
+    ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+                      Context& context, const std::string& parent_name = {}) override;
+    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
+    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    {
+        return "coroutine";
+    }
+
+    void YieldCoroutine()
+    {
+        is_awaiting_ = true;
+    }
+
+    void PushBack(WorkflowPosition new_workflow_position)
+    {
+        workflow_.PushBack(std::move(new_workflow_position));
+    }
+
+    WorkflowPosition* Current()
+    {
+        return workflow_.Current();
+    }
+
+private:
+    static const std::unordered_map<std::string_view, CoroutineCallMethod> coroutine_method_table_;
+    static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> coroutine_method_argument_count_;
+
+    // Указатель на экземпляр класса, которому принадлежит (ему или его предкам) метод-сопрограмма.
+    ClassInstance* class_instance_ = nullptr;
+    const Method* method_ = nullptr;       // Указатель на сам метод-сопрограмму (его дескриптор).
+    // Поля состояния сопрограммы, отражающие ее статус в состоянии приостановки или после окончательного завершения.
+    Closure      coro_closure_;         // Здесь будет сохраняться символьная таблица сопрограммы при её приостановке.
+    bool         is_started_ = false;   // Признак сопрограммы, которая уже работала хотя бы единожды.
+    bool         is_awaiting_ = false;  // Признак, что работа сопрограммы именно приостановлена, а не полностью завершена.
+    ObjectHolder ret_value_;            // Значение, возвращённое сопрограммой при крайнем сеансе её работы.
+    // Поле со сведениями о положении текущей точки в потоке управления сопрограммы.
+    WorkflowStackSaver workflow_;
+    
+    // Обработчики методов класса сопрограммы.
+    ObjectHolder MethodResume(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsStarted(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsAwaiting(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+};

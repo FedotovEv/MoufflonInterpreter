@@ -14,21 +14,21 @@ namespace
 {
     pair<string, string> GetStemExt(const string& filename)
     {
-        int rev_slash_pos = filename.find_last_of('\\');
+        int rev_slash_pos = static_cast<int>(filename.find_last_of('\\'));
         if (rev_slash_pos == string::npos)
             rev_slash_pos = -1;
-        int slash_pos = filename.find_last_of('/');
+        int slash_pos = static_cast<int>(filename.find_last_of('/'));
         if (slash_pos == string::npos)
             slash_pos = -1;
-        int semi_colon_pos = filename.find_last_of(':');
+        int semi_colon_pos = static_cast<int>(filename.find_last_of(':'));
         if (semi_colon_pos == string::npos)
             semi_colon_pos = -1;
         int path_margin = max(rev_slash_pos, slash_pos);
         path_margin = max(path_margin, semi_colon_pos);
 
-        int point_pos = filename.find_last_of('.');
+        int point_pos = static_cast<int>(filename.find_last_of('.'));
         if (point_pos == string::npos || point_pos <= path_margin)
-            point_pos = filename.size();
+            point_pos = static_cast<int>(filename.size());
 
         string stem = filename.substr(path_margin + 1, point_pos - path_margin - 1);
         string ext;
@@ -96,8 +96,19 @@ namespace
             throw ParseError(command_desc + runtime::ThrowMessages::GetThrowText(msg_num));
         }
 
+        runtime::Method* CurrentMethod() const
+        {
+            return current_method_;
+        }
+
+        void SetCurrentMethod(runtime::Method* current_method = nullptr)
+        {
+            current_method_ = current_method;
+        }
+
     private:
         const parse::Lexer& lexer_;
+        runtime::Method* current_method_ = nullptr;
     };
 
     class Parser
@@ -126,7 +137,7 @@ namespace
 
     private:
         // Suite -> NEWLINE INDENT (Statement)+ DEDENT
-        unique_ptr<ast::Statement> ParseSuite()  // NOLINT
+        unique_ptr<ast::Statement> ParseSuite()
         {
             lexer_.Expect<ITokenType::Newline>();
             lexer_.ExpectNext<ITokenType::Indent>();
@@ -135,7 +146,7 @@ namespace
 
             auto result = exec_factory_.Create(ast::Compound());
             while (!lexer_.CurrentToken().Is<ITokenType::Dedent>())
-                result->AddStatement(ParseStatement());  // NOLINT
+                result->AddStatement(ParseStatement());
 
             lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
@@ -144,7 +155,7 @@ namespace
         }
 
         // Methods -> [def id(Params) : Suite]*
-        vector<runtime::Method> ParseMethods()  // NOLINT
+        vector<runtime::Method> ParseMethods()
         {
             vector<runtime::Method> result;
 
@@ -153,6 +164,7 @@ namespace
                 // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
                 runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
                 runtime::Method m;
+                exec_factory_.SetCurrentMethod(&m);
 
                 m.name = lexer_.ExpectNext<ITokenType::Id>().value;
                 lexer_.ExpectNext<ITokenType::Char>('(');
@@ -170,13 +182,14 @@ namespace
 
                 m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()), def_desc);
 
+                exec_factory_.SetCurrentMethod();
                 result.push_back(std::move(m));
             }
             return result;
         }
 
         // ClassDefinition -> Id ['(' Id ')'] : new_line indent MethodList dedent
-        unique_ptr<ast::Statement> ParseClassDefinition()  // NOLINT
+        unique_ptr<ast::Statement> ParseClassDefinition()
         {
             string class_name = lexer_.Expect<ITokenType::Id>().value;
 
@@ -196,14 +209,14 @@ namespace
                         name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS)
                         + class_name);
 
-                base_class = static_cast<const runtime::Class*>(it->second.Get());  // NOLINT
+                base_class = static_cast<const runtime::Class*>(it->second.Get());
             }
 
             lexer_.Expect<ITokenType::Char>(':');
             lexer_.ExpectNext<ITokenType::Newline>();
             lexer_.ExpectNext<ITokenType::Indent>();
             lexer_.ExpectNext<ITokenType::Def>();
-            vector<runtime::Method> methods = ParseMethods();  // NOLINT
+            vector<runtime::Method> methods = ParseMethods();
 
             lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
@@ -245,19 +258,29 @@ namespace
             if (lexer_.CurrentToken() == '=')
             {
                 lexer_.NextToken();
-                if (id_list.empty())
+                if (id_list.empty()) // Это присваивание свободной переменной (не полю объекта) по имени last_name.
                     return exec_factory_.Create(ast::Assignment(std::move(last_name), ParseTest()));
 
-                return exec_factory_.Create(ast::FieldAssignment(
-                    exec_factory_.CreateTemp(ast::VariableValue{std::move(id_list)}),
-                    std::move(last_name), ParseTest()));
+                return exec_factory_.Create(ast::FieldAssignment    // Это присваивание полю last_name объекта с (составным) именем id_list.
+                    (exec_factory_.CreateTemp(ast::VariableValue{std::move(id_list)}),
+                     std::move(last_name), ParseTest()));
             }
             lexer_.Expect<ITokenType::Char>('(');
             lexer_.NextToken();
 
             if (id_list.empty())
-                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(
-                    ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
+                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText
+                    (ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
+
+            // Выявим возможное наличие имени класса-уточнителя в терме, указывающем на вызываемый метод.
+            string parent_class_name;
+            // Последний компонент id_list будем считать таким уточнителем, если он является именем какого-либо из известных
+            // в данный момент классов.
+            if (declared_classes_.count(id_list.back()))
+            {
+                parent_class_name = id_list.back();
+                id_list.pop_back();
+            }
 
             vector<unique_ptr<ast::Statement>> args;
             if (lexer_.CurrentToken() != ')')
@@ -269,22 +292,22 @@ namespace
             // Далее разбираются два варианта - вызов метода либо косвенное присваивание
             // (присваивание указателю, содержащемуся в возвращенном методом результате).
             if (lexer_.CurrentToken() == '=')
-            { // После вызова метода следует лексема '=' - это косвенное присваивание
+            { // После вызова метода следует лексема '=' - это косвенное присваивание.
                 lexer_.NextToken();
-                return exec_factory_.Create(ast::IndirectAssignment(exec_factory_.Create(
-                        ast::VariableValue(std::move(id_list))),
-                        std::move(last_name), std::move(args), ParseTest()));
+                return exec_factory_.Create(ast::IndirectAssignment(exec_factory_.Create
+                    (ast::VariableValue(std::move(id_list))),
+                     std::move(last_name), std::move(args), ParseTest(), parent_class_name));
             }
             else
-            { // Вызов метода последняя лексема строки - имеем дело с простым вызовом метода
+            { // Вызов метода последняя лексема строки - имеем дело с простым вызовом метода.
                 return exec_factory_.Create(ast::MethodCall(exec_factory_.Create(ast::VariableValue(std::move(id_list))),
-                    std::move(last_name), std::move(args)));
+                    std::move(last_name), std::move(args), parent_class_name));
             }
         }
 
         // Далее следуют функции, образующие синтаксический анализатор арифметических выражений
         // Expr -> BitwiseOperand ['&'/'|'/'^' BitwiseOperand]*
-        unique_ptr<ast::Statement> ParseExpression()  // NOLINT
+        unique_ptr<ast::Statement> ParseExpression()
         { // Эта функция разбирает арифметическое выражение на операции самого низкого приоритета -
           // побитово-логические бинарные выражения - побитовое И (&), побитовое ИЛИ (|) и побитовое
           // "ИСКЛЮЧАЮЩЕЕ ИЛИ" (xor, ^). Результат же её работы - исполняемый узел, вычисляющий данное
@@ -307,7 +330,7 @@ namespace
         }
 
         // BitwiseOperand -> ShiftOperand ["<<"/">>" ShiftOperand]*
-        unique_ptr<ast::Statement> ParseBitwiseOperand()  // NOLINT
+        unique_ptr<ast::Statement> ParseBitwiseOperand()
         { // Вот эта функция уже разбирает арифметическое выражение на операции более высокого приоритета -
           // побитовые сдвиги влево и вправо. Результат же её работы - исполняемый узел, могущий служить
           // операндом для низкоприоритетных побитово-логических операций. Отсюда и название -
@@ -328,7 +351,7 @@ namespace
         }
 
         // ShiftOperand -> Adderr ['+'/'-' Adder]*
-        unique_ptr<ast::Statement> ParseShiftOperand()  // NOLINT
+        unique_ptr<ast::Statement> ParseShiftOperand()
         { // Данная функция разлагает арифметическое выражение на операции ещё более высокого приоритета -
           // сложение и вычитание. Результат же её работы - исполняемый узел, могущий служить операндом для
           // битовых сдвигов. Отсюда и название  - ParseShiftOperand().
@@ -347,7 +370,7 @@ namespace
         }
 
         // Adder -> Mult ['*'/'/'/'%' Mult]*
-        unique_ptr<ast::Statement> ParseAdder()  // NOLINT
+        unique_ptr<ast::Statement> ParseAdder()
         { // Объектом обработки данной функции являются операции следующей ступени приоритета - умножение,
           // деление и модульное деление (получение остатка от деления). В целом же формируемый ей узел может
           // являться операндом для операций более низкого приоритета (сложения и вычитания), то есть быть
@@ -385,7 +408,7 @@ namespace
         //       | FALSE
         //       | DottedIds '(' ExprList ')'
         //       | DottedIds
-        unique_ptr<ast::Statement> ParseMult()  // NOLINT
+        unique_ptr<ast::Statement> ParseMult()
         { // Данная же функция выделяет операции самого высокого приоритета - унарные (негация и побитовая инверсия),
           // атомы, вызовы методов. Образуемые же ей узлы могут быть операндами для менее приоритетных операций -
           // умножения, деления, и. т. д., то есть множителями. Поэтому название - ParseMult().
@@ -475,9 +498,9 @@ namespace
 
                 if (!names.empty())
                 {
-                    return exec_factory_.Create(ast::MethodCall(
-                        exec_factory_.Create(ast::VariableValue(std::move(names))), std::move(method_name),
-                        std::move(args)));
+                    return exec_factory_.Create(ast::MethodCall
+                        (exec_factory_.Create(ast::VariableValue(std::move(names))), std::move(method_name),
+                         std::move(args)));
                 }
 
                 try
@@ -496,8 +519,8 @@ namespace
 
                 if (auto it = declared_classes_.find(method_name); it != declared_classes_.end())
                 {
-                    return exec_factory_.Create(ast::NewInstance(
-                        static_cast<const runtime::Class&>(*it->second), std::move(args)));
+                    return exec_factory_.Create(ast::NewInstance
+                        (static_cast<const runtime::Class&>(*it->second), std::move(args)));
                 }
             
                 if (method_name == "str"sv)
@@ -507,13 +530,13 @@ namespace
                 
                     return exec_factory_.Create(ast::Stringify(std::move(args.front())));
                 }
-                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(
-                    ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL) + method_name + "()"s);
+                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText
+                    (ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL) + method_name + "()"s);
             }
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
         }
 
-        vector<unique_ptr<ast::Statement>> ParseTestList()  // NOLINT
+        vector<unique_ptr<ast::Statement>> ParseTestList()
         {
             vector<unique_ptr<ast::Statement>> result;
             result.push_back(ParseTest());
@@ -526,11 +549,11 @@ namespace
             return result;
         }
 
-        // Condition -> if LogicalExpr: Suite [else: Suite]
-        unique_ptr<ast::Statement> ParseCondition()  // NOLINT
+        // Метод обработки грамматической продукции Condition -> if LogicalExpr: Suite [else: Suite]
+        unique_ptr<ast::Statement> ParseCondition()
         {
             lexer_.Expect<ITokenType::If>();
-            // Запомним истинное положение в исходном тексте оператора if
+            // Запомним истинное положение в исходном тексте оператора if.
             runtime::ProgramCommandDescriptor if_desc = lexer_.GetCurrentCommandDesc();
             lexer_.NextToken();
 
@@ -553,11 +576,11 @@ namespace
                                             std::move(else_body)), if_desc);
         }
 
-        // Condition -> while LogicalExpr: Suite
-        unique_ptr<ast::Statement> ParseWhileCondition()  // NOLINT
+        // Обработка продукции Condition -> while LogicalExpr: Suite
+        unique_ptr<ast::Statement> ParseWhileCondition()
         {
             lexer_.Expect<ITokenType::While>();
-            // Запомним истинное положение в исходном тексте оператора while
+            // Запомним истинное положение в исходном тексте оператора while.
             runtime::ProgramCommandDescriptor while_desc = lexer_.GetCurrentCommandDesc();
             lexer_.NextToken();
 
@@ -571,12 +594,90 @@ namespace
             return exec_factory_.Create(ast::While(std::move(condition), std::move(while_body)), while_desc);
         }
 
+        // Метод разбора списка классов и соответствующих им переменных, требуемых для очередного except-предложения.
+        // ExceptBlockList -> [(Class as VariableName)*].
+        ast::TryExcept::ClassVarPairList ParseExceptClassVarList()
+        {
+            ast::TryExcept::ClassVarPairList class_var_list;
+            if (lexer_.CurrentToken() == ':')
+                return {}; // Терм except пустой, соответствует всеядному неизберательному перехватчику.
+
+            while (true)
+            { // Цикл по всему списку, имеющему формат "имя_класса [as имя_переменной][,]".
+                string class_name = lexer_.Expect<ITokenType::Id>().value;
+                lexer_.NextToken();
+                string var_name;
+                if (lexer_.CurrentToken() == ITokenType::As{})
+                {
+                    lexer_.NextToken();
+                    var_name = lexer_.Expect<ITokenType::Id>().value;
+                    lexer_.NextToken();
+                }
+                class_var_list.push_back({move(class_name), move(var_name)});
+
+                if (lexer_.CurrentToken() == ':')
+                    // Следующая лексема - символ ':', список требуемых пар "класс as переменная" полагается
+                    // законченным, сворачиваемся и выходим.
+                    break;                             
+                lexer_.Expect<ITokenType::Char>(','); // Если список не закончился, далее должен быть разделитель-запятая.
+                lexer_.NextToken(); // Пропуск запятой и переход к следующему элементу сканируемого списка "класс as переменная".
+            }
+
+            return class_var_list;
+        }
+
+        // Разбор продукции контролируемого блока структурной обработки исключений:
+        // TryBlock -> try: Suite [(except  ExceptBlockList: Suite)*] [except: Suite] [else: Suite] [finally: Suite]
+        unique_ptr<ast::Statement> ParseTrySuite()
+        {
+            lexer_.Expect<ITokenType::Try>();
+            // Запомним истинное положение в исходном тексте оператора try
+            runtime::ProgramCommandDescriptor while_desc = lexer_.GetCurrentCommandDesc();
+            lexer_.ExpectNext<ITokenType::Char>(':');
+            lexer_.NextToken();
+
+            unique_ptr<ast::Statement> try_body = ParseSuite(); // Тело контролируемого блока try.
+
+            ast::TryExcept::ExceptBlockList except_blocks;
+            while (lexer_.CurrentToken().Is<ITokenType::Except>())
+            { // Цикл разбора except-термов.
+                lexer_.NextToken(); // Пропуск текущей лексемы "expect" и переход к ее списку класс->переменная.
+
+                ast::TryExcept::ExceptBlockDesc new_except_block;
+                new_except_block.class_var_pairs = ParseExceptClassVarList();
+                lexer_.Expect<ITokenType::Char>(':');
+                lexer_.NextToken();
+                new_except_block.except_body = ParseSuite();
+                // Очередной (не)селективный блок-перехватчик исключений разобран и подготовлен.
+                except_blocks.push_back(move(new_except_block));
+            }
+
+            // Разбор else-терма, если он присутствует.
+            unique_ptr<ast::Statement> else_body;
+            if (lexer_.CurrentToken().Is<ITokenType::Else>())
+            {
+                lexer_.ExpectNext<ITokenType::Char>(':');
+                lexer_.NextToken();
+                else_body = ParseSuite();
+            }
+            // Разбор finally-терма, если он есть.
+            unique_ptr<ast::Statement> finally_body;
+            if (lexer_.CurrentToken().Is<ITokenType::Finally>())
+            {
+                lexer_.ExpectNext<ITokenType::Char>(':');
+                lexer_.NextToken();
+                finally_body = ParseSuite();
+            }
+
+            return exec_factory_.Create(ast::TryExcept(move(try_body), move(except_blocks), move(else_body), move(finally_body)));
+        }
+
         // LogicalExpr -> XorTest [OR XorTest]
         // XorTest -> AndTest [XOR AndTest]
         // AndTest -> NotTest [AND NotTest]
         // NotTest -> [NOT] NotTest
         //          | Comparison
-        unique_ptr<ast::Statement> ParseTest()  // NOLINT
+        unique_ptr<ast::Statement> ParseTest()
         {
             auto result = ParseXorTest();
             while (lexer_.CurrentToken().Is<ITokenType::Or>())
@@ -587,7 +688,7 @@ namespace
             return result;
         }
 
-        unique_ptr<ast::Statement> ParseXorTest()  // NOLINT
+        unique_ptr<ast::Statement> ParseXorTest()
         {
             auto result = ParseAndTest();
             while (lexer_.CurrentToken().Is<ITokenType::Xor>())
@@ -598,7 +699,7 @@ namespace
             return result;
         }
 
-        unique_ptr<ast::Statement> ParseAndTest()  // NOLINT
+        unique_ptr<ast::Statement> ParseAndTest()
         {
             auto result = ParseNotTest();
             while (lexer_.CurrentToken().Is<ITokenType::And>())
@@ -609,18 +710,18 @@ namespace
             return result;
         }
 
-        unique_ptr<ast::Statement> ParseNotTest()  // NOLINT
+        unique_ptr<ast::Statement> ParseNotTest()
         {
             if (lexer_.CurrentToken().Is<ITokenType::Not>())
             {
                 lexer_.NextToken();
-                return exec_factory_.Create(ast::Not(ParseNotTest()));  // NOLINT
+                return exec_factory_.Create(ast::Not(ParseNotTest()));
             }
             return ParseComparison();
         }
 
         // Comparison -> Expr [COMP_OP Expr]
-        unique_ptr<ast::Statement> ParseComparison()  // NOLINT
+        unique_ptr<ast::Statement> ParseComparison()
         {
             auto result = ParseExpression();
 
@@ -669,7 +770,10 @@ namespace
         //           | class ClassDefinition
         //           | if Condition
         //           | while Condition
-        unique_ptr<ast::Statement> ParseStatement()  // NOLINT
+        // В данном разборщике также размещена обработка специальной инструкции try начала контролируемого блока кода
+        // обработчика исключений периода исполнения.
+        //           | try
+        unique_ptr<ast::Statement> ParseStatement()
         {
             while (true)
             {
@@ -678,7 +782,7 @@ namespace
                 if (tok.Is<ITokenType::Class>())
                 {
                     lexer_.NextToken();
-                    return ParseClassDefinition();  // NOLINT
+                    return ParseClassDefinition();
                 }
                 else if (tok.Is<ITokenType::If>())
                 {
@@ -687,6 +791,10 @@ namespace
                 else if (tok.Is<ITokenType::While>())
                 {
                     return ParseWhileCondition();
+                }
+                else if (tok.Is<ITokenType::Try>())
+                {
+                    return ParseTrySuite();
                 }
 
                 auto result = ParseSimpleStatement();
@@ -702,6 +810,7 @@ namespace
         // StatementBody -> return Expression
         //               | return_ref VariableValue
         //               | return_ref MethodCall
+        //               | raise Expression
         //               | print ExpressionList
         //               | break
         //               | continue
@@ -736,6 +845,21 @@ namespace
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Return(ParseTest()));
+            }
+
+            if (tok.Is<ITokenType::CoYield>())
+            {
+                if (exec_factory_.CurrentMethod())  // Наличие оператора co_yield делает метод сопрограммой.
+                    exec_factory_.CurrentMethod()->is_coroutine = true;
+
+                lexer_.NextToken();
+                return exec_factory_.Create(ast::CoYield(ParseTest()));
+            }
+
+            if (tok.Is<ITokenType::Raise>())
+            {
+                lexer_.NextToken();
+                return exec_factory_.Create(ast::Raise(ParseTest()));
             }
 
             if (tok.Is<ITokenType::ReturnRef>())
@@ -776,13 +900,11 @@ namespace
                 return exec_factory_.Create(ast::Print(std::move(args)));
             }
 
-
             if (tok.Is<ITokenType::Break>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Break());
             }        
-        
 
             if (tok.Is<ITokenType::Continue>())
             {

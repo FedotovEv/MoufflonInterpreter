@@ -119,7 +119,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
     }
 
     context.SetLastCommandDesc(exec_obj_ptr->GetCommandDesc());
-    if (context.IsTerminate())
+    if (context.IsTerminated())
         ThrowRuntimeError(exec_obj_ptr, ThrowMessageNumber::THRM_URGENT_TERMINATE);
 }
 
@@ -185,9 +185,10 @@ namespace ast
     Assignment::Assignment(std::string var, std::unique_ptr<Statement> rv) : var_(move(var)), rv_(move(rv))
     {}
 
-    IndirectAssignment::IndirectAssignment(std::unique_ptr<Statement> object, std::string method,
-        std::vector<std::unique_ptr<Statement>> args, std::unique_ptr<Statement> rv) :
-        object_(move(object)), method_(move(method)), args_(move(args)), rv_(move(rv))
+    IndirectAssignment::IndirectAssignment
+        (std::unique_ptr<Statement> object, std::string method, std::vector<std::unique_ptr<Statement>> args,
+         std::unique_ptr<Statement> rv, std::string parent_name) :
+         object_(move(object)), method_(move(method)), args_(move(args)), rv_(move(rv)), parent_name_(move(parent_name))
     {}
 
     ObjectHolder IndirectAssignment::Execute(Closure& closure, Context& context)
@@ -199,7 +200,7 @@ namespace ast
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
 
         ObjectHolder target_field = real_object.TryAs<runtime::CommonClassInstance>()->
-                                    Call(method_, real_args, context);
+                                    Call(method_, real_args, context, parent_name_);
         runtime::PointerObject* target_ptr = target_field.TryAs<runtime::PointerObject>();
         if (target_ptr)
         {
@@ -300,10 +301,11 @@ namespace ast
     }
 
     MethodCall::MethodCall(unique_ptr<Statement> object, string method,
-                           vector<std::unique_ptr<Statement>> args) :
+                           vector<std::unique_ptr<Statement>> args, std::string parent_name) :
                            object_(move(object)),
                            method_(move(method)),
-                           args_(move(args))
+                           args_(move(args)),
+                           parent_name_(move(parent_name))
     {}
 
     ObjectHolder MethodCall::Execute(Closure& closure, Context& context)
@@ -312,7 +314,7 @@ namespace ast
         ObjectHolder real_object = object_->Execute(closure, context);
         vector<ObjectHolder> real_args;
         for (auto& cur_arg_ptr : args_)
-        { // Вычисляем истинные значения аргументов метода
+        { // Вычисляем истинные значения аргументов метода.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
         }
 
@@ -320,11 +322,11 @@ namespace ast
         if (!common_class_ptr)
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
 
-        ObjectHolder result = DereferencePointerObject(common_class_ptr->Call(method_, real_args, context));
+        ObjectHolder result = DereferencePointerObject(common_class_ptr->Call(method_, real_args, context, parent_name_));
 
         runtime::ClassInstance* real_class_ptr = dynamic_cast<runtime::ClassInstance*>(common_class_ptr);
         if (real_class_ptr)
-        {  // Требуется вызвать метод объекта общего типа (определенного программно)
+        {  // Требуется вызвать метод объекта общего типа (определенного программно).
             if (real_class_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME && context.GetExternalLinkage())
             {  // Вызов звонковой функции при вызове метода объекта "__external"
                 vector<runtime::LinkageValue> real_args_lv;
@@ -472,8 +474,28 @@ namespace ast
     ObjectHolder Compound::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
-        for (auto& cur_statement_ptr : comp_body_)
+        auto comp_body_current_it = comp_body_.begin();
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
+
+        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
+        {
+            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+            {  // Данный блок (составной оператор) принадлежит и исполняется в составе сопрограммы.
+
+            }
+        }
+
+        if (coro_status_instance)
+        {
+
+        }
+
+        // Выполним элементы сплотки от точки comp_body_current_it до ее конца.
+        for (; comp_body_current_it != comp_body_.end(); ++comp_body_current_it)
+        {
+            auto& cur_statement_ptr = *comp_body_current_it;
             cur_statement_ptr->Execute(closure, context);
+        }
         return {};
     }
 
@@ -486,10 +508,33 @@ namespace ast
         comp_body_.push_back(std::move(stmt));
     }
 
+    ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        string raise_string = "Raise:" + to_string(context.GetLastCommandDesc().module_id) + ':' +
+                              to_string(context.GetLastCommandDesc().module_string_number);
+        throw RuntimeError(runtime::ThrowMessageNumber::THRM_RAISE_CALL, raise_string, statement_->Execute(closure, context));
+    }
+
     ObjectHolder Return::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
         throw ReturnResult(statement_->Execute(closure, context));
+    }
+
+    ObjectHolder CoYield::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder holder_result = statement_->Execute(closure, context);
+
+        // Перед возвратом очередного результата работы сопрограммы, установим в соответствующем объекте-дескрипторе признак её приостановки.
+        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
+        {
+            if (runtime::CoroutineInstance* coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+                coro_status_instance->YieldCoroutine();
+        }
+
+        throw ReturnResult(move(holder_result));
     }
 
     ObjectHolder ReturnRef::ExecuteForVariable(Closure& closure, [[maybe_unused]] Context& context)
@@ -606,6 +651,8 @@ namespace ast
     ObjectHolder IfElse::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
+
+
         if (runtime::IsTrue(condition_->Execute(closure, context)))
             return if_body_->Execute(closure, context);
         else
@@ -642,6 +689,99 @@ namespace ast
 
         return result;
     }
+
+    TryExcept::TryExcept(std::unique_ptr<Statement> try_body, ExceptBlockList except_blocks,
+                         std::unique_ptr<Statement> else_body, std::unique_ptr<Statement> finally_body) :
+        try_body_(std::move(try_body)), except_blocks_(std::move(except_blocks)),
+        else_body_(std::move(else_body)), finally_body_(std::move(finally_body))
+    {}
+
+    ObjectHolder TryExcept::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder result;
+        bool is_runtime_error_happen = false, is_runtime_error_processed = false;
+        try
+        {
+            if (try_body_)
+                result = try_body_->Execute(closure, context);
+        }
+        catch (RuntimeError& rtm_err)
+        {
+            is_runtime_error_happen = true;
+            if (runtime::CommonClassInstance* error_class_ptr = rtm_err.error_object_.TryAs<runtime::CommonClassInstance>())
+            {  // Сначала пробуем обнаружить подходящий именованный блок перехвата, указанный в котором тип объекта ошибки
+               // соответствует реальному объекту error_class_ptr.
+                auto except_block_it = find_if(except_blocks_.begin(), except_blocks_.end(),
+                    [error_class_ptr](const ExceptBlockDesc& scan_block_desc) -> bool
+                    {
+                        for (const ExceptClassVarPair& test_var_pair : scan_block_desc.class_var_pairs)
+                        {
+                            if (error_class_ptr->IsSuccessorOf(test_var_pair.class_name))
+                                // Первый по порядку подходящий блок-перехватчик обнаружен. Завершаем поиск с успехом.
+                                return true;
+                        }
+                        return false;
+                    });
+
+                if (except_block_it != except_blocks_.end())
+                { // Подходящий под требования именованный except-блок найден.
+                    is_runtime_error_processed = true;
+                    if (except_block_it->except_body)
+                    { // Если тело найденного блока не пусто, будем его исполнять. Но его вызов требует некоторой предварительной подготовки.
+                      // Для номальной работы тела ему нужно создать специальную "дополненную" таблицу символов, содержащую как все переменные,
+                      // доступные к данному моменту в результате нормальной работы программы, так и, кроме того, возможные дополнительные
+                      // переменные, образованные из объекта ошибки, порождённого при выбросе исключения.
+
+                        Closure except_block_closure(closure); // Копируем в новую таблицу символов общую таблицу в ее текущем состоянии.
+                        for (const ExceptClassVarPair& create_var_pair : except_block_it->class_var_pairs)
+                        {  // Делаем доступным для обработчика все именованные объекты ошибки, требующиеся для данного блока-обработчика.
+                            if (!create_var_pair.var_name.empty())
+                            {
+                                if (error_class_ptr->IsSuccessorOf(create_var_pair.class_name))
+                                    // Если очередной тип класса, описанного в except-предложении, является предком действительного типа ошибки,
+                                    // создаем переменную, содержащую (указывающую) на истинное содержимое этого объекта.
+                                    except_block_closure.insert({create_var_pair.var_name, rtm_err.error_object_});
+                                else // Иначе создаём пустую переменную (содержащую None).
+                                    except_block_closure.insert({create_var_pair.var_name, ObjectHolder::None()});
+                            }
+                        }
+                        // Исполняем except-блок с новой составной таблицей символов.
+                        result = except_block_it->except_body->Execute(except_block_closure, context);
+                    }
+                }
+            }
+            // Исключение не сопровождается объектом ошибки либо класс объекта не соответствует какой-либо заданной именованной
+            // секции перехвата. В этом случае перехват исключения может быть выполнен только анонимной секцией, которую мы сейчас
+            // и попробуем обнаружить.
+            if (!is_runtime_error_processed)
+            {
+                auto except_block_it = find_if(except_blocks_.begin(), except_blocks_.end(),
+                    [](const ExceptBlockDesc& scan_block_desc) -> bool
+                    {  // Анонимный перехватчик не содержит именнного блока (блока описания типовых объектов ошибок).
+                        return scan_block_desc.class_var_pairs.empty(); // Массив именных описателей пуст - это блок анонимного перехвата.
+                    });
+                if (except_block_it != except_blocks_.end())
+                {
+                    is_runtime_error_processed = true;
+                    result = except_block_it->except_body->Execute(closure, context);
+                }
+            }
+
+            if (is_runtime_error_happen && !is_runtime_error_processed)
+                // Исключение по ошибке периода исполнения не перехвачено и не обработано исполняемой программой. Ретранслируем его
+                // наружу, завершая работу программы.
+                throw;
+        }
+
+        if (else_body_ && !is_runtime_error_happen)
+            result = else_body_->Execute(closure, context);
+        if (finally_body_)
+            result = finally_body_->Execute(closure, context);
+
+        return result;
+    }
+
 
     ObjectHolder ShiftLeft::Execute(Closure& closure, Context& context)
     {

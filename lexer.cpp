@@ -13,12 +13,20 @@ namespace parse
     static const unordered_map<std::string, Token> keyword_tokens
         {{"class"s, token_type::Class{}},
          {"return"s, token_type::Return{}},
+         {"co_yield"s, token_type::CoYield{}},
          {"return_ref"s, token_type::ReturnRef{}},
          {"if"s, token_type::If{}},
          {"else"s, token_type::Else{}},
          {"while"s, token_type::While{}},
          {"break"s, token_type::Break{}},
          {"continue"s, token_type::Continue{}},
+         // Специальные лексемы обработки исключений.
+         {"try"s, token_type::Try{}},
+         {"except"s, token_type::Except{}},
+         {"finally"s, token_type::Finally{}},
+         {"as"s, token_type::As{}},
+         {"raise"s, token_type::Raise{}},
+         //
          {"def"s, token_type::Def{}},
          {"print"s, token_type::Print{}},
          {"import"s, token_type::Import{}},
@@ -338,11 +346,17 @@ namespace parse
 
         UNVALUED_OUTPUT(Class);
         UNVALUED_OUTPUT(Return);
+        UNVALUED_OUTPUT(CoYield);
         UNVALUED_OUTPUT(If);
         UNVALUED_OUTPUT(Else);
         UNVALUED_OUTPUT(While);
         UNVALUED_OUTPUT(Break);
         UNVALUED_OUTPUT(Continue);
+        UNVALUED_OUTPUT(Try);
+        UNVALUED_OUTPUT(Except);
+        UNVALUED_OUTPUT(Finally);
+        UNVALUED_OUTPUT(As);
+        UNVALUED_OUTPUT(Raise);
         UNVALUED_OUTPUT(Def);
         UNVALUED_OUTPUT(Newline);
         UNVALUED_OUTPUT(Print);
@@ -368,6 +382,58 @@ namespace parse
     #undef UNVALUED_OUTPUT
 
         return os << "Unknown token :("sv;
+    }
+
+    std::string TokenTypeToString(const Token& rhs)
+    {
+        using namespace token_type;
+
+        #define STRINGIZE_TOKEN_TYPE(type) \
+            if (auto p = rhs.TryAs<type>()) return '{' + std::string(#type) + '}';
+
+        STRINGIZE_TOKEN_TYPE(NumberInt);
+        STRINGIZE_TOKEN_TYPE(NumberDouble);
+        STRINGIZE_TOKEN_TYPE(Id);
+        STRINGIZE_TOKEN_TYPE(String);
+        STRINGIZE_TOKEN_TYPE(Char);
+        STRINGIZE_TOKEN_TYPE(Class);
+        STRINGIZE_TOKEN_TYPE(Return);
+        STRINGIZE_TOKEN_TYPE(CoYield);
+        STRINGIZE_TOKEN_TYPE(If);
+        STRINGIZE_TOKEN_TYPE(Else);
+        STRINGIZE_TOKEN_TYPE(While);
+        STRINGIZE_TOKEN_TYPE(Break);
+        STRINGIZE_TOKEN_TYPE(Continue);
+        STRINGIZE_TOKEN_TYPE(Try);
+        STRINGIZE_TOKEN_TYPE(Except);
+        STRINGIZE_TOKEN_TYPE(Finally);
+        STRINGIZE_TOKEN_TYPE(As);
+        STRINGIZE_TOKEN_TYPE(Raise);
+        STRINGIZE_TOKEN_TYPE(Def);
+        STRINGIZE_TOKEN_TYPE(Newline);
+        STRINGIZE_TOKEN_TYPE(Print);
+        STRINGIZE_TOKEN_TYPE(Import);
+        STRINGIZE_TOKEN_TYPE(Include);
+        STRINGIZE_TOKEN_TYPE(Indent);
+        STRINGIZE_TOKEN_TYPE(Dedent);
+        STRINGIZE_TOKEN_TYPE(And);
+        STRINGIZE_TOKEN_TYPE(Or);
+        STRINGIZE_TOKEN_TYPE(Not);
+        STRINGIZE_TOKEN_TYPE(Xor);
+        STRINGIZE_TOKEN_TYPE(Eq);
+        STRINGIZE_TOKEN_TYPE(NotEq);
+        STRINGIZE_TOKEN_TYPE(LessOrEq);
+        STRINGIZE_TOKEN_TYPE(GreaterOrEq);
+        STRINGIZE_TOKEN_TYPE(ShiftLeft);
+        STRINGIZE_TOKEN_TYPE(ShiftRight);
+        STRINGIZE_TOKEN_TYPE(None);
+        STRINGIZE_TOKEN_TYPE(True);
+        STRINGIZE_TOKEN_TYPE(False);
+        STRINGIZE_TOKEN_TYPE(Eof);
+
+        #undef STRINGIZE_TOKEN_TYPE
+
+        return "{Unknown token type}";
     }
 
     Lexer::Lexer(LexerInputEx& input) : input_(input),

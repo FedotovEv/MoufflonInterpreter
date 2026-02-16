@@ -160,6 +160,30 @@ namespace runtime
         {"Release"sv, {0, 0}}
     };
 
+    const unordered_map<string_view, CoroutineInstance::CoroutineCallMethod> CoroutineInstance::coroutine_method_table_
+    {
+        {"resume"sv, &CoroutineInstance::MethodResume},
+        {"Resume"sv, &CoroutineInstance::MethodResume},
+        {"is_started"sv, &CoroutineInstance::MethodIsStarted},
+        {"IsStarted"sv, &CoroutineInstance::MethodIsStarted},
+        {"is_awaiting"sv, &CoroutineInstance::MethodIsAwaiting},
+        {"IsAwaiting"sv, &CoroutineInstance::MethodIsAwaiting},
+        {"value"sv, &CoroutineInstance::MethodValue},
+        {"Value"sv, &CoroutineInstance::MethodValue}
+    };
+
+    const unordered_map<string_view, pair<size_t, size_t>> CoroutineInstance::coroutine_method_argument_count_
+    {
+        {"resume"sv, {0, 0}},
+        {"Resume"sv, {0, 0}},
+        {"is_started"sv, {0, 0}},
+        {"IsStarted"sv, {0, 0}},
+        {"is_awaiting"sv, {0, 0}},
+        {"IsAwaiting"sv, {0, 0}},
+        {"value"sv, {0, 0}},
+        {"Value"sv, {0, 0}}
+    };
+
     int MapInstance::last_iterator_pack_serial_ = 0;
 
     void CheckMethodParams(Context& context, const string& method_name,
@@ -397,8 +421,8 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder ArrayInstance::Call(const std::string& method_name,
-                        const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder ArrayInstance::Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
+                                     Context& context, const std::string& parent_name)
     {
         if (array_method_table_.count(method_name))
             return (this->*array_method_table_.at(method_name))(method_name, actual_args, context);
@@ -664,7 +688,7 @@ namespace runtime
     }
 
     ObjectHolder MapInstance::Call(const std::string& method_name,
-                            const std::vector<ObjectHolder>& actual_args, Context& context)
+                                   const std::vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
     {
         if (map_method_table_.count(method_name))
             return (this->*map_method_table_.at(method_name))(method_name, actual_args, context);
@@ -684,5 +708,83 @@ namespace runtime
         {
             return false;
         }
+    }
+
+    CoroutineInstance::CoroutineInstance(ClassInstance* class_instance, const runtime::Method* method, Closure& closure) :
+        class_instance_(class_instance), method_(method), coro_closure_(closure), is_started_(false), is_awaiting_(true)
+    {
+        if (!method_->is_coroutine)
+            throw runtime_error("Метод " + method_->name + " не сопрограмма");
+        // Подготовим к работе символьную таблицу coro_closure_ сопрограммы, добавив в нее ссылку (слабую, невладеющую) на
+        // объект-дескриптор сопрограммы (то есть, на этот объект).
+        coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
+    }
+    
+    void CoroutineInstance::Print(std::ostream& os, Context& context)
+    {
+        if (class_instance_ &&  method_)
+        {
+            os << "Coroutine:" << class_instance_->GetClassName() << " - Method:" << method_->name
+               << " - Coroutine:" << std::boolalpha << method_->is_coroutine;
+        }
+        else
+        {
+            os << "Сопрограмма невалидна";
+        }
+    }
+
+    ObjectHolder CoroutineInstance::Call(const std::string& method_name,
+                                         const std::vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
+    {
+        if (coroutine_method_table_.count(method_name))
+            return (this->*coroutine_method_table_.at(method_name))(method_name, actual_args, context);
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    bool CoroutineInstance::HasMethod(const string& method_name, size_t argument_count) const
+    {
+        if (coroutine_method_argument_count_.count(method_name))
+        {
+            auto argument_org_count = coroutine_method_argument_count_.at(method_name);
+            return argument_count >= argument_org_count.first &&
+                argument_count <= argument_org_count.second;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    ObjectHolder CoroutineInstance::MethodResume(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        if (!is_awaiting_)
+            return ret_value_;
+
+        is_started_ = true;
+        is_awaiting_ = false;
+        // Обновим указатель на сам объект сопрограммы (то есть на this), так как между вызовами наш объект мог переместиться в памяти.
+        coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
+        ret_value_ = method_->body->Execute(coro_closure_, context);
+
+        return ret_value_;
+    }
+    
+    ObjectHolder CoroutineInstance::MethodIsStarted
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return ObjectHolder::Own(Bool(is_started_));
+    }
+    
+    ObjectHolder CoroutineInstance::MethodIsAwaiting
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return ObjectHolder::Own(Bool(is_awaiting_));
+    }
+    
+    ObjectHolder CoroutineInstance::MethodValue
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return ret_value_;
     }
 } //namespace runtime

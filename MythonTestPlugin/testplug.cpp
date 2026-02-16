@@ -176,8 +176,8 @@ namespace runtime
         return ObjectHolder::Own(String(move(hello_string)));
     }
 
-    ObjectHolder PluginInstance::Call(const string& method_name,
-        const vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder PluginInstance::Call
+        (const string& method_name, const vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
     {
         if (plugin_method_table_.count(method_name))
             return (this->*plugin_method_table_.at(method_name))(method_name, actual_args, context);

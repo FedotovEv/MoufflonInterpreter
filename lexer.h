@@ -39,12 +39,20 @@ namespace parse
 
         struct Class {};     // Лексема «class»
         struct Return {};    // Лексема «return»
+        struct CoYield {};   // Лексема «co_yield»
         struct ReturnRef {}; // Лексема «return_ref»
         struct If {};        // Лексема «if»
         struct Else {};      // Лексема «else»
         struct While {};     // Лексема "while"
         struct Break {};     // Лексема "break"
         struct Continue {};  // Лексема "continue"
+        // Лексемы обслуживания системы обработки исключений.
+        struct Try {};       // Лексема "try"
+        struct Except {};    // Лексема "except"
+        struct Finally {};   // Лексема "finally"
+        struct As {};        // Лексема "as"
+        struct Raise {};     // Лексема "raise"
+        //
         struct Def {};       // Лексема «def»
         struct Newline {};   // Лексема «конец строки»
         struct Print {};     // Лексема «print»
@@ -71,8 +79,10 @@ namespace parse
     using TokenBase
         = std::variant<token_type::NumberInt, token_type::NumberDouble, token_type::Id, token_type::Char,
                        token_type::String, token_type::Class,
-                       token_type::Return, token_type::ReturnRef, token_type::If, token_type::Else,
+                       token_type::Return, token_type::CoYield, token_type::ReturnRef,
+                       token_type::If, token_type::Else,
                        token_type::While, token_type::Break, token_type::Continue,
+                       token_type::Try, token_type::Except, token_type::Finally, token_type::As, token_type::Raise,
                        token_type::Def, token_type::Newline,
                        token_type::Print, token_type::Import, token_type::Include,
                        token_type::Indent, token_type::Dedent,
@@ -108,6 +118,7 @@ namespace parse
     bool operator!=(const Token& lhs, const Token& rhs);
 
     std::ostream& operator<<(std::ostream& os, const Token& rhs);
+    std::string TokenTypeToString(const Token& rhs);
 
     class LexerError : public std::runtime_error
     {
@@ -185,14 +196,19 @@ namespace parse
     class Lexer
     {
     public:
+        static constexpr char BAD_TOKEN_TYPE[] = "Недопустимый тип жетона";
+        static constexpr char BAD_TOKEN_VALUE[] = "Недопустимое значение жетона";
+        static constexpr char TOKEN_AWAITING[] = " - ожидается - ";
+
         explicit Lexer(LexerInputEx& input);
         explicit Lexer(std::istream& input);
         ~Lexer();
 
-        // Возвращает ссылку на текущий токен или token_type::Eof, если поток токенов закончился
+        // Возвращает ссылку на текущий жетон или token_type::Eof, если поток жетонов на входе закончился.
         [[nodiscard]] const Token& CurrentToken() const;
 
-        // Возвращает следующий токен, либо token_type::Eof, если поток токенов закончился
+        // Продвигает очередь входных жетонов вперёд на единицу и возвращает следующий жетон, либо token_type::Eof,
+        // если поток жетонов на входе закончился.
         Token NextToken();
 
         // Если текущий токен имеет тип T, метод возвращает ссылку на него.
@@ -209,7 +225,7 @@ namespace parse
             {
                 std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
                     std::to_string(current_command_desc_.module_string_number) + "):"s;
-                throw LexerError(command_desc + "Bad token type"s);
+                throw LexerError(command_desc + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{}));
             }
         }
 
@@ -224,7 +240,9 @@ namespace parse
             {
                 std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
                     std::to_string(current_command_desc_.module_string_number) + "):"s;
-                throw LexerError(command_desc + "Bad token value"s);
+                std::ostringstream token_await_str;
+                token_await_str << T{value};
+                throw LexerError(command_desc + BAD_TOKEN_VALUE + TOKEN_AWAITING + token_await_str.str());
             }
         }
 

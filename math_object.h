@@ -29,8 +29,13 @@ public:
      * round(arg) - округление аргумента arg к ближайшему целому
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                      Context& context) override;
+                      Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
+    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    {
+        return "math";
+    }
 
 private:
     static const std::unordered_map<std::string_view, MathCallMethod> math_method_table_;

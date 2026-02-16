@@ -233,8 +233,8 @@ namespace runtime
         return ObjectHolder::Own(Number(static_cast<int>(round(actual_args[0].TryAs<Number>()->GetDoubleValue()))));
     }
 
-    ObjectHolder MathInstance::Call(const string& method_name,
-                                    const vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder MathInstance::Call(const string& method_name, const vector<ObjectHolder>& actual_args,
+                                    Context& context, const std::string& parent_name)
     {
         if (math_method_table_.count(method_name))
             return (this->*math_method_table_.at(method_name))(method_name, actual_args, context);

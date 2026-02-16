@@ -66,7 +66,7 @@ namespace runtime
         void Print(std::ostream& os, Context& context) override;
 
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                          Context& context) override;
+                          Context& context, const std::string& parent_name = {}) override;
         bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
     private:

@@ -59,6 +59,9 @@ namespace runtime
         {ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND, "Не найдена функция загрузки списка объектов"s},
         {ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS, "Ошибка в параметрах директивы include"s},
         {ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS, "Недопустимые аргументы операции сдвига"s},
+        {ThrowMessageNumber::THRM_RAISE_CALL, "Принудительный вызов исключения оператором raise"s},
+        {ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR, "Объект-уточнитель не является классом-предком объекта"s},
+        {ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD, "Неоднозначность перегрузки методов"s},
         {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s}
     };
 } // namespace runtime

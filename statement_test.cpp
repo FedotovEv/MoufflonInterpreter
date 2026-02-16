@@ -107,7 +107,8 @@ void TestAssignment() {
     ASSERT(context.output.str().empty());
 }
 
-void TestFieldAssignment() {
+void TestFieldAssignment()
+{
     runtime::DummyContext context;
 
     runtime::Class empty("Empty"s, {}, nullptr);
@@ -357,21 +358,22 @@ void TestBaseClass() {
 
     ASSERT_EQUAL(cls.GetName(), "BoxedValue"s);
     {
-        const auto* m = cls.GetMethod("GetValue"s);
-        ASSERT(m != nullptr);
+        auto m = cls.GetMethod("GetValue"s);
+        ASSERT(m);
         ASSERT_EQUAL(m->name, "GetValue"s);
         ASSERT(m->formal_params.empty());
     }
     {
-        const auto* m = cls.GetMethod("SetValue"s);
-        ASSERT(m != nullptr);
+        auto m = cls.GetMethod("SetValue"s);
+        ASSERT(m);
         ASSERT_EQUAL(m->name, "SetValue"s);
         ASSERT_EQUAL(m->formal_params.size(), 1U);
     }
     ASSERT(!cls.GetMethod("AsString"s));
 }
 
-void TestInheritance() {
+void TestInheritance()
+{
     vector<runtime::Method> methods;
     methods.push_back({"GetValue"s, {}, make_unique<VariableValue>(vector{"self"s, "value"s})});
     methods.push_back({"SetValue"s,
@@ -388,35 +390,36 @@ void TestInheritance() {
 
     ASSERT_EQUAL(cls.GetName(), "StringableValue"s);
     {
-        const auto* m = cls.GetMethod("GetValue"s);
-        ASSERT(m != nullptr);
+        auto m = cls.GetMethod("GetValue"s);
+        ASSERT(m);
         ASSERT_EQUAL(m->name, "GetValue"s);
         ASSERT_EQUAL(m->formal_params.size(), 1U);
     }
     {
-        const auto* m = cls.GetMethod("SetValue"s);
-        ASSERT(m != nullptr);
+        auto m = cls.GetMethod("SetValue"s);
+        ASSERT(m);
         ASSERT_EQUAL(m->name, "SetValue"s);
         ASSERT_EQUAL(m->formal_params.size(), 1U);
     }
     {
-        const auto* m = cls.GetMethod("AsString"s);
-        ASSERT(m != nullptr);
+        auto m = cls.GetMethod("AsString"s);
+        ASSERT(m);
         ASSERT_EQUAL(m->name, "AsString"s);
         ASSERT(m->formal_params.empty());
     }
     ASSERT(!cls.GetMethod("AsStringValue"s));
 }
 
-void TestOr() {
-    auto test_or = [](bool lhs, bool rhs) {
-        Or or_statement{make_unique<BoolConst>(lhs), make_unique<BoolConst>(rhs)};
-        Closure closure;
-        runtime::DummyContext context;
-        ASSERT_EQUAL(runtime::Equal(or_statement.Execute(closure, context),
-                                    ObjectHolder::Own(runtime::Bool(true)), context),
-                     lhs || rhs);
-    };
+void TestOr()
+{
+    auto test_or = [](bool lhs, bool rhs)
+        {
+            Or or_statement{make_unique<BoolConst>(lhs), make_unique<BoolConst>(rhs)};
+            Closure closure;
+            runtime::DummyContext context;
+            ASSERT_EQUAL(runtime::Equal(or_statement.Execute(closure, context),
+                                        ObjectHolder::Own(runtime::Bool(true)), context), lhs || rhs);
+        };
 
     test_or(true, true);
     test_or(true, false);
@@ -424,15 +427,16 @@ void TestOr() {
     test_or(false, false);
 }
 
-void TestAnd() {
-    auto test_and = [](bool lhs, bool rhs) {
-        And and_statement{make_unique<BoolConst>(lhs), make_unique<BoolConst>(rhs)};
-        Closure closure;
-        runtime::DummyContext context;
-        ASSERT_EQUAL(runtime::Equal(and_statement.Execute(closure, context),
-                                    ObjectHolder::Own(runtime::Bool(true)), context),
-                     lhs && rhs);
-    };
+void TestAnd()
+{
+    auto test_and = [](bool lhs, bool rhs)
+        {
+            And and_statement{make_unique<BoolConst>(lhs), make_unique<BoolConst>(rhs)};
+            Closure closure;
+            runtime::DummyContext context;
+            ASSERT_EQUAL(runtime::Equal(and_statement.Execute(closure, context),
+                                        ObjectHolder::Own(runtime::Bool(true)), context), lhs && rhs);
+        };
 
     test_and(true, true);
     test_and(true, false);

@@ -3,6 +3,7 @@
 #include "declares.h"
 #include "runtime.h"
 #include "parse.h"
+#include "throw_messages.h" 
 
 #include <functional>
 
@@ -29,6 +30,19 @@ namespace ast
         {}
 
         TerminateLoopReason terminate_loop_reason_;
+    };
+
+    struct RuntimeError : public std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+
+        RuntimeError(runtime::ThrowMessageNumber runtime_error_type, const std::string& error_text,
+                     runtime::ObjectHolder error_object = {}) :
+            std::runtime_error(error_text), runtime_error_type_(runtime_error_type), error_object_(std::move(error_object))
+        {}
+
+        runtime::ThrowMessageNumber runtime_error_type_ = runtime::ThrowMessageNumber::THRM_UNKNOWN;
+        runtime::ObjectHolder error_object_ = {};
     };
 
     using Statement = runtime::Executable;
@@ -147,7 +161,7 @@ namespace ast
         };
 
         MethodCall(std::unique_ptr<Statement> object, std::string method,
-                   std::vector<std::unique_ptr<Statement>> args);
+                   std::vector<std::unique_ptr<Statement>> args, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
         MethodCallDesc GetMethodCallDesc()
@@ -159,6 +173,7 @@ namespace ast
         std::unique_ptr<Statement> object_;
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
+        std::string parent_name_;
     };
 
     // Косвенное присваивание - присваивание значения некоторой переменной по вычисляемому указателю на неё.
@@ -172,8 +187,9 @@ namespace ast
     class IndirectAssignment : public Statement
     {
     public:
-        IndirectAssignment(std::unique_ptr<Statement> object, std::string method,
-            std::vector<std::unique_ptr<Statement>> args, std::unique_ptr<Statement> rv);
+        IndirectAssignment
+            (std::unique_ptr<Statement> object, std::string method,std::vector<std::unique_ptr<Statement>> args,
+             std::unique_ptr<Statement> rv, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     private:
@@ -182,6 +198,7 @@ namespace ast
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
         std::unique_ptr<Statement> rv_;
+        std::string parent_name_;
     };
 
     /*
@@ -481,7 +498,7 @@ namespace ast
                 PacketAddStatement(args...);
         }
 
-        std::vector<std::unique_ptr<Statement>> comp_body_;        
+        std::vector<std::unique_ptr<Statement>> comp_body_;
         runtime::ProgramCommandDescriptor last_body_command_desc_; // дескриптор последней команды сплотки
     };
 
@@ -500,6 +517,21 @@ namespace ast
         std::unique_ptr<runtime::PsevdoExecutable> dummy_statement_ = std::make_unique<runtime::PsevdoExecutable>();
     };
 
+    // Объект исполнения инструкции выброса исключения raise с выражением (аргументом) statement.
+    class Raise : public Statement
+    {
+    public:
+        explicit Raise(std::unique_ptr<Statement> statement) : statement_(move(statement))
+        {
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
+        }
+
+        // Выбрасывает исключение RuntimeError с объектом ошибки, возвращаемом при вычислении выражения statement_.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    private:
+        std::unique_ptr<Statement> statement_;
+    };
+
     // Выполняет инструкцию return с выражением statement
     class Return : public Statement
     {
@@ -516,12 +548,30 @@ namespace ast
         std::unique_ptr<Statement> statement_;
     };
 
+    // Выполняет инструкцию co_yield с выражением statement.
+    class CoYield : public Statement
+    {
+    public:
+        explicit CoYield(std::unique_ptr<Statement> statement) : statement_(move(statement))
+        {
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
+        }
+
+        // Приостанавливает выполнение текущей сопрограммы, сохраняя снимок её мгновенного состояния в её объект-дескриптор.
+        // После выполнения инструкции co_yield метод-сопрограмма, внутри которого она была исполнена, сохраняет
+        // промежуточный (очередной) результат своей деятельности в дескриптор сопрограммы, а также возвращает его как свое
+        // возвращаемое значение.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    private:
+        std::unique_ptr<Statement> statement_;
+    };
+
     // Выполняет инструкцию return_ref с переменной dotted_ids, которая должна быть полем
     // объекта (начинаться с self).
     class ReturnRef : public Statement
     {
     public:
-        // Вариант конструктора, если аргументом return_ref выступает переменная
+        // Вариант конструктора, если аргументом return_ref выступает переменная.
         explicit ReturnRef(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
         {
             SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
@@ -597,7 +647,7 @@ namespace ast
     class IfElse : public Statement
     {
     public:
-        // Параметр else_body может быть равен nullptr
+        // Параметр else_body может быть равен nullptr.
         IfElse(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> if_body,
                std::unique_ptr<Statement> else_body);
 
@@ -618,6 +668,46 @@ namespace ast
     private:
         std::unique_ptr<Statement> condition_;
         std::unique_ptr<Statement> while_body_;
+    };
+
+    // Блок обработки исключений. Структура инструкции состоит из контролируемого блока try <try_body>, последовательности
+    // селективных перехватчиков except <class_name> as <var_name> <except_body>, неселективного перехватичка вида except <except_body>,
+    // блока обработки нормального завершения else <else_body> и блока общего послелога finally <finally_body>.
+    // try <try_body> {except <class_name> as <var_name> <except_body> ...} {except <except_body>} {else <else_body>} {finally <finally_body>}.
+    class TryExcept : public Statement
+    {
+    public:
+        // Классы ExceptClassVarPair и ExceptBlockDesc определяют структуру дескриптора отдельного except-терма блочной инструкции
+        // try..{except ...} ... .
+        struct ExceptClassVarPair
+        {
+            std::string class_name;
+            std::string var_name;
+        };
+
+        using ClassVarPairList = std::vector<ExceptClassVarPair>;
+
+        struct ExceptBlockDesc
+        {
+            ClassVarPairList class_var_pairs;
+            std::unique_ptr<Statement> except_body;
+        };
+
+        using ExceptBlockList = std::vector<ExceptBlockDesc>;
+
+        // Тела термов else_body и finally_body могут быть равными nullptr, массив except_blocks также может оказаться пуст.
+        TryExcept(std::unique_ptr<Statement> try_body, ExceptBlockList except_blocks,
+                  std::unique_ptr<Statement> else_body, std::unique_ptr<Statement> finally_body);
+        // Безусловно исполняет защищаемый блок try_body, перехватывает возникшие при этом исключения, анализирует их на
+        // принадлежность одному из except-термов, при обнаружении первого сходства исполняет его тело. При отсутствии
+        // исключений, порождённых ошибками периода исполнения внутри контролируемого блока, исполняется содержимое
+        // блока else_body. Наконец, завершающим шагом безусловно и всегда исполняется блок finally_body.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    private:
+        std::unique_ptr<Statement> try_body_;
+        ExceptBlockList except_blocks_;
+        std::unique_ptr<Statement> else_body_;
+        std::unique_ptr<Statement> finally_body_;
     };
 
     // Операция сравнения

@@ -12,6 +12,11 @@
 #include <variant>
 #include <atomic>
 
+namespace ast
+{
+    class CoYield;
+}
+
 namespace runtime
 {
     enum MethodParamCheckMode
@@ -49,7 +54,7 @@ namespace runtime
     enum class CommandGenus
     {
         CMD_GENUS_UNKNOWN = 0,
-        CMD_GENUS_CALL_METHOD,
+        CMD_GENUS_CALL_METHOD,              // Это команда вызова метода класса
         CMD_GENUS_RETURN_FROM_METHOD,
         CMD_GENUS_AFTER_LAST_METHOD_STMT,
         CMD_GENUS_INITIALIZE
@@ -62,7 +67,7 @@ namespace runtime
         // Возвращает поток вывода для команд print
         virtual std::ostream& GetOutputStream() = 0;
         virtual LinkageFunction& GetExternalLinkage() = 0;
-        virtual bool IsTerminate() = 0;
+        virtual bool IsTerminated() = 0;
         virtual void SetTerminate() = 0;
         virtual void Clear() = 0;
 
@@ -94,6 +99,7 @@ namespace runtime
         virtual void Print(std::ostream& os, Context& context) = 0;
     };
 
+    class CommonClassInstance;
     // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе
     class MYTHLON_INTERPRETER_PUBLIC ObjectHolder
     {
@@ -131,26 +137,34 @@ namespace runtime
             return dynamic_cast<T*>(this->Get());
         }
 
-        // Возвращает true, если ObjectHolder не пуст
+        // Возвращает true, если ObjectHolder не пуст.
         explicit operator bool() const;
+
+        // Возвращает "ИСТИНУ", если указатель владеющий.
+        bool IsOwning() const;
         
         // Модифицирует содержимое объекта, перенацеливая указатель data_ на тот объект,
-        //на который указывает data_ внутри аргумента object_holder.
+        // на который указывает data_ внутри аргумента object_holder.
         void ModifyData(const ObjectHolder& object_holder);
-
+        
     private:
         explicit ObjectHolder(std::shared_ptr<Object> data);
+        bool IsOwning(const std::shared_ptr<Object>& test_ptr) const;
         void AssertIsValid() const;
+
+        // Пустой удалитель, применяемый для невладеющих вместилищ, возвращаемых методом Share().
+        static void empty_deleter(Object*)
+        {}  // Не делает ничего. Абсолютно ничего.
 
         std::shared_ptr<Object> data_;
     };
 
-    // Объект-значение, хранящий значение типа T
+    // Объект-значение, хранящий значение типа T.
     template <typename T>
     class MYTHLON_INTERPRETER_PUBLIC ValueObject : public Object
     {
     public:
-        ValueObject(T v) : value_(v) // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)            
+        ValueObject(T v) : value_(v)      
         {}
 
         void Print(std::ostream& os, [[maybe_unused]] Context& context) override
@@ -371,6 +385,8 @@ namespace runtime
         std::vector<std::string> formal_params;
         // Тело метода
         std::unique_ptr<Executable> body;
+        // Признак того, что данный метод является сопрограммой (крутиной).
+        bool is_coroutine = false;
     };
 
     // Псевдокоманда для служебных целей (посылки уведомлений в ast::PrepareExecute)
@@ -392,24 +408,78 @@ namespace runtime
         // Если parent равен nullptr, то создаётся базовый класс
         explicit Class(std::string name, std::vector<Method> methods, const Class* parent);
 
-        // Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует
-        [[nodiscard]] const Method* GetMethod(const std::string& name) const;
+        //   Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует.
+        // args_count - требуемое количество формальных параметров у искомого метода. Если этот аргумент < 0,
+        // будет найден какой-либо метод с именем name из имеющихся в наличии с любым числом формальных параметров.
+        //   Аргумент parent_name указывает имя родительского класса, начиная с которого (от класса parent_name в
+        // направлении его предков) будет выполняться поиск целевого метода name. Если аргумент parent_name пуст,
+        // поиск выполняется непосредственно от данного класса.
+        struct GetMethodRet
+        {
+            const Method* method = nullptr;
+            ThrowMessageNumber error = ThrowMessageNumber::THRM_UNKNOWN;
+
+            GetMethodRet() = default;
+            GetMethodRet(const GetMethodRet&) = default;
+            GetMethodRet(GetMethodRet&&) = default;
+            GetMethodRet(const Method* p_method) : method(p_method)
+            {}
+            GetMethodRet(ThrowMessageNumber p_error) : error(p_error)
+            {}
+
+            GetMethodRet& operator=(const GetMethodRet&) = default;
+            GetMethodRet& operator=(GetMethodRet&&) = default;
+
+            operator const Method*() const
+            {
+                return method;
+            }
+
+            bool IsError() const
+            {
+                return method == nullptr;
+            }
+
+            operator bool() const
+            {
+                return !IsError();
+            }
+
+            const Method* operator->() const
+            {
+                return method;
+            }
+
+            friend std::ostream& operator<<(std::ostream& ostr, const GetMethodRet& method_ret)
+            {
+                ostr << method_ret.method;
+                return ostr;
+            }
+        };
+        [[nodiscard]] GetMethodRet GetMethod(const std::string& name, int args_count = -1, const std::string& parent_name = {}) const;
         
         // Возвращает массив пар-описателей методов класса
-        std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
+        [[nodiscard]] std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
 
         // Возвращает имя класса
         [[nodiscard]] const std::string& GetName() const;
 
+        // Возвращает "истину", если данный класс является наследником (потомком) проверяемого класса test_my_parent (в силу
+        // симметрии отношения наследования проверяемый класс будет в этом случае предком данного класса).
+        // В противном случае функции вернут "ложь".
+        // Для второй перегрузки проверяемый класс задается его именем test_class_name.
+        [[nodiscard]] bool IsSuccessorOf(const std::string& test_my_parent) const;
+        [[nodiscard]] bool IsSuccessorOf(const Class& test_my_parent) const;
+
         // Выводит в os строку "Class <имя класса>", например "Class cat"
         void Print(std::ostream& os, Context& context) override;
 
-        const void* GetPtr() const
+        const void* GetPtr() const override
         {
             return nullptr;
         }
 
-        size_t SizeOf() const
+        size_t SizeOf() const override
         {
             return 0;
         }
@@ -417,7 +487,7 @@ namespace runtime
     private:
         std::string my_name_;
         const Class& parent_;
-        std::unordered_map<std::string, Method> virtual_method_table_;
+        std::unordered_multimap<std::string, Method> virtual_method_table_;
     };
 
     class MYTHLON_INTERPRETER_PUBLIC CommonClassInstance : public Object
@@ -426,13 +496,27 @@ namespace runtime
         void Print(std::ostream& os, Context& context) override = 0;
         virtual bool HasMethod(const std::string& method_name, size_t argument_count) const = 0;
         virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                  Context& context) = 0;
-        const void* GetPtr() const
+                                  Context& context, const std::string& parent_name = {}) = 0;
+        virtual std::string GetClassName() const = 0; // Возвращает имя данного класса.
+
+        // Анализ отношений родства классов. Методы возвращают "ИСТИНУ", если класс test_my_parent
+        // является предком класса, экземпляром которого является данный объект.
+        [[nodiscard]] virtual bool IsSuccessorOf(const std::string& test_my_parent) const
+        {
+            return GetClassName() == test_my_parent;
+        }
+        
+        [[nodiscard]] virtual bool IsSuccessorOf(const Class& test_my_parent) const
+        {
+            return GetClassName() == test_my_parent.GetName();
+        }
+
+        const void* GetPtr() const override
         {
             return nullptr;
         }
 
-        size_t SizeOf() const
+        size_t SizeOf() const override
         {
             return 0;
         }
@@ -441,6 +525,8 @@ namespace runtime
     // Экземпляр класса
     class ClassInstance : public CommonClassInstance
     {
+        friend class CoroutineInstance;
+
     public:
         explicit ClassInstance(const Class& cls);
 
@@ -453,11 +539,16 @@ namespace runtime
         /*
          * Вызывает у объекта метод method, передавая ему actual_args параметров.
          * Параметр context задаёт контекст для выполнения метода.
-         * Если ни сам класс, ни его родители не содержат метод method, метод выбрасывает исключение
-         * runtime_error
+         * Вызов метода-сопрограммы выполняется особым способом - создаётся объект статуса сопрограммы, который и возвращается
+         * как результат работы данной функции.
+         * Если ни сам класс, ни его родители не содержат метод method, метод выбрасывает исключение runtime_error.
+         * \param parent_name - имя родительского класса, начиная от которого будет вестить поиск вызываемого метода method.
+         *                      Поиск в этом случае выполняется "вверх" (в восходящем направлении), от предкового класса
+                                parent_name к вершине иерархии наследования.
+                                Если parent_name пуста, то поиск выполняется непосредственно от данного класса.
          */
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                          Context& context) override;
+                          Context& context, const std::string& parent_name = {}) override;
 
         // Возвращает true, если объект имеет метод method, принимающий argument_count параметров
         [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count) const override;
@@ -469,16 +560,199 @@ namespace runtime
         // Возвращает имя хранимого внутри класса
         [[nodiscard]] std::string GetClassName() const;
 
+        // Анализ родства классов. Проверка того, являектся ли класс test_my_parent предком класса, к которому
+        // относится данный объект.
+        [[nodiscard]] virtual bool IsSuccessorOf(const std::string& test_my_parent) const override;
+        [[nodiscard]] virtual bool IsSuccessorOf(const Class& test_my_parent) const override;
+
     private:
         const Class& my_class_;
         Closure closure_;
         std::unique_ptr<PsevdoExecutable> dummy_statement_ = std::make_unique<PsevdoExecutable>();
+
+        const Class& GetBaseClass() const
+        {
+            return my_class_;
+        }
     };
 
     void MYTHLON_INTERPRETER_PUBLIC CheckMethodParams(Context& context, const std::string& method_name,
                            MethodParamCheckMode check_mode,
                            MethodParamType param_type, size_t required_params,
                            const std::vector<ObjectHolder>& actual_args);
+
+    /*
+    * Классы-хранители состояния (точнее, положения) потока управления программы, позволяющий однозначно восстановить ход ее работы
+    * от некоторой опорной точки точки до положения, описанного в этой структуре.
+    */
+    // Отметка о входе потока управления внуть некоторого метода.
+    struct MethodWorkflowPosData
+    {
+        const Method* method = nullptr;
+    };
+
+    // Тип хранения положения потока исполнения внутри составного (группового) последовательного оператора Compound.
+    struct CompoundWorkflowPosData
+    {
+        int index = -1;
+    };
+
+    // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора if ... else ... .
+    struct IfElseWorkflowPosData
+    {
+        enum class IfElseBranch
+        {
+            IFELSE_BRANCH_UNKNOWN = 0,
+            IFELSE_BRANCH_IF,
+            IFELSE_BRANCH_ELSE
+        };
+
+        IfElseBranch if_pass_branch = IfElseBranch::IFELSE_BRANCH_UNKNOWN;
+    };
+
+    // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора while ... .
+    struct WhileWorkflowPosData
+    {
+        bool is_pass_internal = false;
+    };
+
+    using WorkFlowPosData =
+        std::variant<std::monostate, MethodWorkflowPosData, CompoundWorkflowPosData,
+                     IfElseWorkflowPosData, WhileWorkflowPosData>;
+
+    class WorkflowPosition
+    {
+    public:
+        enum class WorkPosType
+        {
+            WORK_POS_UNKNOWN = 0,
+            WORK_POS_METHOD,        // Исполняется метод класса.
+            WORK_POS_COMPOUND,      // Исполняется составной оператор типа Compound.
+            WORK_POS_IF_ELSE,       // Исполняется блок if ... else ... .
+            WORK_POS_WHILE          // Исполняется блок while.
+        };
+
+        WorkflowPosition() = default;
+        WorkflowPosition(WorkFlowPosData pos_data, Executable* block_statement) :
+            pos_data_(pos_data), block_statement_(block_statement)
+        {}
+
+        WorkPosType GetType() const
+        {
+            if (std::holds_alternative<MethodWorkflowPosData>(pos_data_))
+                return WorkPosType::WORK_POS_METHOD;
+            else if (std::holds_alternative<CompoundWorkflowPosData>(pos_data_))
+                return WorkPosType::WORK_POS_COMPOUND;
+            else if (std::holds_alternative<IfElseWorkflowPosData>(pos_data_))
+                return WorkPosType::WORK_POS_IF_ELSE;
+            else if (std::holds_alternative<WhileWorkflowPosData>(pos_data_))
+                return WorkPosType::WORK_POS_WHILE;
+
+            return WorkPosType::WORK_POS_UNKNOWN;
+        }
+
+    protected:
+        WorkFlowPosData pos_data_;
+        Executable* block_statement_ = nullptr;
+    };
+
+    class WorkflowStackSaver : public Object
+    {
+    public:
+        void PushBack(WorkflowPosition new_workflow_position)
+        {
+            workflow_data_.push_back(new_workflow_position);
+        }
+
+        WorkflowPosition PopBack(WorkflowPosition::WorkPosType find_pos_type = WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
+        {
+            while (!workflow_data_.empty())
+            {
+                WorkflowPosition top_workflow_pos = workflow_data_.back();
+                workflow_data_.pop_back();
+                if (top_workflow_pos.GetType() == find_pos_type ||
+                    find_pos_type == WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
+                {
+                    CorrectCurrentIndex();
+                    return top_workflow_pos;
+                }
+            }
+            CorrectCurrentIndex();
+            return {};
+        }
+
+        WorkflowPosition* Current()
+        {
+            if (current_workflow_index_ != (std::numeric_limits<size_t>::max)() &&
+                current_workflow_index_ < workflow_data_.size())
+                return &workflow_data_[current_workflow_index_];
+            else
+                return nullptr;
+        }
+
+        WorkflowPosition* Reset()
+        {
+            current_workflow_index_ = 0;
+            CorrectCurrentIndex();
+            return Current();
+        }
+
+        WorkflowPosition* Advance(int dist)
+        {  // Сдвиг нндекса текущей позиции потока управления на dist элементов (вперед или назад).
+            int new_index = static_cast<int>(current_workflow_index_) + dist;
+            current_workflow_index_ = new_index < 0 ? 0 : static_cast<size_t>(new_index);
+            CorrectCurrentIndex();
+            return Current();
+        }
+
+        WorkflowPosition* Back()
+        {
+            if (!workflow_data_.empty())
+                return &(workflow_data_.back());
+            else
+                return nullptr;
+        }
+
+        void Clear()
+        {
+            workflow_data_.clear();
+            current_workflow_index_ = (std::numeric_limits<size_t>::max)();
+        }
+
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
+        {
+            if (Current())
+                os << "Поток исполнения в " << static_cast<int>(Current()->GetType());
+            else
+                os << "Поток исполнения не зафиксирован";
+        }
+
+        size_t SizeOf() const override
+        {
+            return 0;
+        }
+        
+        const void* GetPtr() const override
+        {
+            return nullptr;
+        }
+
+    private:
+        void CorrectCurrentIndex()
+        {
+            if (current_workflow_index_ != (std::numeric_limits<size_t>::max)())
+            {
+                if (workflow_data_.empty())
+                    current_workflow_index_ = (std::numeric_limits<size_t>::max)();
+                else
+                    if (current_workflow_index_ >= workflow_data_.size())
+                        current_workflow_index_ = workflow_data_.size() - 1;
+            }
+        }
+
+        std::vector<WorkflowPosition> workflow_data_;
+        size_t current_workflow_index_ = (std::numeric_limits<size_t>::max)();
+    };
 
 #include "special_objects.h"
 #include "math_object.h"
@@ -525,7 +799,7 @@ namespace runtime
             return external_link_;
         }
 
-        bool IsTerminate() override
+        bool IsTerminated() override
         {
             return false;
         }
@@ -562,7 +836,7 @@ namespace runtime
             return external_link_;
         }
 
-        bool IsTerminate() override
+        bool IsTerminated() override
         {
             return is_terminate_;
         }

@@ -121,7 +121,8 @@ print x.calc(2)
     ASSERT_EQUAL(context.output.str(), "2\n"s);
 }
 
-void TestRecursion() {
+void TestRecursion()
+{ // Рекурсивный вызов метода с накоплением результата в поле класса.
     const string program = R"(
 class ArithmeticProgression:
   def calc(n):
@@ -148,7 +149,8 @@ print x.result
     ASSERT_EQUAL(context.output.str(), "55\n"s);
 }
 
-void TestRecursion2() {
+void TestRecursion2()
+{ // Классическая рекурсия с возвращением результата через возвращаемое значение рекурсивного метода.
     const string program = R"(
 class GCD:
   def __init__():
@@ -177,7 +179,8 @@ print x.call_count
     ASSERT_EQUAL(context.output.str(), "17\n1\n115\n"s);
 }
 
-void TestComplexLogicalExpression() {
+void TestComplexLogicalExpression()
+{ // Вычисление сложных логических выражений.
     const string program = R"(
 a = 1
 b = 2
@@ -195,7 +198,8 @@ print ok
     ASSERT_EQUAL(context.output.str(), "False\n"s);
 }
 
-void TestClassicalPolymorphism() {
+void TestClassicalPolymorphism()
+{
     const string program = R"(
 class Shape:
   def __str__():
@@ -248,10 +252,62 @@ print r, c, t1, t2
                  "Rect(10x20) Circle(52) Triangle(3, 4, 5) Wrong triangle\n"s);
 }
 
+void TestAnchestorCalls()
+{
+    { // Проверка вызовов "скрытых" (переопределённых) методов унаследованных классов.
+        const string program = R"--(
+class Shape:
+  def __init__(shape_name):
+    self.shape_name = shape_name
+    self.width = 0
+    self.height = 0
+    print "Shape_Init - Shape_Name = ", self.shape_name
+
+class Rect(Shape):
+  def __init__(shape_name, width, height):
+    self.Shape.__init__(shape_name)
+    self.width = width
+    self.height = height
+    print "Rect_Init_3"
+
+  def __init__(width, height):
+    self.__init__("Rect", width, height)
+    print "Rect_Init_2"
+
+class Square(Rect):
+  def __init__(shape_name, size):
+    self.Rect.__init__(shape_name, size, size)
+    print "Square_Init_2"
+
+  def __init__(size):
+    self.Rect.__init__("Square", size, size)
+    print "Square_Init_1"
+
+  def __init__():
+    self.Shape.__init__("Square")
+    print "Square_Init_0"
+
+shape_instance = Shape("Unknown_Shape")
+rect_instance = Rect(10, 20)
+square_instance_0 = Square()
+square_instance_1 = Square(50)
+square_instance_0 = Square("Super_Square", 100)
+)--"s;
+
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+    }
+}
+
 }  // namespace parse
 
 void TestParseProgram(TestRunner& tr)
 {
+    RUN_TEST(tr, parse::TestAnchestorCalls);
     RUN_TEST(tr, parse::TestSimpleProgram);
     RUN_TEST(tr, parse::TestProgramWithClasses);
     RUN_TEST(tr, parse::TestProgramWithIf);

@@ -861,6 +861,94 @@ print x << y, x << y + 1, x >> y, x >> y - 1
         }
     }
 
+    void TestMethodsOverload()
+    {
+        { // Проверка обработки перегруженных методов класса.
+            istringstream istr(R"--(
+class WithOverloadedMethod:
+  def overloaded_method(gw):
+    print "1"
+    return gw
+
+  def overloaded_method(gw, gh):
+    print "2"
+    return gw + gh
+
+  def overloaded_method(gw, gh, gz):
+    print "3"
+    return gw + gh + gz
+
+over_class = WithOverloadedMethod()
+# Вызов разных ипостасей перегруженного метода WithOverloadedMethod::overloaded_method(...)
+over_class.overloaded_method(1)
+over_class.overloaded_method(1, 2)
+over_class.overloaded_method(1, 2, 3)
+over_class.overloaded_method(1, 2)
+over_class.overloaded_method(1)
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "1\n2\n3\n2\n1\n");
+        }
+    }
+
+    void TestTryExceptions()
+    {
+        { // Проверка работоспособности аппарата перехвата и обработки исключений, возникающих при работе программы.
+            istringstream istr(R"--(
+class ErrorClass:
+  def __init__(err_code):
+    self.code = err_code
+
+i = 10
+while i > 0:
+  i = i - 1
+  try:
+    if i < 5:
+      err_var = ErrorClass(i)
+      raise err_var
+  except ErrorClass as ex_err:
+    print ex_err.code
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "4\n3\n2\n1\n0\n");
+        }
+    }
+
+    void TestSimpleCoroutine()
+    {
+        { // Проверка работоспособности аппарата сопрограмм в его простейшем виде.
+            istringstream istr(R"--(
+class TestClass:
+  def __init__(err_code):
+    self.code = err_code
+
+  def simple_method(x):
+    return 2 * x
+
+  def coroutine_method(x):
+    z = x
+    while (z < 1000):
+      co_yield z
+      z = z + 2
+
+test_instance = TestClass(0)
+ordinary_value = test_instance.simple_method(2)
+
+coro_instance = test_instance.coroutine_method(2)
+coro_value_1 = coro_instance.resume()
+coro_value_2 = coro_instance.resume()
+
+print ordinary_value
+print coro_value_1, coro_value_2
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            //ASSERT_EQUAL(ostr.str(), "4\n3\n2\n1\n0\n");
+        }
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -871,6 +959,7 @@ print x << y, x << y + 1, x >> y, x >> y - 1
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
 
+        RUN_TEST(tr, TestSimpleCoroutine);
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);
         RUN_TEST(tr, TestArithmetics);
@@ -887,6 +976,8 @@ print x << y, x << y + 1, x >> y, x >> y - 1
         RUN_TEST(tr, TestIncludes);
         RUN_TEST(tr, TestBitwiseOps);
         RUN_TEST(tr, TestShiftOps);
+        RUN_TEST(tr, TestMethodsOverload);
+        RUN_TEST(tr, TestTryExceptions);
     }
 }  // namespace
 
