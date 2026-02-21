@@ -2,6 +2,7 @@
 #include "parse.h"
 #include "lexer.h"
 #include "statement.h"
+#include "error_classes.h"
 #include "throw_messages.h"
 
 using namespace std;
@@ -120,6 +121,16 @@ namespace
             internal_classes_["array"s] = ast::CreateArray;
             internal_classes_["map"s] = ast::CreateMap;
             internal_classes_["math"s] = ast::CreateMath;
+            // Набор записей с указаниями на производящие функции экземпляров классов ошибок.
+            internal_classes_["CommonError"s] = ast::CreateCommonError;
+            internal_classes_["ErrorDivisionByZero"s] = ast::CreateErrorDivisionByZero;
+            internal_classes_["OverflowError"s] = ast::CreateOverflowError;
+            internal_classes_["DomainError"s] = ast::CreateDomainError;
+            internal_classes_["ErrorParamsInconsistency"s] = ast::CreateErrorParamsInconsistency;
+            internal_classes_["SyntaxError"s] = ast::CreateSyntaxError;
+            internal_classes_["ModuleError"s] = ast::CreateModuleError;
+            internal_classes_["LogicError"s] = ast::CreateLogicError;
+            internal_classes_["ReferenceError"s] = ast::CreateReferenceError;
         }
 
         // Program -> eps

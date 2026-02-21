@@ -12,8 +12,8 @@ public:
     // Возвращает объект, содержащий значение типа ArrayInstance,
     // представляющее собой созданный экземпляр массива.
     runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-private:
 
+private:
     std::vector<std::unique_ptr<Statement>> args_;
 };
 

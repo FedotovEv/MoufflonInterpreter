@@ -2,6 +2,7 @@
 #include "statement.h"
 #include "parse.h"
 #include "throw_messages.h"
+#include "error_classes.h"
 
 #include <cassert>
 #include <optional>

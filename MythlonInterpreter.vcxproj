@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="error_classes.cpp" />
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="lexer_test_open.cpp" />
     <ClCompile Include="main.cpp" />
@@ -34,6 +35,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="declares.h" />
+    <ClInclude Include="error_classes.h" />
     <ClInclude Include="lexer.h" />
     <ClInclude Include="math_object.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>

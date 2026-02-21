@@ -232,14 +232,35 @@ public:
         is_awaiting_ = true;
     }
 
-    void PushBack(WorkflowPosition new_workflow_position)
+    // Переадресующие вызовы для методов поля workflow_.
+    WorkflowPosition* PushBack(WorkflowPosition new_workflow_position)
     {
-        workflow_.PushBack(std::move(new_workflow_position));
+        return workflow_.PushBack(std::move(new_workflow_position));
+    }
+
+    WorkflowPosition PopBack(WorkflowPosition::WorkPosType find_pos_type = WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
+    {
+        return workflow_.PopBack(find_pos_type);
     }
 
     WorkflowPosition* Current()
     {
         return workflow_.Current();
+    }
+
+    WorkflowPosition* SetIndex(int new_index = 0)
+    {
+        return workflow_.SetIndex(new_index);
+    }
+
+    WorkflowPosition* Advance(int dist = 1)
+    {
+        return workflow_.Advance(dist);
+    }
+
+    WorkflowPosition* Back()
+    {
+        return workflow_.Back();
     }
 
 private:
@@ -254,8 +275,10 @@ private:
     bool         is_started_ = false;   // Признак сопрограммы, которая уже работала хотя бы единожды.
     bool         is_awaiting_ = false;  // Признак, что работа сопрограммы именно приостановлена, а не полностью завершена.
     ObjectHolder ret_value_;            // Значение, возвращённое сопрограммой при крайнем сеансе её работы.
-    // Поле со сведениями о положении текущей точки в потоке управления сопрограммы.
-    WorkflowStackSaver workflow_;
+    // Поля со сведениями о положении точки в потоке управления сопрограммы.
+    WorkflowStackSaver last_workflow_;  // Состояние потока управления (положение исполняемой точки) в момент завершения
+                                        // сопрограммы (исполнения операторов co_yield или co_yield_ref)
+    WorkflowStackSaver workflow_;       // Текущее положение потока управления.
     
     // Обработчики методов класса сопрограммы.
     ObjectHolder MethodResume(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

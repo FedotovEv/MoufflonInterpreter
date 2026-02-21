@@ -1,6 +1,7 @@
 
 #include "runtime.h"
 #include "parse.h"
+#include "error_classes.h"
 
 #include <cassert>
 #include <optional>
@@ -10,46 +11,14 @@ using namespace std;
 
 namespace runtime
 {
-    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const string& except_text)
+    std::string RuntimeError::ExtractMessage(const runtime::ObjectHolder& error_object)
     {
-        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
-            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + except_text);
-    }
-
-    [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num)
-    {
-        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
-            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + ThrowMessages::GetThrowText(msg_num));
-    }
-
-    [[noreturn]] void RethrowRuntimeError(runtime::Executable* exec_obj_ptr, runtime_error & orig_runtime_error)
-    {
-        string command_desc = to_string(exec_obj_ptr->GetCommandDesc().module_id) + "("s +
-            to_string(exec_obj_ptr->GetCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + orig_runtime_error.what());
-    }
-
-    [[noreturn]] void ThrowRuntimeError(Context& context, const string& except_text)
-    {
-        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
-            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + except_text);
-    }
-
-    [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num)
-    {
-        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
-            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + ThrowMessages::GetThrowText(msg_num));
-    }
-
-    [[noreturn]] void RethrowRuntimeError(Context& context, runtime_error& orig_runtime_error)
-    {
-        string command_desc = to_string(context.GetLastCommandDesc().module_id) + "("s +
-            to_string(context.GetLastCommandDesc().module_string_number) + "):"s;
-        throw runtime_error(command_desc + orig_runtime_error.what());
+        if (const runtime::CommonClassInstance* error_class_ptr = error_object.TryAs<runtime::CommonClassInstance>())
+        {
+            if (const CommonError* common_error = dynamic_cast<const CommonError*>(error_class_ptr))
+                return common_error->GetText();
+        }
+        return {};
     }
 
     ObjectHolder::ObjectHolder(std::shared_ptr<Object> data) : data_(std::move(data))
@@ -526,6 +495,100 @@ namespace runtime
     void Bool::Print(std::ostream& os, [[maybe_unused]] Context& context)
     {
         os << (GetValue() ? "True"sv : "False"sv);
+    }
+
+    WorkflowPosition::WorkPosType WorkflowPosition::GetType() const
+    {
+        if (std::holds_alternative<MethodWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_METHOD;
+        else if (std::holds_alternative<CompoundWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_COMPOUND;
+        else if (std::holds_alternative<IfElseWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_IF_ELSE;
+        else if (std::holds_alternative<WhileWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_WHILE;
+        else if (std::holds_alternative<CoYieldWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_CO_YIELD;
+        else if (std::holds_alternative<TryExceptWorkflowPosData>(pos_data_))
+            return WorkPosType::WORK_POS_TRY_EXCEPT;
+
+        return WorkPosType::WORK_POS_UNKNOWN;
+    }
+
+    WorkflowPosition* WorkflowStackSaver::PushBack(WorkflowPosition new_workflow_position)
+    {
+        workflow_data_.push_back(new_workflow_position);
+        current_workflow_index_ = static_cast<int>(workflow_data_.size()) - 1;
+        return Current();
+    }
+
+    WorkflowPosition WorkflowStackSaver::PopBack(WorkflowPosition::WorkPosType find_pos_type)
+    {
+        while (!workflow_data_.empty())
+        {
+            WorkflowPosition top_workflow_pos = std::move(workflow_data_.back());
+            workflow_data_.pop_back();
+            if (top_workflow_pos.GetType() == find_pos_type ||
+                find_pos_type == WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
+            {
+                CorrectCurrentIndex();
+                return top_workflow_pos;
+            }
+        }
+        CorrectCurrentIndex();
+        return {};
+    }
+
+    WorkflowPosition* WorkflowStackSaver::Current()
+    {
+        if (current_workflow_index_ >= 0 && current_workflow_index_ < static_cast<int>(workflow_data_.size()))
+            return &workflow_data_[current_workflow_index_];
+        else
+            return nullptr;
+    }
+
+    WorkflowPosition* WorkflowStackSaver::SetIndex(int new_index)
+    {
+        current_workflow_index_ = new_index;
+        CorrectCurrentIndex();
+        return Current();
+    }
+
+    WorkflowPosition* WorkflowStackSaver::Advance(int dist)
+    {  // Сдвиг нндекса текущей позиции потока управления на dist элементов (вперед или назад).
+        current_workflow_index_ += dist;
+        CorrectCurrentIndex();
+        return Current();
+    }
+
+    WorkflowPosition* WorkflowStackSaver::Back()
+    {
+        if (!workflow_data_.empty())
+            return &(workflow_data_.back());
+        else
+            return nullptr;
+    }
+
+    void WorkflowStackSaver::Clear()
+    {
+        workflow_data_.clear();
+        current_workflow_index_ = 0;
+    }
+
+    void WorkflowStackSaver::CorrectCurrentIndex()
+    {
+        if (current_workflow_index_ < -1)
+            current_workflow_index_ = -1;
+        if (current_workflow_index_ > static_cast<int>(workflow_data_.size()))
+            current_workflow_index_ = static_cast<int>(workflow_data_.size());
+    }
+
+    void WorkflowStackSaver::Print(std::ostream& os, [[maybe_unused]] Context& context)
+    {
+        if (Current())
+            os << "Поток исполнения в " << static_cast<int>(Current()->GetType());
+        else
+            os << "Поток исполнения не зафиксирован";
     }
 
     bool Equal(const ObjectHolder& lhs, const ObjectHolder& rhs, [[maybe_unused]] Context& context)

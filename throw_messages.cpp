@@ -14,10 +14,12 @@ namespace runtime
         {ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL, "Вызов неизвестного метода "s},
         {ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED, "Возврат указателя на значение запрещён"s},
         {ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED, "Возврат указателя на локальную переменную запрещён"s},
+        //
         {ThrowMessageNumber::THRM_BASE_CLASS, "Базовый класс "s},
         {ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS, " не найден для класса "s},
         {ThrowMessageNumber::THRM_CLASS, "Класс "s},
         {ThrowMessageNumber::THRM_ALREADY_EXISTS, "уже сущестует"s},
+        //
         {ThrowMessageNumber::THRM_METHOD_NOT_FOUND, "Метод не найден"s},
         {ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR, "Ошибка семантики косвенного присваивания"s},
         {ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND, "Переменная не найдена"s},
@@ -38,6 +40,10 @@ namespace runtime
         {ThrowMessageNumber::THRM_ARRAY_IS_EMPTY, "Массив пуст"s},
         {ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_INSERT, "Идет работа с итераторами. Вызов Insert невозможен"},
         {ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_ERASE, "Идет работа с итераторами. Вызов Erase невозможен"},
+        //
+        {ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, "Несогласованность типа параметров метода"s},
+        {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Неверное количество параметров метода"s},
+        {ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Недопустимое значение параметра"s},
         {ThrowMessageNumber::THRM_METHOD, "Метод "s},
         {ThrowMessageNumber::THRM_ARGUMENTS, " аргументов"s},
         {ThrowMessageNumber::THRM_DEMAND_EQUAL, " требует "s},
@@ -51,6 +57,7 @@ namespace runtime
         {ThrowMessageNumber::THRM_MUST_BE_ITERATOR, " должен быть итератором"s},
         {ThrowMessageNumber::THRM_IN_METHOD, "В методе "s},
         {ThrowMessageNumber::THRM_ITERATOR_INVALID, " итератор недействителен"s},
+        //
         {ThrowMessageNumber::THRM_MATH_CTOR_HAS_NO_PARAMS, "Конструктор math не должен иметь аргументов"s},
         {ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST, "Ошибка в параметрах команды"s},
         {ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME, "Недопустимое имя импортируемой библиотеки"s},

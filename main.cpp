@@ -917,9 +917,8 @@ while i > 0:
     }
 
     void TestSimpleCoroutine()
-    {
-        { // Проверка работоспособности аппарата сопрограмм в его простейшем виде.
-            istringstream istr(R"--(
+    { // Испытания работоспособности и различных способов применения существующего в языке механизма сопрограмм.
+        std::string test_class_example(R"--(
 class TestClass:
   def __init__(err_code):
     self.code = err_code
@@ -929,23 +928,51 @@ class TestClass:
 
   def coroutine_method(x):
     z = x
-    while (z < 1000):
+    while (z < 20):
+      z = z + 1
       co_yield z
       z = z + 2
 
 test_instance = TestClass(0)
+)--");
+        { // Проверка работоспособности аппарата сопрограмм в его простейшем виде.
+        std::string simple_coro_example(R"--(
 ordinary_value = test_instance.simple_method(2)
 
 coro_instance = test_instance.coroutine_method(2)
 coro_value_1 = coro_instance.resume()
 coro_value_2 = coro_instance.resume()
+coro_value_3 = coro_instance.resume()
 
 print ordinary_value
-print coro_value_1, coro_value_2
+print coro_value_1, coro_value_2, coro_value_3
 )--");
+
+            istringstream istr(test_class_example + simple_coro_example);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            //ASSERT_EQUAL(ostr.str(), "4\n3\n2\n1\n0\n");
+            ASSERT_EQUAL(ostr.str(), "4\n3 6 9\n");
+        }
+
+        { // Чуть более сложный пример сопрограммы, где она выступает как генератор
+          // (теоретически бесконечной) последовательности.
+            std::string gener_coro_example(R"--(
+ordinary_value = test_instance.simple_method(2)
+
+coro_instance = test_instance.coroutine_method(2)
+i = 0
+while coro_instance.IsAwaiting():
+  next_coro_value = coro_instance.resume()
+  print i, next_coro_value
+  i = i + 1
+
+print "Всего", i
+)--");
+
+            istringstream istr(test_class_example + gener_coro_example);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "0 3\n1 6\n2 9\n3 12\n4 15\n5 18\n6 None\nВсего 7\n");
         }
     }
 
@@ -993,8 +1020,8 @@ int main()
     catch (const exception& e)
     {
         cerr << e.what() << endl;
-		return 1;
+		return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

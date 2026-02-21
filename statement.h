@@ -32,19 +32,6 @@ namespace ast
         TerminateLoopReason terminate_loop_reason_;
     };
 
-    struct RuntimeError : public std::runtime_error
-    {
-        using std::runtime_error::runtime_error;
-
-        RuntimeError(runtime::ThrowMessageNumber runtime_error_type, const std::string& error_text,
-                     runtime::ObjectHolder error_object = {}) :
-            std::runtime_error(error_text), runtime_error_type_(runtime_error_type), error_object_(std::move(error_object))
-        {}
-
-        runtime::ThrowMessageNumber runtime_error_type_ = runtime::ThrowMessageNumber::THRM_UNKNOWN;
-        runtime::ObjectHolder error_object_ = {};
-    };
-
     using Statement = runtime::Executable;
 
     // Выражение, возвращающее значение типа T,
@@ -221,6 +208,7 @@ namespace ast
         NewInstance(const runtime::Class& class_, std::vector<std::unique_ptr<Statement>> args);
         // Возвращает объект, содержащий значение типа ClassInstance
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
     private:
         runtime::ClassInstance new_class_instance_;
         std::vector<std::unique_ptr<Statement>> args_;

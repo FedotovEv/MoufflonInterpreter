@@ -2,6 +2,7 @@
 #include "throw_messages.h"
 #include "parse.h"
 #include "debug_context.h"
+#include "error_classes.h"
 
 #include <iostream>
 #include <sstream>
@@ -475,27 +476,49 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         auto comp_body_current_it = comp_body_.begin();
+        // Локальные переменные, характеризующие наше положение относительно текущей исполняющейся сопрограммы,
+        // если она в данный момент исполняется и мы находимся в ней.
         runtime::CoroutineInstance* coro_status_instance = nullptr;
+        runtime::WorkflowPosition* workflow_current = nullptr;
+        runtime::CompoundWorkflowPosData* workflow_compound = nullptr;
 
         if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
         {
             if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
             {  // Данный блок (составной оператор) принадлежит и исполняется в составе сопрограммы.
-
+                workflow_current = coro_status_instance->Advance(1);
+                if (workflow_current)
+                { // Сейчас мы возобновляем работу после приостановки сопрограммы в одной из её промежуточных
+                  // точек возврата. Поэтому нужно прямо перейти к тому компоненту нашей сплотки, который выполнялся
+                  // в момент последней приостановки сопрограммы.
+                    assert(workflow_current->GetOwningStatement() == this);
+                    workflow_compound = &std::get<runtime::CompoundWorkflowPosData>(workflow_current->GetData());
+                    comp_body_current_it = comp_body_.begin() + static_cast<size_t>(workflow_compound->index);
+                }
+                else
+                { // Сплотка исполняется заново, по свежему, так сказать, снегу. Поэтому будет создан новый кадр
+                  // сохранения положения потока управления
+                    workflow_current = coro_status_instance->PushBack({runtime::CompoundWorkflowPosData{}, this});
+                    workflow_compound = &std::get<runtime::CompoundWorkflowPosData>(workflow_current->GetData());
+                }
             }
-        }
-
-        if (coro_status_instance)
-        {
-
         }
 
         // Выполним элементы сплотки от точки comp_body_current_it до ее конца.
         for (; comp_body_current_it != comp_body_.end(); ++comp_body_current_it)
         {
+            if (workflow_current)
+                // При исполнении в составе сопрограммы будем указывать ее дескриптору конкретный индекс оператора (одного из
+                // состава данной сплотки), к исполнению которого мы приступаем.
+                workflow_compound->index = static_cast<int>(comp_body_current_it - comp_body_.begin());
+
             auto& cur_statement_ptr = *comp_body_current_it;
             cur_statement_ptr->Execute(closure, context);
         }
+
+        if (workflow_current)
+            // Исполнение сплотки в составе сопрограммы завершилось, удаляем из стека состояний её запись.
+            coro_status_instance->PopBack();
         return {};
     }
 
@@ -511,9 +534,7 @@ namespace ast
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
-        string raise_string = "Raise:" + to_string(context.GetLastCommandDesc().module_id) + ':' +
-                              to_string(context.GetLastCommandDesc().module_string_number);
-        throw RuntimeError(runtime::ThrowMessageNumber::THRM_RAISE_CALL, raise_string, statement_->Execute(closure, context));
+        throw runtime::RuntimeError(statement_->Execute(closure, context));
     }
 
     ObjectHolder Return::Execute(Closure& closure, Context& context)
@@ -525,14 +546,33 @@ namespace ast
     ObjectHolder CoYield::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
-        ObjectHolder holder_result = statement_->Execute(closure, context);
+        // Указатель на объект-дескриптор сопрограммы, в контексте которой мы выполняемся.
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
 
-        // Перед возвратом очередного результата работы сопрограммы, установим в соответствующем объекте-дескрипторе признак её приостановки.
         if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
         {
-            if (runtime::CoroutineInstance* coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
-                coro_status_instance->YieldCoroutine();
+            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+            {  // Данный оператор co_yield принадлежит и исполняется в составе сопрограммы.
+                runtime::WorkflowPosition* workflow_current = coro_status_instance->Advance(1);
+                if (workflow_current)
+                { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                    assert(workflow_current->GetOwningStatement() == this);
+                    coro_status_instance->PopBack();
+                    return ObjectHolder::None();
+                }
+                else
+                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+                    workflow_current = coro_status_instance->PushBack({runtime::CoYieldWorkflowPosData{}, this});
+                    std::get<runtime::CoYieldWorkflowPosData>(workflow_current->GetData()).is_already_executed = true;
+                }
+            }
         }
+
+        ObjectHolder holder_result = statement_->Execute(closure, context);
+        if (coro_status_instance)
+            // Перед возвратом очередного результата работы сопрограммы установим в соответствующем объекте - дескрипторе признак её приостановки.
+            coro_status_instance->YieldCoroutine();
 
         throw ReturnResult(move(holder_result));
     }
@@ -651,15 +691,77 @@ namespace ast
     ObjectHolder IfElse::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
+        // Несколько локальных переменных, управляющих нашей работой в составе сопрограммы.
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
+        runtime::WorkflowPosition* workflow_current = nullptr;
+        runtime::IfElseWorkflowPosData* workflow_if = nullptr;
 
+        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
+        {
+            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+            {  // Данный оператор co_yield принадлежит и исполняется в составе сопрограммы.
+                workflow_current = coro_status_instance->Advance(1);
+                if (workflow_current)
+                { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                    assert(workflow_current->GetOwningStatement() == this);
+                    workflow_if = &std::get<runtime::IfElseWorkflowPosData>(workflow_current->GetData());
+                }
+                else
+                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+                    workflow_current = coro_status_instance->PushBack({runtime::IfElseWorkflowPosData{}, this});
+                    workflow_if = &std::get<runtime::IfElseWorkflowPosData>(workflow_current->GetData());
+                }
+            }
+        }
 
-        if (runtime::IsTrue(condition_->Execute(closure, context)))
-            return if_body_->Execute(closure, context);
+        ObjectHolder if_return_value;
+        bool if_selector;
+        if (workflow_current)
+        { // При работе в составе сопрограммы в случае её возобноления альтернативную ветвь оператора if выбираем по содержимому
+          // дескриптора, зафиксировавшего ту ветвь, которая ведёт к нужной точке приостановки (и, соответственно, возобновления) ее работы.
+            switch (workflow_if->if_pass_branch)
+            {
+            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_IF:
+                // Экстренно переходим к ветке if без расчёта условия, так как оно уже было вычислено к моменту приостановки сопрограммы.
+                if_selector = true;
+                break;
+            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_ELSE:
+                // Аналогично форсированно выполняем переход без расчёта условия, но уже к варианту else.
+                if_selector = false;
+                break;
+            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_UNKNOWN:
+                [[fallthrough]];
+            default:
+                if_selector = runtime::IsTrue(condition_->Execute(closure, context));
+                break;
+            }
+        }
         else
-            if (else_body_)
-                return else_body_->Execute(closure, context);
-            else
-                return {};
+        { // Работа вне сопрограммы.
+            if_selector = runtime::IsTrue(condition_->Execute(closure, context));
+        }
+
+        // Выбираем ту условную альтернативу, которую указывает if_selector, определённый выше как для случая нормальной работы, так и для
+        // случая возобновлния работы сопрограммы.
+        if (if_selector)
+        {
+            if (workflow_current)
+                workflow_if->if_pass_branch = runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_IF;
+            if_return_value = if_body_->Execute(closure, context);
+        }
+        else if (else_body_)
+        {
+            if (workflow_current)
+                workflow_if->if_pass_branch = runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_ELSE;
+            if_return_value = else_body_->Execute(closure, context);
+        }
+        
+        if (workflow_current)
+            // Исполнение условнрго оператора в составе сопрограммы завершилось, удаляем из стека сохранения состояний его запись.
+            coro_status_instance->PopBack();
+
+        return if_return_value;
     }
 
     While::While(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> while_body) :
@@ -670,8 +772,40 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         ObjectHolder result;
-        while (runtime::IsTrue(condition_->Execute(closure, context)))
+        // Несколько локальных переменных, управляющих нашей работой в составе сопрограммы.
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
+        runtime::WorkflowPosition* workflow_current = nullptr;
+        runtime::WhileWorkflowPosData* workflow_while = nullptr;
+        bool is_direct_pass = false;
+
+        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
         {
+            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+            {  // Данный оператор co_yield принадлежит и исполняется в составе сопрограммы.
+                workflow_current = coro_status_instance->Advance(1);
+                if (workflow_current)
+                { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                    assert(workflow_current->GetOwningStatement() == this);
+                    workflow_while = &std::get<runtime::WhileWorkflowPosData>(workflow_current->GetData());
+                    is_direct_pass = workflow_while->is_pass_internal;
+                }
+                else
+                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+                    workflow_current = coro_status_instance->PushBack({runtime::WhileWorkflowPosData{}, this});
+                    workflow_while = &std::get<runtime::WhileWorkflowPosData>(workflow_current->GetData());
+                }
+            }
+        }
+
+        // Тело цикла исполняется, если предусловие цикла выполнено. Но также мы переходим прямо к телу, если ранее при работе
+        // сопрограммы мы уже ранее выполнили условие на данной итерации и вошли внутрь цикла.
+        while (is_direct_pass || runtime::IsTrue(condition_->Execute(closure, context)))
+        {
+            is_direct_pass = false;
+            if (workflow_current)
+                workflow_while->is_pass_internal = true;
+
             try
             {
                 result = while_body_->Execute(closure, context);
@@ -687,6 +821,10 @@ namespace ast
             }
         }
 
+        if (workflow_current)
+            // Исполнение цикла в составе сопрограммы закончилось, удаляем из стека состояний соответствующую ему запись.
+            coro_status_instance->PopBack();
+
         return result;
     }
 
@@ -701,14 +839,93 @@ namespace ast
         PrepareExecute(this, closure, context);
         ObjectHolder result;
         bool is_runtime_error_happen = false, is_runtime_error_processed = false;
+        // Набор локальных переменных, применяемых для управления работой блока (try ... except) в составе сопрограммы.
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
+        runtime::WorkflowPosition* workflow_current = nullptr;
+        runtime::TryExceptWorkflowPosData* workflow_try_except = nullptr;
+        bool is_resume_in_coro = false;
+
+        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
+        {
+            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
+            {  // Данный блок try ... except принадлежит и исполняется в составе сопрограммы.
+                workflow_current = coro_status_instance->Advance(1);
+                if (workflow_current)
+                { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                    assert(workflow_current->GetOwningStatement() == this);
+                    workflow_try_except = &std::get<runtime::TryExceptWorkflowPosData>(workflow_current->GetData());
+                    is_resume_in_coro = true;
+                }
+                else
+                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+                    workflow_current = coro_status_instance->PushBack({runtime::TryExceptWorkflowPosData{}, this});
+                    workflow_try_except = &std::get<runtime::TryExceptWorkflowPosData>(workflow_current->GetData());
+                }
+            }
+        }
+
         try
         {
+            if (is_resume_in_coro)
+            { // При возобновлении сопрограммы форсированно выберем блок, в котором находится текущая точка ее приостановки.
+                switch (workflow_try_except->try_except_pass_branch)
+                {
+                    // Сначала рассмотрим варианты, которые для достижения точки возобноления сопрограммы требуют выбрасывания исключения
+                    // (точка возобновления сопрограммы находится внутри ветви catch ...).
+                    case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ANY_EXCEPT:
+                        [[fallthrough]];
+                    case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_NAMED_EXCEPT:
+                        [[fallthrough]];
+                    case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ANONYMOUS_EXCEPT:
+                        throw workflow_try_except->runtime_error_object_; // Выбросим исключение требуемого типа, переходя в блок catch... .
+                    // Далее обрабатываются варианты, для которых точка возобновления сопрограммы находится за пределами try ... catch.
+                    case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ELSE:
+                        [[fallthrough]];
+                    case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_FINALLY:
+                        goto skip_try_block; // Прекращаем обработку try ... catch, переходя к else ... или finally... .
+                    default:    // Точка возобновления сопрограммы находится внутри блока try... .
+                        break;
+                }
+            }
+
+            if (workflow_current)
+                workflow_try_except->try_except_pass_branch = runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_TRY;
             if (try_body_)
                 result = try_body_->Execute(closure, context);
         }
-        catch (RuntimeError& rtm_err)
+        catch (runtime::RuntimeError& rtm_err)
         {
             is_runtime_error_happen = true;
+            if (is_resume_in_coro)
+            { // Упрощённая форсированная процедура вызова оператора обработки исключения в процессе возобновления сопрограммы.
+                switch (workflow_try_except->try_except_pass_branch)
+                {
+                case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_NAMED_EXCEPT:
+                {   // Точка приостановки находится внутри какого-то именованного блока-обработчика.
+                    Closure except_block_closure(workflow_try_except->except_block_closure);
+                    auto except_block_it = except_blocks_.begin() + workflow_try_except->index;
+                    result = except_block_it->except_body->Execute(except_block_closure, context);
+                    goto skip_try_block;
+                }
+                case runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ANONYMOUS_EXCEPT:
+                { // Точка приостановки находится внутри анонимного блока-обработчика.
+                    auto except_block_it = except_blocks_.begin() + workflow_try_except->index;
+                    result = except_block_it->except_body->Execute(closure, context);
+                    goto skip_try_block;
+                }
+                default: // Исключение не было обработано, так как подходящего блока не было найдено. Ретранслируем его наружу.
+                    coro_status_instance->PopBack();
+                    throw;
+                }
+            }
+
+            if (workflow_current)
+            {
+                workflow_try_except->try_except_pass_branch = runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ANY_EXCEPT;
+                workflow_try_except->runtime_error_object_ = rtm_err;
+            }
+
             if (runtime::CommonClassInstance* error_class_ptr = rtm_err.error_object_.TryAs<runtime::CommonClassInstance>())
             {  // Сначала пробуем обнаружить подходящий именованный блок перехвата, указанный в котором тип объекта ошибки
                // соответствует реальному объекту error_class_ptr.
@@ -747,6 +964,13 @@ namespace ast
                             }
                         }
                         // Исполняем except-блок с новой составной таблицей символов.
+                        if (workflow_current)
+                        { // Сохраним в информационный кадр индекс и контекст выбранного блока обработки исключения.
+                            workflow_try_except->try_except_pass_branch =
+                                runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_NAMED_EXCEPT;
+                            workflow_try_except->index = static_cast<int>(except_block_it - except_blocks_.begin());
+                            workflow_try_except->except_block_closure = except_block_closure;
+                        }
                         result = except_block_it->except_body->Execute(except_block_closure, context);
                     }
                 }
@@ -764,20 +988,52 @@ namespace ast
                 if (except_block_it != except_blocks_.end())
                 {
                     is_runtime_error_processed = true;
+                    if (workflow_current) // Сохраним в информационный кадр индекс и контекст выбранного блока обработки исключения.
+                    {
+                        workflow_try_except->try_except_pass_branch =
+                            runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ANONYMOUS_EXCEPT;
+                        workflow_try_except->index = static_cast<int>(except_block_it - except_blocks_.begin());
+                    }
                     result = except_block_it->except_body->Execute(closure, context);
                 }
             }
 
             if (is_runtime_error_happen && !is_runtime_error_processed)
-                // Исключение по ошибке периода исполнения не перехвачено и не обработано исполняемой программой. Ретранслируем его
-                // наружу, завершая работу программы.
+            { // Исключение по ошибке периода исполнения не перехвачено и не обработано исполняемой программой. Ретранслируем его
+              // наружу, либо передавая исключение по цепочке возможному вышележащему обработчику, либо завершая работу программы.
+                if (workflow_current)
+                    // Исполнение блока обработки исключений в составе сопрограммы завершилось, удаляем из стека сохранения состояний его запись.
+                    coro_status_instance->PopBack();
+
                 throw;
+            }
         }
 
+        skip_try_block:
+
+        if (is_resume_in_coro)
+            // Если точка возобновления лежит внутри else..., обеспечим попадание управления именно туда.
+            is_runtime_error_happen =
+                (workflow_try_except->try_except_pass_branch == runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ELSE);
+
         if (else_body_ && !is_runtime_error_happen)
+        {
+            if (workflow_current)
+                workflow_try_except->try_except_pass_branch = runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_ELSE;
+
             result = else_body_->Execute(closure, context);
+        }
         if (finally_body_)
+        {
+            if (workflow_current)
+                workflow_try_except->try_except_pass_branch = runtime::TryExceptWorkflowPosData::TryExceptBranch::TRYEXCEPT_BRANCH_FINALLY;
+
             result = finally_body_->Execute(closure, context);
+        }
+
+        if (workflow_current)
+            // Исполнение блока обработки исключений в составе сопрограммы завершилось, удаляем из стека сохранения состояний его запись.
+            coro_status_instance->PopBack();
 
         return result;
     }

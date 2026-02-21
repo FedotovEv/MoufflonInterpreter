@@ -2,6 +2,7 @@
 #include "statement.h"
 #include "parse.h"
 #include "throw_messages.h"
+#include "error_classes.h"
 
 #include <cassert>
 #include <optional>
@@ -202,7 +203,7 @@ namespace runtime
                 err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
                            ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_EQUAL) +
                            to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
-                ThrowRuntimeError(context, err_mess);
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_LESS_EQ:
@@ -211,7 +212,7 @@ namespace runtime
                 err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
                     ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL) +
                     to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
-                ThrowRuntimeError(context, err_mess);
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ:
@@ -220,7 +221,7 @@ namespace runtime
                 err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
                     ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL) +
                     to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
-                ThrowRuntimeError(context, err_mess);
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
         default:
@@ -252,7 +253,7 @@ namespace runtime
                     err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_PARAMETER) + to_string(i) +
                         ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_OF_METHOD) + method_name +
                         ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
-                    ThrowRuntimeError(context, err_mess);
+                    ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, err_mess);
                 }
                 ++i;
             }
@@ -527,7 +528,7 @@ namespace runtime
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
                        ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT);
-            ThrowRuntimeError(context, err_mess);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
         }
 
         MapIterator * map_iter_ptr = actual_args[0].TryAs<MapIterator>();
@@ -535,14 +536,14 @@ namespace runtime
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD) +
                        method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_MUST_BE_ITERATOR);
-            ThrowRuntimeError(context, err_mess);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, err_mess);
         }
 
         if (!map_iter_ptr->IsIteratorValid())
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_IN_METHOD) +
                 method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ITERATOR_INVALID);
-            ThrowRuntimeError(context, err_mess);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, err_mess);
         }
     }
 
@@ -714,7 +715,10 @@ namespace runtime
         class_instance_(class_instance), method_(method), coro_closure_(closure), is_started_(false), is_awaiting_(true)
     {
         if (!method_->is_coroutine)
+        {
+            assert(false);
             throw runtime_error("Метод " + method_->name + " не сопрограмма");
+        }
         // Подготовим к работе символьную таблицу coro_closure_ сопрограммы, добавив в нее ссылку (слабую, невладеющую) на
         // объект-дескриптор сопрограммы (то есть, на этот объект).
         coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
@@ -765,7 +769,20 @@ namespace runtime
         is_awaiting_ = false;
         // Обновим указатель на сам объект сопрограммы (то есть на this), так как между вызовами наш объект мог переместиться в памяти.
         coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
-        ret_value_ = method_->body->Execute(coro_closure_, context);
+        // Восстановим хранилище стека потока выполнения к положению, запомненному при последней приостановке сопрограммы.
+        workflow_ = move(last_workflow_);
+        workflow_.SetIndex(-1);  // -1 - положение "перед началом" стека кадров положения потока управления.
+        try
+        {
+            ret_value_ = method_->body->Execute(coro_closure_, context);
+        }
+        catch (...)
+        { // Любое исключение, распространившееся за пределы сопрограммы, окончательно её завершает.
+            is_awaiting_ = false;
+            throw;  // Передаём исключение далее по цепочке для возможных вышележащих обработчиков.
+        }
+        // А теперь вновь запомним состояние потока управления сопрограммы, но уже по позиции её новой приостановки.
+        last_workflow_ = move(workflow_);
 
         return ret_value_;
     }

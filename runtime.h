@@ -64,7 +64,7 @@ namespace runtime
     class MYTHLON_INTERPRETER_PUBLIC Context
     {
     public:
-        // Возвращает поток вывода для команд print
+        // Возвращает поток вывода для команд print.
         virtual std::ostream& GetOutputStream() = 0;
         virtual LinkageFunction& GetExternalLinkage() = 0;
         virtual bool IsTerminated() = 0;
@@ -157,6 +157,22 @@ namespace runtime
         {}  // Не делает ничего. Абсолютно ничего.
 
         std::shared_ptr<Object> data_;
+    };
+
+    // Объект-контейнер, предназначенный для хранения внутри себя одного из конкретных классов ошибки (CommonError или его наследники).
+    // Именно такой объект выбрасывается вместе с исключением оператором raise или внутренними функциями среды исполнения Муфлоно-программы,
+    // которая обеспечивается для неё интерпретатором, при возникновении любых ошибок или исключений периода исполнения.
+    struct RuntimeError : public std::runtime_error
+    {
+        static std::string ExtractMessage(const runtime::ObjectHolder& error_object);
+
+        RuntimeError(runtime::ObjectHolder error_object = {}) : 
+            std::runtime_error(ExtractMessage(error_object)), error_object_(std::move(error_object))
+        {}
+        RuntimeError(const std::string& error_message) : std::runtime_error(error_message)
+        {}
+
+        runtime::ObjectHolder error_object_ = {}; // Здесь размещается какой-либо из конкретных классов ошибки.
     };
 
     // Объект-значение, хранящий значение типа T.
@@ -616,9 +632,36 @@ namespace runtime
         bool is_pass_internal = false;
     };
 
+    // Хранитель информации о состоянии исполнения операторов приостановки сопрограмм co_yield и co_yield_ref.
+    struct CoYieldWorkflowPosData
+    {
+        bool is_already_executed = false;
+    };
+
+    // Хранитель информации о потоке управления внутри структуры try ... except ... else ... finally ... .
+    struct TryExceptWorkflowPosData
+    {
+        enum class TryExceptBranch
+        {
+            TRYEXCEPT_BRANCH_UNKNOWN = 0,
+            TRYEXCEPT_BRANCH_TRY,
+            TRYEXCEPT_BRANCH_ANY_EXCEPT,
+            TRYEXCEPT_BRANCH_NAMED_EXCEPT,
+            TRYEXCEPT_BRANCH_ANONYMOUS_EXCEPT,
+            TRYEXCEPT_BRANCH_ELSE,
+            TRYEXCEPT_BRANCH_FINALLY
+        };
+
+        TryExceptBranch try_except_pass_branch = TryExceptBranch::TRYEXCEPT_BRANCH_UNKNOWN;
+        int index = -1; // Индекс (порядковый номер, отсчитываемый от нуля), указывающий на активный except-кадр,
+                        // внутри которого находится управление в момент сохранения кадра.
+        RuntimeError runtime_error_object_; // Объект-контейнер ошибки, выброшенный вместе с исключением в try-блоке.
+        Closure except_block_closure;       // Специальная (дополненная) таблица символов, применяемая при вызове именованного except-блока.
+    };
+
     using WorkFlowPosData =
-        std::variant<std::monostate, MethodWorkflowPosData, CompoundWorkflowPosData,
-                     IfElseWorkflowPosData, WhileWorkflowPosData>;
+        std::variant<std::monostate, MethodWorkflowPosData, CompoundWorkflowPosData, IfElseWorkflowPosData,
+                     WhileWorkflowPosData, CoYieldWorkflowPosData, TryExceptWorkflowPosData>;
 
     class WorkflowPosition
     {
@@ -629,7 +672,9 @@ namespace runtime
             WORK_POS_METHOD,        // Исполняется метод класса.
             WORK_POS_COMPOUND,      // Исполняется составной оператор типа Compound.
             WORK_POS_IF_ELSE,       // Исполняется блок if ... else ... .
-            WORK_POS_WHILE          // Исполняется блок while.
+            WORK_POS_WHILE,         // Исполняется блок while.
+            WORK_POS_CO_YIELD,      // Исполняется какой-либо оператор приостановки сопрограммы - co_yield ... или co_yield_ref ... .
+            WORK_POS_TRY_EXCEPT     // Производится выполнение блока try ... except ... .
         };
 
         WorkflowPosition() = default;
@@ -637,18 +682,15 @@ namespace runtime
             pos_data_(pos_data), block_statement_(block_statement)
         {}
 
-        WorkPosType GetType() const
+        WorkPosType GetType() const;
+        WorkFlowPosData& GetData()
         {
-            if (std::holds_alternative<MethodWorkflowPosData>(pos_data_))
-                return WorkPosType::WORK_POS_METHOD;
-            else if (std::holds_alternative<CompoundWorkflowPosData>(pos_data_))
-                return WorkPosType::WORK_POS_COMPOUND;
-            else if (std::holds_alternative<IfElseWorkflowPosData>(pos_data_))
-                return WorkPosType::WORK_POS_IF_ELSE;
-            else if (std::holds_alternative<WhileWorkflowPosData>(pos_data_))
-                return WorkPosType::WORK_POS_WHILE;
+            return pos_data_;
+        }
 
-            return WorkPosType::WORK_POS_UNKNOWN;
+        Executable* GetOwningStatement()
+        {
+            return block_statement_;
         }
 
     protected:
@@ -659,73 +701,14 @@ namespace runtime
     class WorkflowStackSaver : public Object
     {
     public:
-        void PushBack(WorkflowPosition new_workflow_position)
-        {
-            workflow_data_.push_back(new_workflow_position);
-        }
-
-        WorkflowPosition PopBack(WorkflowPosition::WorkPosType find_pos_type = WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
-        {
-            while (!workflow_data_.empty())
-            {
-                WorkflowPosition top_workflow_pos = workflow_data_.back();
-                workflow_data_.pop_back();
-                if (top_workflow_pos.GetType() == find_pos_type ||
-                    find_pos_type == WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
-                {
-                    CorrectCurrentIndex();
-                    return top_workflow_pos;
-                }
-            }
-            CorrectCurrentIndex();
-            return {};
-        }
-
-        WorkflowPosition* Current()
-        {
-            if (current_workflow_index_ != (std::numeric_limits<size_t>::max)() &&
-                current_workflow_index_ < workflow_data_.size())
-                return &workflow_data_[current_workflow_index_];
-            else
-                return nullptr;
-        }
-
-        WorkflowPosition* Reset()
-        {
-            current_workflow_index_ = 0;
-            CorrectCurrentIndex();
-            return Current();
-        }
-
-        WorkflowPosition* Advance(int dist)
-        {  // Сдвиг нндекса текущей позиции потока управления на dist элементов (вперед или назад).
-            int new_index = static_cast<int>(current_workflow_index_) + dist;
-            current_workflow_index_ = new_index < 0 ? 0 : static_cast<size_t>(new_index);
-            CorrectCurrentIndex();
-            return Current();
-        }
-
-        WorkflowPosition* Back()
-        {
-            if (!workflow_data_.empty())
-                return &(workflow_data_.back());
-            else
-                return nullptr;
-        }
-
-        void Clear()
-        {
-            workflow_data_.clear();
-            current_workflow_index_ = (std::numeric_limits<size_t>::max)();
-        }
-
-        void Print(std::ostream& os, [[maybe_unused]] Context& context) override
-        {
-            if (Current())
-                os << "Поток исполнения в " << static_cast<int>(Current()->GetType());
-            else
-                os << "Поток исполнения не зафиксирован";
-        }
+        WorkflowPosition* PushBack(WorkflowPosition new_workflow_position);
+        WorkflowPosition PopBack(WorkflowPosition::WorkPosType find_pos_type = WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN);
+        WorkflowPosition* Current();
+        WorkflowPosition* SetIndex(int new_index = 0);
+        WorkflowPosition* Advance(int dist = 1); // Сдвиг нндекса текущей позиции потока управления на dist элементов (вперед или назад).
+        WorkflowPosition* Back();
+        void Clear();
+        void Print(std::ostream& os, [[maybe_unused]] Context& context) override;
 
         size_t SizeOf() const override
         {
@@ -738,20 +721,10 @@ namespace runtime
         }
 
     private:
-        void CorrectCurrentIndex()
-        {
-            if (current_workflow_index_ != (std::numeric_limits<size_t>::max)())
-            {
-                if (workflow_data_.empty())
-                    current_workflow_index_ = (std::numeric_limits<size_t>::max)();
-                else
-                    if (current_workflow_index_ >= workflow_data_.size())
-                        current_workflow_index_ = workflow_data_.size() - 1;
-            }
-        }
+        void CorrectCurrentIndex();
 
         std::vector<WorkflowPosition> workflow_data_;
-        size_t current_workflow_index_ = (std::numeric_limits<size_t>::max)();
+        int current_workflow_index_ = 0;
     };
 
 #include "special_objects.h"
@@ -856,19 +829,6 @@ namespace runtime
         LinkageFunction external_link_;
         std::atomic_bool is_terminate_{false};
     };
-
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        ThrowRuntimeError(runtime::Executable* exec_obj_ptr, const std::string& except_text);
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num);
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        RethrowRuntimeError(runtime::Executable* exec_obj_ptr, std::runtime_error& orig_runtime_error);
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        ThrowRuntimeError(Context& context, const std::string& except_text);
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num);
-    [[noreturn]] void MYTHLON_INTERPRETER_PUBLIC
-        RethrowRuntimeError(Context& context, std::runtime_error& orig_runtime_error);
 }  // namespace runtime
 
 void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure,
