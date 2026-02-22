@@ -819,8 +819,11 @@ namespace
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
         // обрабатываются директивы времени трансляции (например, import).
         // StatementBody -> return Expression
+        //               | co_yield Expression
         //               | return_ref VariableValue
         //               | return_ref MethodCall
+        //               | co_yield_ref VariableValue
+        //               | co_yield_ref MethodCall
         //               | raise Expression
         //               | print ExpressionList
         //               | break
@@ -873,8 +876,12 @@ namespace
                 return exec_factory_.Create(ast::Raise(ParseTest()));
             }
 
-            if (tok.Is<ITokenType::ReturnRef>())
+            if (tok.Is<ITokenType::ReturnRef>() || tok.Is<ITokenType::CoYieldRef>())
             {
+                bool is_co_yield_ref = tok.Is<ITokenType::CoYieldRef>();
+                if (is_co_yield_ref && exec_factory_.CurrentMethod())  // Наличие оператора co_yield_ref также делает метод сопрограммой.
+                    exec_factory_.CurrentMethod()->is_coroutine = true;
+
                 lexer_.NextToken();
                 auto test_result = ParseTest();
                 ast::VariableValue* variable_value_ptr = dynamic_cast<ast::VariableValue*>(test_result.get());
@@ -883,7 +890,7 @@ namespace
                 {
                     vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
                     if (dotted_ids.size() && dotted_ids[0] == "self"sv)
-                        return exec_factory_.Create(ast::ReturnRef(move(dotted_ids)));
+                        return exec_factory_.Create(ast::ReturnRef(move(dotted_ids), is_co_yield_ref));
                 }
                 else if (method_call_ptr)
                 {
@@ -894,8 +901,9 @@ namespace
                     {
                         vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
                         if (dotted_ids.size() && dotted_ids[0] == "self"sv)
-                            return exec_factory_.Create(ast::ReturnRef(move(method_call_desc.call_object),
-                                move(method_call_desc.call_method), move(method_call_desc.call_args)));
+                            return exec_factory_.Create(ast::ReturnRef
+                                (move(method_call_desc.call_object), move(method_call_desc.call_method),
+                                 move(method_call_desc.call_args), is_co_yield_ref));
                     }
                 }
                 exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED);

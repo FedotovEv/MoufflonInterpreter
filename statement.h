@@ -34,6 +34,19 @@ namespace ast
 
     using Statement = runtime::Executable;
 
+    // Вспомогательные элементы для обслуживания работы в составе сопрограмм.
+    struct CoroCoords
+    {
+        // Указатель на объект-дескриптор сопрограммы, в контексте которой мы выполняемся.
+        runtime::CoroutineInstance* coro_status_instance = nullptr;
+        // Указатель на объект-хранитель состояния потока управления для данной исполняемой инструкции.
+        runtime::WorkflowPosition* workflow_current = nullptr;
+        // Признак того, что сейчас сопрограмма находится в процессе возобновления своего выполнения
+        // (движется к точке своей последней приостановки).
+        bool is_resume_execution_now = false;
+    };
+    CoroCoords GetCoYieldCoroCoords(runtime::Closure& closure, Statement* this_statement);
+
     // Выражение, возвращающее значение типа T,
     // используется как основа для создания констант
     template <typename T>
@@ -554,13 +567,17 @@ namespace ast
         std::unique_ptr<Statement> statement_;
     };
 
-    // Выполняет инструкцию return_ref с переменной dotted_ids, которая должна быть полем
-    // объекта (начинаться с self).
+    // Выполняет инструкцию return_ref dotted_ids, возвращая ссылку на переменную dotted_ids, которая должна быть полем
+    // объекта (начинаться с self), или ретранслирует вызывающей команде результат работы другого метода, возвращающего
+    // такую сслыку (вариант return_ref method_call_id).
+    // Этот же класс также выполняет аналогичные функции инструкции co_yield_ref, выполняющейся в составе сопрограммы и,
+    // кроме возврата ссылки, также формирует точку её приостановки и последующего возобновления.
     class ReturnRef : public Statement
     {
     public:
         // Вариант конструктора, если аргументом return_ref выступает переменная.
-        explicit ReturnRef(std::vector<std::string> dotted_ids) : dotted_ids_(move(dotted_ids))
+        explicit ReturnRef(std::vector<std::string> dotted_ids, bool is_co_yield_ref = false) :
+            dotted_ids_(move(dotted_ids)), is_co_yield_ref_(is_co_yield_ref)
         {
             SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
         }
@@ -568,10 +585,11 @@ namespace ast
         // Вариант конструктора, если аргументом return_ref является вызов метода (который,
         // в свою очередь, должен возвратить указатель PointerObject).
         explicit ReturnRef(std::unique_ptr<Statement> object, std::string method,
-                           std::vector<std::unique_ptr<Statement>> args) :
+                           std::vector<std::unique_ptr<Statement>> args, bool is_co_yield_ref = false) :
             object_(move(object)),
             method_(move(method)),
-            args_(move(args))
+            args_(move(args)),
+            is_co_yield_ref_(is_co_yield_ref)
         {}
 
         // Останавливает выполнение текущего метода. После выполнения инструкции return_ref метод,
@@ -587,6 +605,8 @@ namespace ast
         std::unique_ptr<Statement> object_;
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
+        // Признак, указывающий на то, что объект является исполнителем инструкции co_yield_ref.
+        bool is_co_yield_ref_ = false;
 
         runtime::ObjectHolder ExecuteForVariable(runtime::Closure& closure, runtime::Context& context);
         runtime::ObjectHolder ExecuteForMethod(runtime::Closure& closure, runtime::Context& context);

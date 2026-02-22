@@ -15,6 +15,7 @@ namespace parse
          {"return"s, token_type::Return{}},
          {"co_yield"s, token_type::CoYield{}},
          {"return_ref"s, token_type::ReturnRef{}},
+         {"co_yield_ref"s, token_type::CoYieldRef{}},
          {"if"s, token_type::If{}},
          {"else"s, token_type::Else{}},
          {"while"s, token_type::While{}},
@@ -347,6 +348,8 @@ namespace parse
         UNVALUED_OUTPUT(Class);
         UNVALUED_OUTPUT(Return);
         UNVALUED_OUTPUT(CoYield);
+        UNVALUED_OUTPUT(ReturnRef);
+        UNVALUED_OUTPUT(CoYieldRef);
         UNVALUED_OUTPUT(If);
         UNVALUED_OUTPUT(Else);
         UNVALUED_OUTPUT(While);
@@ -399,6 +402,8 @@ namespace parse
         STRINGIZE_TOKEN_TYPE(Class);
         STRINGIZE_TOKEN_TYPE(Return);
         STRINGIZE_TOKEN_TYPE(CoYield);
+        STRINGIZE_TOKEN_TYPE(ReturnRef);
+        STRINGIZE_TOKEN_TYPE(CoYieldRef);
         STRINGIZE_TOKEN_TYPE(If);
         STRINGIZE_TOKEN_TYPE(Else);
         STRINGIZE_TOKEN_TYPE(While);

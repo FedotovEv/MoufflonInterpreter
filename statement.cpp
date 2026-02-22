@@ -177,6 +177,38 @@ namespace ast
             return pointer_obj;
     }
 
+    CoroCoords GetCoYieldCoroCoords(runtime::Closure& closure, Statement* this_statement)
+    { // Функция предназначена для подготовки (или создания, если требуется) объекта-хранителя состояния потока
+      // управления программы для приостанавливающих сопрограмму инструкций co_yield и co_yield_ref.
+        CoroCoords coro_coords;
+
+        // Операторы co_yield и co_yield_ref должны принадлежать и исполняться только в составе сопрограммы.
+        auto closure_it = closure.find(COROUTINE_STATUS_VAR);
+        if (closure_it != closure.end())
+            coro_coords.coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>();
+        if (!coro_coords.coro_status_instance)
+        {
+            assert(false);
+            throw runtime_error("co_yield или co_yield_ref исполняется вне сопрограммы!");
+        }
+        coro_coords.workflow_current = coro_coords.coro_status_instance->Advance(1);
+        if (coro_coords.workflow_current)
+        { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+          // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+            assert(coro_coords.workflow_current->GetOwningStatement() == this_statement);
+            coro_coords.coro_status_instance->PopBack();
+            coro_coords.is_resume_execution_now = true;
+        }
+        else
+        { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+            coro_coords.workflow_current =
+                coro_coords.coro_status_instance->PushBack({runtime::CoYieldWorkflowPosData{}, this_statement});
+            std::get<runtime::CoYieldWorkflowPosData>(coro_coords.workflow_current->GetData()).is_already_executed = true;
+        }
+
+        return coro_coords;
+    }
+
     ObjectHolder Assignment::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -546,33 +578,17 @@ namespace ast
     ObjectHolder CoYield::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
-        // Указатель на объект-дескриптор сопрограммы, в контексте которой мы выполняемся.
-        runtime::CoroutineInstance* coro_status_instance = nullptr;
-
-        if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
-        {
-            if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
-            {  // Данный оператор co_yield принадлежит и исполняется в составе сопрограммы.
-                runtime::WorkflowPosition* workflow_current = coro_status_instance->Advance(1);
-                if (workflow_current)
-                { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
-                    assert(workflow_current->GetOwningStatement() == this);
-                    coro_status_instance->PopBack();
-                    return ObjectHolder::None();
-                }
-                else
-                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
-                    workflow_current = coro_status_instance->PushBack({runtime::CoYieldWorkflowPosData{}, this});
-                    std::get<runtime::CoYieldWorkflowPosData>(workflow_current->GetData()).is_already_executed = true;
-                }
-            }
-        }
+        // Оператор co_yield должен принадлежать и исполняться только в составе сопрограммы.
+        CoroCoords coro_coords = GetCoYieldCoroCoords(closure, this);
+        if (coro_coords.is_resume_execution_now)
+            // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+            // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+            return ObjectHolder::None();
 
         ObjectHolder holder_result = statement_->Execute(closure, context);
-        if (coro_status_instance)
+        if (coro_coords.coro_status_instance)
             // Перед возвратом очередного результата работы сопрограммы установим в соответствующем объекте - дескрипторе признак её приостановки.
-            coro_status_instance->YieldCoroutine();
+            coro_coords.coro_status_instance->YieldCoroutine();
 
         throw ReturnResult(move(holder_result));
     }
@@ -594,8 +610,8 @@ namespace ast
             }
             else
             {
-                throw ReturnResult(runtime::ObjectHolder::Own(
-                    runtime::PointerObject(&cur_closure_ptr->at(id_name))));
+                throw ReturnResult(runtime::ObjectHolder::Own
+                    (runtime::PointerObject(&cur_closure_ptr->at(id_name))));
             }
         }
         return {};
@@ -619,10 +635,19 @@ namespace ast
     ObjectHolder ReturnRef::Execute(Closure& closure, [[maybe_unused]] Context& context)
     {
         PrepareExecute(this, closure, context);
-        if (dotted_ids_.size())
-            return ExecuteForVariable(closure, context);
-        else
-            return ExecuteForMethod(closure, context);
+
+        CoroCoords coro_coords;
+        if (is_co_yield_ref_)
+            // Это оператор co_yield_ref. Он должен принадлежать и исполняться только в составе сопрограммы.
+            coro_coords = GetCoYieldCoroCoords(closure, this);
+
+        ObjectHolder return_result = dotted_ids_.size() ? ExecuteForVariable(closure, context) : ExecuteForMethod(closure, context);
+        if (is_co_yield_ref_ && coro_coords.coro_status_instance)
+            // Это инструкция co_yield_ref. Перед возвратом её результата (очередного результата работы сопрограммы)
+            // установим в соответствующем объекте - дескрипторе признак её приостановки.
+            coro_coords.coro_status_instance->YieldCoroutine();
+
+        return return_result;
     }
 
     ObjectHolder Break::Execute(Closure& closure, Context& context)
