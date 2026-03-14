@@ -6,6 +6,7 @@
 
 #include "testplug.h"
 
+#include <string>
 #include <optional>
 #include <fstream>
 #include <cstdio>
@@ -19,7 +20,7 @@ namespace ast
     NewPlugin::NewPlugin(std::vector<std::unique_ptr<Statement>>&& args) : args_(move(args))
     {
         if (args_.size())
-                ThrowRuntimeError(this, "Конструктор класса TestPlugin не должен иметь параметров"s);
+            ThrowRuntimeError(this, "Конструктор класса TestPlugin не должен иметь параметров"s);
     }
 
     runtime::ObjectHolder NewPlugin::Execute(runtime::Closure& closure, runtime::Context& context)

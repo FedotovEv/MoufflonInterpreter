@@ -21,6 +21,7 @@ namespace parse
          {"while"s, token_type::While{}},
          {"break"s, token_type::Break{}},
          {"continue"s, token_type::Continue{}},
+         {"pass"s, token_type::Pass{}},
          // Специальные лексемы обработки исключений.
          {"try"s, token_type::Try{}},
          {"except"s, token_type::Except{}},
@@ -355,6 +356,7 @@ namespace parse
         UNVALUED_OUTPUT(While);
         UNVALUED_OUTPUT(Break);
         UNVALUED_OUTPUT(Continue);
+        UNVALUED_OUTPUT(Pass);
         UNVALUED_OUTPUT(Try);
         UNVALUED_OUTPUT(Except);
         UNVALUED_OUTPUT(Finally);
@@ -409,6 +411,7 @@ namespace parse
         STRINGIZE_TOKEN_TYPE(While);
         STRINGIZE_TOKEN_TYPE(Break);
         STRINGIZE_TOKEN_TYPE(Continue);
+        STRINGIZE_TOKEN_TYPE(Pass);
         STRINGIZE_TOKEN_TYPE(Try);
         STRINGIZE_TOKEN_TYPE(Except);
         STRINGIZE_TOKEN_TYPE(Finally);

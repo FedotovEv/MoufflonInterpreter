@@ -26,7 +26,7 @@ namespace runtime
     using DebugCallback =
         std::function<DebugExecutionMode(DebugCallbackReason, Executable*, Closure&, Context&)>;
 
-    class MYTHLON_INTERPRETER_PUBLIC DebugContext : public SimpleContext
+    class DebugContext : public SimpleContext
     {
     public:
         explicit DebugContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())

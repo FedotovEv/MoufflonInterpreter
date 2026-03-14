@@ -632,6 +632,16 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
+    // "Холостая" (нефункциональная) инструкция pass
+    class Pass : public Statement
+    {
+    public:
+        explicit Pass() = default;
+
+        // Холостой оператор-заполнитель - не делает ничего содержательного.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
     // Объявляет класс
     class ClassDefinition : public Statement
     {

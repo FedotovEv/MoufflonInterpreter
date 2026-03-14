@@ -828,6 +828,7 @@ namespace
         //               | print ExpressionList
         //               | break
         //               | continue
+        //               | pass
         //               | AssignmentOrCall
         std::optional<unique_ptr<ast::Statement>> ParseSimpleStatement()
         {
@@ -931,6 +932,12 @@ namespace
                 return exec_factory_.Create(ast::Continue());
             }
         
+            if (tok.Is<ITokenType::Pass>())
+            {
+                lexer_.NextToken();
+                return exec_factory_.Create(ast::Pass());
+            }
+
             return ParseAssignmentOrCall();
         }
 

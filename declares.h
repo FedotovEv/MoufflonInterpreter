@@ -16,13 +16,9 @@
 #endif
 
 #if defined (_WIN64) || defined(_WIN32)
-    #ifdef MYTHLON_INTERPRETER_MODULE
-        #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllimport)
-    #else
-        #define MYTHLON_INTERPRETER_PUBLIC __declspec(dllexport)
-    #endif
+    #define MYTHLON_KERNEL_EXPORT __declspec(dllexport)
 #else
-    #define MYTHLON_INTERPRETER_PUBLIC
+    #define MYTHLON_INTERPRETER_EXPORT
 #endif
 
 #define ZERO_TOLERANCE 0.000000001

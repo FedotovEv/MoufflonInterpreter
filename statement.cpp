@@ -582,7 +582,7 @@ namespace ast
         CoroCoords coro_coords = GetCoYieldCoroCoords(closure, this);
         if (coro_coords.is_resume_execution_now)
             // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-            // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+            // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
             return ObjectHolder::None();
 
         ObjectHolder holder_result = statement_->Execute(closure, context);
@@ -638,8 +638,13 @@ namespace ast
 
         CoroCoords coro_coords;
         if (is_co_yield_ref_)
-            // Это оператор co_yield_ref. Он должен принадлежать и исполняться только в составе сопрограммы.
+        { // Это оператор co_yield_ref. Он должен принадлежать и исполняться только в составе сопрограммы.
             coro_coords = GetCoYieldCoroCoords(closure, this);
+            if (coro_coords.is_resume_execution_now)
+                // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
+                // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
+                return ObjectHolder::None();
+        }
 
         ObjectHolder return_result = dotted_ids_.size() ? ExecuteForVariable(closure, context) : ExecuteForMethod(closure, context);
         if (is_co_yield_ref_ && coro_coords.coro_status_instance)
@@ -660,6 +665,13 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         throw TerminateLoop(TerminateLoopReason::TERMINATE_LOOP_CONTINUE);
+    }
+
+    // Холостой оператор-заполнитель - не делает ничего содержательного.
+    ObjectHolder Pass::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        return ObjectHolder::None();
     }
 
     ClassDefinition::ClassDefinition(ObjectHolder cls) : cls_(move(cls))
@@ -883,7 +895,7 @@ namespace ast
                     is_resume_in_coro = true;
                 }
                 else
-                { // Сплотка исполняется заново, будет создан новый кадр сохранения положения потока управления.
+                { // Блок обработчика исключений исполняется заново, будет создан новый кадр сохранения положения потока управления.
                     workflow_current = coro_status_instance->PushBack({runtime::TryExceptWorkflowPosData{}, this});
                     workflow_try_except = &std::get<runtime::TryExceptWorkflowPosData>(workflow_current->GetData());
                 }

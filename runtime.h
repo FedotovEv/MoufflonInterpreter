@@ -20,12 +20,12 @@ namespace ast
 namespace runtime
 {
     enum MethodParamCheckMode
-    {
-        PARAM_CHECK_NONE = 0,
-        PARAM_CHECK_QUANTITY_EQUAL = 1,
-        PARAM_CHECK_QUANTITY_LESS_EQ = 2,
-        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,
-        PARAM_CHECK_TYPE = 4,
+    { // Тип требуемых проверок.
+        PARAM_CHECK_NONE = 0,                           // Проверок не выполнять.
+        PARAM_CHECK_QUANTITY_EQUAL = 1,                 // Количество фактических параметров должно строго совпадать с указанным.
+        PARAM_CHECK_QUANTITY_LESS_EQ = 2,               // 
+        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,            //
+        PARAM_CHECK_TYPE = 4,                           // Проверять соответствие типа фактического параметра.
         PARAM_CHECK_TYPE_QUANTITY_EQUAL = 5,
         PARAM_CHECK_TYPE_QUANTITY_LESS_EQ = 6,
         PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ = 7
@@ -33,22 +33,23 @@ namespace runtime
 
     enum MethodParamType
     {
-        PARAM_TYPE_ANY = 0,
-        PARAM_TYPE_NUMERIC = 1,
-        PARAM_TYPE_STRING = 2,
-        PARAM_TYPE_LOGICAL = 4,
-        PARAM_TYPE_NONE = 8,
-        PARAM_TYPE_NUMERIC_STRING = 3,
-        PARAM_TYPE_NUMERIC_LOGICAL = 5,
-        PARAM_TYPE_STRING_LOGICAL = 6,
-        PARAM_TYPE_NUMERIC_NONE = 9,
-        PARAM_TYPE_STRING_NONE = 10,
-        PARAM_TYPE_LOGICAL_NONE = 12,
-        PARAM_TYPE_NUMERIC_STRING_NONE = 11,
-        PARAM_TYPE_NUMERIC_LOGICAL_NONE = 13,
-        PARAM_TYPE_STRING_LOGICAL_NONE = 14,
-        PARAM_TYPE_NUMERIC_STRING_LOGICAL = 7,
-        PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = 15
+        PARAM_TYPE_ANY = 0,                             // Контроль типа параметра не выполняется.
+        PARAM_TYPE_NUMERIC = 1,                         // Параметр может быть числовым.
+        PARAM_TYPE_STRING = 2,                          // Параметр может быть строковым.
+        PARAM_TYPE_LOGICAL = 4,                         // Параметр может быть логическим значением.
+        PARAM_TYPE_NONE = 8,                            // Параметр может быть пустым (ничего не содержать или, иначе, содержать значение None).
+        // Следующие значения перечисления предназначены для тех случаев, если фактический параметр может содержать различные типы значений.
+        PARAM_TYPE_NUMERIC_STRING = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING,
+        PARAM_TYPE_NUMERIC_LOGICAL = PARAM_TYPE_NUMERIC | PARAM_TYPE_LOGICAL,
+        PARAM_TYPE_STRING_LOGICAL = PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL,
+        PARAM_TYPE_NUMERIC_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_NONE,
+        PARAM_TYPE_STRING_NONE = PARAM_TYPE_STRING | PARAM_TYPE_NONE,
+        PARAM_TYPE_LOGICAL_NONE = PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
+        PARAM_TYPE_NUMERIC_STRING_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_NONE,
+        PARAM_TYPE_NUMERIC_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
+        PARAM_TYPE_STRING_LOGICAL_NONE = PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
+        PARAM_TYPE_NUMERIC_STRING_LOGICAL = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL,
+        PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE
     };
     
     enum class CommandGenus
@@ -61,7 +62,7 @@ namespace runtime
     };
 
     // Контекст исполнения инструкций Mython
-    class MYTHLON_INTERPRETER_PUBLIC Context
+    class Context
     {
     public:
         // Возвращает поток вывода для команд print.
@@ -89,7 +90,7 @@ namespace runtime
     };
 
     // Базовый класс для всех объектов языка Mython
-    class MYTHLON_INTERPRETER_PUBLIC Object
+    class Object
     {
     public:
         virtual ~Object() = default;
@@ -101,7 +102,7 @@ namespace runtime
 
     class CommonClassInstance;
     // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе
-    class MYTHLON_INTERPRETER_PUBLIC ObjectHolder
+    class ObjectHolder
     {
     public:
         // Создаёт пустое значение
@@ -177,7 +178,7 @@ namespace runtime
 
     // Объект-значение, хранящий значение типа T.
     template <typename T>
-    class MYTHLON_INTERPRETER_PUBLIC ValueObject : public Object
+    class ValueObject : public Object
     {
     public:
         ValueObject(T v) : value_(v)      
@@ -207,7 +208,7 @@ namespace runtime
         T value_;
     };
 
-    class MYTHLON_INTERPRETER_PUBLIC PointerObject : public Object
+    class PointerObject : public Object
     {
     public:
         PointerObject() : object_ptr_(nullptr)
@@ -258,7 +259,7 @@ namespace runtime
     bool IsTrue(const ObjectHolder& object);
 
     // Интерфейс для выполнения действий над объектами Mython
-    class MYTHLON_INTERPRETER_PUBLIC Executable
+    class Executable
     {
     public:
         Executable() = default;
@@ -309,7 +310,7 @@ namespace runtime
     };
 
     // Далее описываются структуры, необходимые для работы с числовыми значениями
-    class MYTHLON_INTERPRETER_PUBLIC Number : public Object
+    class Number : public Object
     {
     public:
         Number(NumberValue v) : value_(v)
@@ -384,7 +385,7 @@ namespace runtime
     bool operator==(const Number& first_op, const Number& second_op);
 
     // Логическое значение
-    class MYTHLON_INTERPRETER_PUBLIC Bool : public ValueObject<bool>
+    class Bool : public ValueObject<bool>
     {
     public:
         using ValueObject<bool>::ValueObject;
@@ -506,7 +507,7 @@ namespace runtime
         std::unordered_multimap<std::string, Method> virtual_method_table_;
     };
 
-    class MYTHLON_INTERPRETER_PUBLIC CommonClassInstance : public Object
+    class CommonClassInstance : public Object
     {
     public:
         void Print(std::ostream& os, Context& context) override = 0;
@@ -592,10 +593,8 @@ namespace runtime
         }
     };
 
-    void MYTHLON_INTERPRETER_PUBLIC CheckMethodParams(Context& context, const std::string& method_name,
-                           MethodParamCheckMode check_mode,
-                           MethodParamType param_type, size_t required_params,
-                           const std::vector<ObjectHolder>& actual_args);
+    void CheckMethodParams(Context& context, const std::string& method_name, MethodParamCheckMode check_mode,
+                           MethodParamType param_type, size_t required_params, const std::vector<ObjectHolder>& actual_args);
 
     /*
     * Классы-хранители состояния (точнее, положения) потока управления программы, позволяющий однозначно восстановить ход ее работы
@@ -792,7 +791,7 @@ namespace runtime
     // с внешним программным комплексом. в который встроен этот скриптовый язык.
     // Вдобавок поместим сюда ещё данные и методы, обеспечивающие поддержку отладки программ с
     // помощью внешнего отладчика.
-    class MYTHLON_INTERPRETER_PUBLIC SimpleContext : public Context
+    class SimpleContext : public Context
     {
     public:
         explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
@@ -831,5 +830,4 @@ namespace runtime
     };
 }  // namespace runtime
 
-void MYTHLON_INTERPRETER_PUBLIC PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure,
-                                               runtime::Context& context);
+void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context);
