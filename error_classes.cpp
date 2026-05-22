@@ -74,6 +74,8 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE:
             throw RuntimeError(ObjectHolder::Own(SyntaxError(msg_num, command_desc, except_text)));
         // Неверная работа со ссылками.
@@ -130,6 +132,8 @@ namespace runtime
         case ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS:
             throw RuntimeError(ObjectHolder::Own(ModuleError(msg_num, command_desc, except_text)));

@@ -864,8 +864,14 @@ namespace
 
             if (tok.Is<ITokenType::CoYield>())
             {
-                if (exec_factory_.CurrentMethod())  // Наличие оператора co_yield делает метод сопрограммой.
-                    exec_factory_.CurrentMethod()->is_coroutine = true;
+                if (runtime::Method* current_method = exec_factory_.CurrentMethod())
+                {  // Наличие оператора co_yield делает метод сопрограммой.
+                    if (current_method->name.substr(0, 2) == "__")
+                        // Специальные методы (точки настройки типа __init__, __add__, __eq__, и.т.д.), имена которых
+                        // начинаются с "__", не могут быть сопрограммами.
+                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE);
+                    current_method->is_coroutine = true;
+                }
 
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::CoYield(ParseTest()));

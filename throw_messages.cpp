@@ -69,6 +69,11 @@ namespace runtime
         {ThrowMessageNumber::THRM_RAISE_CALL, "Принудительный вызов исключения оператором raise"s},
         {ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR, "Объект-уточнитель не является классом-предком объекта"s},
         {ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD, "Неоднозначность перегрузки методов"s},
+        //
+        {ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE, "Метод не является сопрограммой"s},
+        {ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE, "Специальный метод не может быть сопрограммой"s},
+        {ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS, "Конструктор объекта-втыкалы не имеет аргументов"s},
+        //
         {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s}
     };
 } // namespace runtime

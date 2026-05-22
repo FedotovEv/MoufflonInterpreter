@@ -23,8 +23,8 @@ namespace runtime
     { // Тип требуемых проверок.
         PARAM_CHECK_NONE = 0,                           // Проверок не выполнять.
         PARAM_CHECK_QUANTITY_EQUAL = 1,                 // Количество фактических параметров должно строго совпадать с указанным.
-        PARAM_CHECK_QUANTITY_LESS_EQ = 2,               // 
-        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,            //
+        PARAM_CHECK_QUANTITY_LESS_EQ = 2,               // Количество параметров может быть менее или равным указанному.
+        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,            // Количество параметров может быть более или равным указанному.
         PARAM_CHECK_TYPE = 4,                           // Проверять соответствие типа фактического параметра.
         PARAM_CHECK_TYPE_QUANTITY_EQUAL = 5,
         PARAM_CHECK_TYPE_QUANTITY_LESS_EQ = 6,
