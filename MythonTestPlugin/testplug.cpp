@@ -12,191 +12,607 @@
 #include <cstdio>
 
 using namespace std;
-using namespace runtime;
-using namespace std;
 
-namespace ast
-{
-    NewPlugin::NewPlugin(std::vector<std::unique_ptr<Statement>>&& args) : args_(move(args))
-    {
-        if (args_.size())
-            ThrowRuntimeError(this, "Конструктор класса TestPlugin не должен иметь параметров"s);
-    }
+std::unordered_map<uintptr_t, PluginInstance> object_table;
 
-    runtime::ObjectHolder NewPlugin::Execute(runtime::Closure& closure, runtime::Context& context)
-    {
-        PrepareExecute(this, closure, context);
-        return ObjectHolder::Own(runtime::PluginInstance());
-    }
-} // namespace ast
+constexpr const char plugin_init_method_name[] = PLUGIN_INIT_METHOD;
+constexpr const char plugin_destroy_method_name[] = PLUGIN_DESTROY_METHOD;
+constexpr const char plugin_str_function_name[] = PLUGIN_STR_FUNCTION_METHOD;
+constexpr const char plugin_add_method_name[] = PLUGIN_ADD_METHOD;
 
-static PluginListType plugin_list = {{"CreatePlugin"s, "test"s}};
+constexpr double ZERO_TOLERANCE = 1E-9; // Предел, все числа ниже которого считаются нулём.
 
 extern "C"
 {
-    unique_ptr<ast::Statement> CreatePlugin(vector<unique_ptr<ast::Statement>> args)
+    MYTHLON_MODULE_EXPORT const char* GetPluginsInfoFunction(uint32_t load_level)
     {
-        return make_unique<ast::NewPlugin>(ast::NewPlugin(move(args)));
+        static constexpr const char* PLUGIN_INFO_FUNC_LIST[] =
+        {
+            "GetPluginInfo",    // Имя информирующей функции для единственной втыкалы этого модуля.
+            ""                  // Обязательный пустой закрывающий элемент списка.
+        };
+
+        return PLUGIN_INFO_FUNC_LIST[0];
     }
     
-    PluginListType* LoadPluginList()
+    // Информирующая функция (информатор) для данной втыкалы.
+    MYTHLON_MODULE_EXPORT int32_t GetPluginInfo(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length)
     {
-        return &plugin_list;
+        static constexpr const char PLUGIN_NAME[] = "TestPlugin";
+        static constexpr const char EXECUTE_FUNCTION_NAME[] = "CallPluginMethod";
+        static constexpr const char* PLUGIN_CLASS_METHODS_LIST[] =
+        {   // Список существующих публичных методов класса втыкалы. Специальные методы (инициализатор, компаратор, конвертер в строку, и.т.д.)
+            // сюда тоже можно включить, что мы и сделаем.
+            plugin_init_method_name,      // Стандартное имя инициализирующего метода класса втыкалы (конструктора).
+            plugin_str_function_name,     // Стандартное имя строкофикатора - преобразователя текущего состояния объекта втыкалы в строку.
+            "add_all",
+            "AddAll",
+            "find_zero",
+            "FindZero",
+            "find_char",
+            "FindChar",
+            "ston",
+            "Ston",
+            "print_hello",
+            "PrintHello",
+            ""  // Обязательный пустой завершающий элемент списка.
+        };
+
+        switch (static_cast<PluginInfoRequest>(request_type))
+        {
+            case PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME:           // Получение имени втыкалы.
+                if (target_length < static_cast<int32_t>(std::size(PLUGIN_NAME)))
+                    return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL);
+
+                strcpy((char*)target_area, PLUGIN_NAME);
+                return static_cast<int32_t>(std::size(PLUGIN_NAME));
+            case PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_NAME:    // Получение имени функции, выполняющей вызов методов данной втыкалы.
+                if (target_length < static_cast<int32_t>(std::size(EXECUTE_FUNCTION_NAME)))
+                    return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL);
+
+                strcpy((char*)target_area, EXECUTE_FUNCTION_NAME);
+                return static_cast<int32_t>(std::size(EXECUTE_FUNCTION_NAME));
+            case PluginInfoRequest::PLUG_REQUEST_METHOD_LIST:           // Список имён методов класса втыкалы, доступных для вызова.
+            {
+                // Рассчитаем полную длину списка, который нам нужно возвратить в ответ на данный запрос.
+                size_t total_data_size = 0;
+                for (const char* method_name : PLUGIN_CLASS_METHODS_LIST)
+                    total_data_size += (strlen(method_name) + 1);
+                if (target_length < total_data_size)
+                    return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL);
+
+                // Длина приёмного буфера достаточна.
+                for (const char* method_name : PLUGIN_CLASS_METHODS_LIST)
+                {
+                    size_t method_name_length = strlen(method_name) + 1;
+                    memcpy(target_area, method_name, method_name_length);
+                    target_area = reinterpret_cast<char*>(target_area) + method_name_length;
+                }
+                return static_cast<int32_t>(total_data_size);
+            }
+            case PluginInfoRequest::PLUG_REQUEST_METHOD_PARAMS:  // Характеристики параметров некоторого метода, предоставляемого втыкалой для обращения.
+            {
+                if (!source_area)
+                    return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
+                std::string req_method_name(reinterpret_cast<const char*>(source_area));
+                // 
+                std::pair<size_t, PluginInstance::CopyCharmResult> copy_result =
+                    PluginInstance::CopyCharm(req_method_name, target_area, static_cast<size_t>(target_length));
+                if (copy_result.second == PluginInstance::CopyCharmResult::COPY_CHARM_OK)
+                { // Копирование данных на выход завершилось успешно. Как результат всей функции возвращаем длину скопированных данных.
+                    return static_cast<int32_t>(copy_result.first);
+                }
+                else
+                { // При копировании произошла какая-то ошибка. Транслируем ошибку типа PluginInstance::CopyCharmResult в ошибку класса
+                  // PluginErrorCode, которую и возвращаем в качестве результата работы функции.
+                    switch (copy_result.second)
+                    {
+                    case PluginInstance::CopyCharmResult::COPY_CHARM_METHOD_NOT_FOUND:
+                        return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_METHOD_NOT_FOUND);
+                    case PluginInstance::CopyCharmResult::COPY_CHARM_BUFFER_TOO_SMALL:
+                        return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL);
+                    default:
+                        return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_INVALID_REQUEST);
+                    }
+                }
+            }
+            default:
+                return static_cast<int32_t>(PluginErrorCode::PLUGIN_ERR_INVALID_REQUEST);
+        }
+    }
+    
+    // Её вызывная функция, служащая для обращения к методам класса втыкалы.
+    MYTHLON_MODULE_EXPORT void CallPluginMethod(const char* method_name, uintptr_t plugin_method_call_id)
+    {
+        // Получение условного идента текущего экземпляра класса выткалы, к которому обращён вызов.
+        uintptr_t plugin_object_id = PluginGetInstanceId(plugin_method_call_id);
+        // Поиск этого экземпляра в хэш-таблице - хранилище объектов-втыкал.
+        std::unordered_map<uintptr_t, PluginInstance>::iterator object_table_it = object_table.find(plugin_object_id);
+        if (object_table_it == object_table.end())
+            // Экземпляр объекта втыкалы, к методу которого обращён вызов, пока ещё не существует. Нужно его создать.
+            object_table_it = object_table.emplace(plugin_object_id, PluginInstance()).first;
+
+        if (strcmp(method_name, plugin_destroy_method_name) == 0)
+        { // Это метод-деструктор. Такой вызов не переадресуется объекту, а вместо этого объект просто уничтожается.
+            object_table.erase(object_table_it);
+            return;
+        }
+
+        // Для всех прочих методов они переадресуются внутренним функциям класса с помощью функции-члена Call().
+        object_table_it->second.Call(method_name, plugin_method_call_id);
     }
 }
 
-namespace runtime
+const unordered_map<string_view, PluginInstance::PluginCallMethod> PluginInstance::plugin_method_table_
 {
-    const unordered_map<string_view, PluginInstance::PluginCallMethod> PluginInstance::plugin_method_table_
-    {
-        {"add_all"sv, &PluginInstance::MethodTestAddAll},
-        {"AddAll"sv, &PluginInstance::MethodTestAddAll},
-        {"find_zero"sv, &PluginInstance::MethodTestFindZero},
-        {"FindZero"sv, &PluginInstance::MethodTestFindZero},
-        {"find_char"sv, &PluginInstance::MethodTestFindChar},
-        {"FindChar"sv, &PluginInstance::MethodTestFindChar},
-        {"ston"sv, &PluginInstance::MethodTestSton},
-        {"Ston"sv, &PluginInstance::MethodTestSton},
-        {"print_hello"sv, &PluginInstance::MethodTestPrintHello},
-        {"PrintHello"sv, &PluginInstance::MethodTestPrintHello}
-    };
+    // Специальные стандартные методы Муфлон-классов.
+    {{plugin_init_method_name, std::size(plugin_init_method_name)}, &PluginInstance::MethodInit},
+    {{plugin_str_function_name, std::size(plugin_str_function_name)}, &PluginInstance::MethodStringize},
+    // Прочие свободно определяемые методы класса втыкалы.
+    {"add_all"sv, &PluginInstance::MethodTestAddAll},
+    {"AddAll"sv, &PluginInstance::MethodTestAddAll},
+    {"find_zero"sv, &PluginInstance::MethodTestFindZero},
+    {"FindZero"sv, &PluginInstance::MethodTestFindZero},
+    {"find_char"sv, &PluginInstance::MethodTestFindChar},
+    {"FindChar"sv, &PluginInstance::MethodTestFindChar},
+    {"ston"sv, &PluginInstance::MethodTestSton},
+    {"Ston"sv, &PluginInstance::MethodTestSton},
+    {"print_hello"sv, &PluginInstance::MethodTestPrintHello},
+    {"PrintHello"sv, &PluginInstance::MethodTestPrintHello}
+};
 
-    const std::unordered_map<std::string_view, pair<size_t, size_t>> PluginInstance::plugin_method_argument_count_
+const std::unordered_map<std::string_view, PluginInstance::ParamsCharm> PluginInstance::plugin_method_params_charm_
+{
+    // Стандартные специальные методы в нашем случае не принимают никаких параметров.
     {
-        {"add_all"sv, {0, UINT_MAX}},
-        {"AddAll"sv, {0, UINT_MAX}},
-        {"find_zero"sv, {0, UINT_MAX}},
-        {"FindZero"sv, {0, UINT_MAX}},
-        {"find_char"sv, {2, 2}},
-        {"FindChar"sv, {2, 2}},
-        {"ston"sv, {1, 1}},
-        {"Ston"sv, {1, 1}},
-        {"print_hello"sv, {0, 0}},
-        {"PrintHello"sv, {0, 0}}
-    };
-
-    void PluginInstance::Print(ostream& os, Context& context)
+        {plugin_init_method_name, std::size(plugin_init_method_name)},
+        {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
+    },
     {
-        os << "TestPlugin:";
+        {plugin_str_function_name, std::size(plugin_str_function_name)},
+        {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
+    },
+    //
+    {"add_all"sv, {.params_definer = {.arg_count_min = 0, .arg_count_max = UINT_MAX}}},     // Допускается любое количество параметров любого типа.
+    {"AddAll"sv, {.params_definer = {.arg_count_min = 0, .arg_count_max = UINT_MAX}}},      // Аналогично.
+    {"find_zero"sv, {.params_definer = {.arg_count_min = 0, .arg_count_max = UINT_MAX}}},   // Аналогично.
+    {"FindZero"sv, {.params_definer = {.arg_count_min = 0, .arg_count_max = UINT_MAX}}},    // Аналогично.
+    {
+        "find_char"sv,  // Строго два строковых аргумента.
+        {.params_definer = {.arg_count_min = 2, .arg_count_max = 2, .check_mode = MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
+         .params_type = {MethodParamType::PARAM_TYPE_STRING, MethodParamType::PARAM_TYPE_STRING}}
+    },
+    {
+        "FindChar"sv,  // Также точно два строковых аргумента.
+        {.params_definer = {.arg_count_min = 2, .arg_count_max = 2, .check_mode = MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
+         .params_type = {MethodParamType::PARAM_TYPE_STRING, MethodParamType::PARAM_TYPE_STRING}}
+    },
+    {
+        "ston"sv,   // Строго один строковый параметр.
+        {.params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 1},
+         .params_type = {MethodParamType::PARAM_TYPE_STRING}}
+    },
+    {
+        "Ston"sv,   // Аналогично.
+        {.params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 1},
+         .params_type = {MethodParamType::PARAM_TYPE_STRING}}
+    },
+    {
+        "print_hello"sv,    // Не принимает параметров.
+        {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
+    },
+    {
+        "PrintHello"sv,     // Точно так же.
+        {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
     }
+};
 
-    ObjectHolder PluginInstance::MethodTestAddAll(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                                  Context& context)
+// Инициализирующий метод - конструктор. В нашем случае он параметров не принимает.
+void PluginInstance::MethodInit(uintptr_t plugin_method_call_id)
+{
+    if (PluginParamsCount(plugin_method_call_id) != 0)
+        // Есть какие-то аргументы. Для нас это будет выступать как ошибка.
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
+                              "Конструктор этого класса не должен иметь параметров");
+}
+
+// Застроковщик. Возвращает в виде строки текущее состояние объекта. Параметров не принимает.
+void PluginInstance::MethodStringize(uintptr_t plugin_method_call_id)
+{
+
+}
+
+// Возвращает число (целое либо дробное), равное сумме всех аргументов функции. Суммируются числа или строки, содержащие числа,
+// в любой комбинации. Аргументы любого другого типа вызывают ошибку времени исполнения.
+void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
+{
+    int32_t int_result = 0;
+    double double_result = 0.0;
+    bool is_double_summ = false;
+    bool is_arg_error = false;
+    //
+    constexpr size_t STR_BUFFER_SIZE = 128;
+    char str_buffer[STR_BUFFER_SIZE];
+
+    int32_t args_count = PluginParamsCount(plugin_method_call_id);
+    for (int32_t arg_index = 0; arg_index < args_count; ++arg_index)
     {
-        CheckMethodParams(context, "AddAll"s, MethodParamCheckMode::PARAM_CHECK_TYPE,
-                          MethodParamType::PARAM_TYPE_NUMERIC, 0, actual_args);
-
-        int int_result = 0;
-        double double_result = 0.0;
-        bool is_double_arg = false;
-        for (auto& cur_arg : actual_args)
+        ObjectTypes arg_type = static_cast<ObjectTypes>(PluginParamType(plugin_method_call_id, arg_index));
+        switch (arg_type)
         {
-            if (!is_double_arg && !cur_arg.TryAs<Number>()->IsInt())
+            case ObjectTypes::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
             {
-                is_double_arg = true;
-                double_result = int_result;
+                bool arg_bool;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_bool, sizeof(bool)) < static_cast<int32_t>(sizeof(bool)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в логическое поле arg_bool.
+                if (is_double_summ)
+                    double_result += static_cast<double>(arg_bool);
+                else
+                    int_result += static_cast<int32_t>(arg_bool);
+                break;
             }
+            case ObjectTypes::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
+            {
+                int32_t arg_intval;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_intval, sizeof(int32_t)) < static_cast<int32_t>(sizeof(int32_t)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в целочисленное поле arg_intval.
+                if (is_double_summ)
+                    double_result += static_cast<double>(arg_intval);
+                else
+                    int_result += arg_intval;
+                break;
+            }
+            case ObjectTypes::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
+            {
+                double arg_doubleval;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_doubleval, sizeof(double)) < static_cast<int32_t>(sizeof(double)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в поле числа двойной точности arg_doubleval.
+                if (!is_double_summ)
+                { // Если очередной аргумент дробный, а сумма ранее вычислялась, как целая, то переводим её расчёт в "дробный" режим.
+                    double_result = static_cast<double>(int_result);
+                    is_double_summ = true;
+                }
+                double_result += arg_doubleval;
+                break;
+            }
+            case ObjectTypes::OBJECT_TYPE_STRING:   // Символьная строка std::string.
+            {
+                int32_t arg_string_size = PluginParamStringSize(plugin_method_call_id, arg_index);
+                if (arg_string_size >= STR_BUFFER_SIZE)
+                {   // Слишком длинная строка с заведомо недопустимым содержимым.
+                    is_arg_error = true;
+                    break;
+                }
 
-            if (is_double_arg)
-                double_result += cur_arg.TryAs<Number>()->GetDoubleValue();
-            else
-                int_result += cur_arg.TryAs<Number>()->GetIntValue();
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, str_buffer, arg_string_size) != arg_string_size)
+                {   // Какая-то проблема с извлечением строки.
+                    is_arg_error = true;
+                    break;
+                }
+                str_buffer[arg_string_size] = 0;    // Превращаем строку в C-строку путём вставки оконечного нуля.
+
+                char* val_end_pos;
+                int32_t arg_intval = strtol(str_buffer, &val_end_pos, 10);
+                if (val_end_pos - str_buffer != arg_string_size)
+                { // Это не целое число (полностью преобразовать его как целое у нас не получилось). Попробуем разобрать его как дробное.
+                    double arg_doubleval = strtod(str_buffer, &val_end_pos);
+                    if (val_end_pos - str_buffer == arg_string_size)
+                    { // Это корректное дробное число.
+                        if (!is_double_summ)
+                        { // Если очередной аргумент дробный, а сумма ранее вычислялась, как целая, то переводим её расчёт в "дробный" режим.
+                            double_result = static_cast<double>(int_result);
+                            is_double_summ = true;
+                        }
+                        double_result += arg_doubleval;
+                    }
+                    else
+                    { // Полагать аргумент верным дробным числом тоже, увы, не получается. Возвращаем ошибку.
+                        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                                              "Строка не содержит корректного числа");
+                        return;
+                    }
+                }
+                else
+                { // Это целое число.
+                    if (is_double_summ)
+                        double_result += static_cast<double>(arg_intval);
+                    else
+                        int_result += arg_intval;
+                }
+                break;
+            }
+            default:    // Неподдерживаемый тип аргумента.
+            {
+                PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
+                                      "Суммирование значений такого типа не поддерживается");
+                return;
+            }
         }
+
+        if (is_arg_error)
+        { // Произошёл сбой при получении очередного аргумента функции.
+            PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                                  "Сбой при извлечении аргумента");
+            return;
+        }
+    }
         
-        if (is_double_arg)
-            return ObjectHolder::Own(Number(double_result));
-        else
-            return ObjectHolder::Own(Number(int_result));
-    }
-    
-    ObjectHolder PluginInstance::MethodTestFindZero(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                                    Context& context)
-    {
-        CheckMethodParams(context, "FindZero"s, MethodParamCheckMode::PARAM_CHECK_TYPE,
-                          MethodParamType::PARAM_TYPE_NUMERIC, 0, actual_args);
+    if (is_double_summ)
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE),
+                             &double_result, static_cast<int32_t>(sizeof(double)));
+    else
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                             &int_result, static_cast<int32_t>(sizeof(int32_t)));
+}
 
-        int zero_element_index = 0;
-        for (auto& cur_arg : actual_args)
+// Ищет первый встретившийся нуль в последовательности аргументов функции. Возвращает индекс первого найденного нуля.
+// Анализируются только числа - целые либо дробные. Встреча фактического аргумента любого другого типа трактуется как ошибка.
+void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
+{
+    bool is_arg_error = false;
+    bool is_zero_found = false;
+
+    int32_t args_count = PluginParamsCount(plugin_method_call_id);
+    for (int32_t arg_index = 0; arg_index < args_count; ++arg_index)
+    {
+        ObjectTypes arg_type = static_cast<ObjectTypes>(PluginParamType(plugin_method_call_id, arg_index));
+        switch (arg_type)
         {
-            if (cur_arg.TryAs<Number>()->IsInt())
+            case ObjectTypes::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
             {
-                if (cur_arg.TryAs<Number>()->GetIntValue() == 0)
-                    return ObjectHolder::Own(Number(zero_element_index));
+                bool arg_bool;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_bool, sizeof(bool)) < static_cast<int32_t>(sizeof(bool)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в логическое поле arg_bool.
+                if (!arg_bool)
+                    is_zero_found = true;
+                break;
             }
-            else
+            case ObjectTypes::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
             {
-                if (abs(cur_arg.TryAs<Number>()->GetDoubleValue()) < ZERO_TOLERANCE)
-                    return ObjectHolder::Own(Number(zero_element_index));
+                int32_t arg_intval;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_intval, sizeof(int32_t)) < static_cast<int32_t>(sizeof(int32_t)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в целочисленное поле arg_intval.
+                if (arg_intval == 0)
+                    is_zero_found = true;
+                break;
             }
-            ++zero_element_index;
+            case ObjectTypes::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
+            {
+                double arg_doubleval;
+                if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_doubleval, sizeof(double)) < static_cast<int32_t>(sizeof(double)))
+                {   // Считать логический аргумент не получилось. Далее по флагу is_arg_error будет выставлена ошибка периода исполннения.
+                    is_arg_error = true;
+                    break;
+                }
+                // Очередной операнд для суммирования считан успешно в поле числа двойной точности arg_doubleval.
+                if (fabs(arg_doubleval) < ZERO_TOLERANCE)
+                    is_zero_found = true;
+                break;
+            }
+            default:     // Неподдерживаемый тип аргумента.
+            {
+                PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
+                                      "Поиск нуля среди значений такого типа не поддерживается");
+                return;
+            }
         }
-        
-        return ObjectHolder::None();
-    }
-    
-    ObjectHolder PluginInstance::MethodTestFindChar(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                                    Context& context)
-    {
-        CheckMethodParams(context, "FindChar"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
-                          MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
-        string match_string = actual_args[1].TryAs<String>()->GetValue();
-        char match_char;
-        if (match_string.empty())
-            return ObjectHolder::Own(Number(0));
-        else
-            match_char = match_string[0];
+        if (is_arg_error)
+        { // Произошёл сбой при получении очередного аргумента функции.
+            PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                                  "Сбой при извлечении аргумента");
+            return;
+        }
 
-        int char_position = actual_args[0].TryAs<String>()->GetValue().find(match_char);
-        return ObjectHolder::Own(Number(char_position));
-    }
-    
-    ObjectHolder PluginInstance::MethodTestSton(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                                Context& context)
-    {
-        CheckMethodParams(context, "Ston"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
-                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
-
-        string string_arg = actual_args[0].TryAs<String>()->GetValue();
-        int int_result = stoi(string_arg);
-        double double_result = stod(string_arg);
-        if (static_cast<double>(int_result) == double_result)
-            return ObjectHolder::Own(Number(int_result));
-        else
-            return ObjectHolder::Own(Number(double_result));
-    }
-    
-    ObjectHolder PluginInstance::MethodTestPrintHello(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                                      Context& context)
-    {
-        CheckMethodParams(context, "PrintHello"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-
-        string hello_string = "Hello"s;
-        context.GetOutputStream() << hello_string;
-        return ObjectHolder::Own(String(move(hello_string)));
-    }
-
-    ObjectHolder PluginInstance::Call
-        (const string& method_name, const vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
-    {
-        if (plugin_method_table_.count(method_name))
-            return (this->*plugin_method_table_.at(method_name))(method_name, actual_args, context);
-        else
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
-    }
-
-    bool PluginInstance::HasMethod(const string& method_name, size_t argument_count) const
-    {
-        if (plugin_method_argument_count_.count(method_name))
+        if (is_zero_found)
         {
-            auto argument_org_count = plugin_method_argument_count_.at(method_name);
-            return argument_count >= argument_org_count.first &&
-                   argument_count <= argument_org_count.second;
-        }
-        else
-        {
-            return false;
+            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                                 &arg_index, static_cast<int32_t>(sizeof(int32_t)));
+            return;
         }
     }
-} //namespace runtime
+
+    // Нулевого члена в последовательности аргументов не найдено. Возвращаем -1.
+    int32_t arg_index = -1;
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                         &arg_index, static_cast<int32_t>(sizeof(int32_t)));
+}
+
+// Функция имеет два строковых формальных аргумента. Выполняет поиск положения первой буквы (символа) второй строки в первой. Возвращает целое
+// число, содержащее номер этой позиции, либо std::numeric_limits<int>::max(), если такого символа в первом аргументе не содержится.
+// Нестроковые аргументы порождают ошибку исполнения.
+void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
+{
+    if (PluginParamsCount(plugin_method_call_id) != 2)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
+                              "Метод принимает строго два строковых параметра");
+        return;
+    }
+
+    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING) ||
+        PluginParamType(plugin_method_call_id, 1) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING))
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
+                              "Метод принимает только строковые параметры");
+        return;
+    }
+
+    int32_t arg_0_string_size = PluginParamStringSize(plugin_method_call_id, 0);
+    int32_t arg_1_string_size = PluginParamStringSize(plugin_method_call_id, 1);
+    if (arg_0_string_size < 0 || arg_1_string_size < 0)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                              "Сбой при извлечении длины параметров");
+        return;
+    }
+
+    std::unique_ptr<std::string> arg_0_ptr(std::make_unique<std::string>(arg_0_string_size, '\0'));
+    std::unique_ptr<std::string> arg_1_ptr(std::make_unique<std::string>(arg_1_string_size, '\0'));
+    if (PluginParamGetValue(plugin_method_call_id, 0, arg_0_ptr->data(), arg_0_string_size) != arg_0_string_size ||
+        PluginParamGetValue(plugin_method_call_id, 1, arg_1_ptr->data(), arg_1_string_size) != arg_1_string_size)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                              "Сбой при извлечении содержимого параметров");
+        return;
+    }
+
+    size_t char_position = std::string::npos;
+    if (!arg_1_ptr->empty())
+        char_position = (*arg_0_ptr).find((*arg_1_ptr)[0]);
+    
+    // -1 - значение, возвращаемое при неуспешном поиске.
+    int32_t int_char_position = char_position != std::string::npos ? static_cast<int32_t>(char_position) : -1;
+
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                         &int_char_position, static_cast<int32_t>(sizeof(int32_t)));
+}
+
+// Функция ston(string_argument) - преобразование строки в число (целое либо дробное с плавающей точкой). Нестроковый аргумент - возврат ошибки
+// периода исполнения.
+void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
+{
+    if (PluginParamsCount(plugin_method_call_id) != 1)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
+                              "Метод принимает строго один строковый параметр");
+        return;
+    }
+
+    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING))
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
+                              "Метод принимает только строковый параметр");
+        return;
+    }
+
+    int32_t arg_0_string_size = PluginParamStringSize(plugin_method_call_id, 0);
+    if (arg_0_string_size < 0)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                              "Сбой при извлечении длины параметров");
+        return;
+    }
+
+    std::unique_ptr<std::string> arg_0_ptr(std::make_unique<std::string>(arg_0_string_size, '\0'));
+    if (PluginParamGetValue(plugin_method_call_id, 0, arg_0_ptr->data(), arg_0_string_size) != arg_0_string_size)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                              "Сбой при извлечении содержимого параметров");
+        return;
+    }
+
+    try
+    {
+        int32_t int_result = static_cast<int32_t>(stoi(*arg_0_ptr));
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                             &int_result, static_cast<int32_t>(sizeof(int32_t)));
+        return;
+    }
+    catch (...)
+    {}
+
+    try
+    {
+        double double_result = stod(*arg_0_ptr);
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE),
+                             &double_result, static_cast<int32_t>(sizeof(double)));
+        return;
+    }
+    catch(...)
+    {}
+
+    // Обе функции преобразования строки в число (stoi() и stod()) привели к ошибке при работе.
+    PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                          "Строка не содержит корректного числа");
+}
+
+// Функция не принимает аргументов, печатает и возвращает как результат строку "Hello".
+void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
+{
+    if (PluginParamsCount(plugin_method_call_id) != 0)
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
+                              "Метод не принимает никаких параметров");
+        return;
+    }
+
+    std::string hello_string = "Hello"s;
+
+
+    context.GetOutputStream() << hello_string;
+    
+
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING),
+                         hello_string.data(), static_cast<int32_t>(hello_string.size()));
+}
+
+void PluginInstance::Call(const char* method_name, uintptr_t plugin_method_call_id)
+{
+    if (plugin_method_table_.count(method_name))
+        return (this->*plugin_method_table_.at(method_name))(plugin_method_call_id);
+    else
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_METHOD_NOT_FOUND), "Метод не найден");
+}
+
+std::pair<size_t, PluginInstance::CopyCharmResult> PluginInstance::CopyCharm
+    (const std::string& req_method_name, void* target_area, size_t target_area_size)
+{
+    if (PluginInstance::plugin_method_params_charm_.count(req_method_name))
+    {
+        const ParamsCharm& req_method_charm = plugin_method_params_charm_.at(req_method_name);
+        size_t total_data_length =
+            sizeof(PluginMethodDefiner) + static_cast<size_t>(req_method_charm.params_definer.param_types_count) * sizeof(uint32_t);
+        if (target_area_size < total_data_length)
+            return {0, CopyCharmResult::COPY_CHARM_BUFFER_TOO_SMALL};
+
+        // Места в приёмном буфере достаточно. Переносим туда сначала блок фиксированной структуры PluginMethodDefiner, а затем элементы
+        // массива MethodParamType.
+        memcpy(target_area, &req_method_charm.params_definer, sizeof(PluginMethodDefiner));
+        // method_params_count_real - действительное количество типовых описателей аргументов, которые нужно перенести в приёмную область
+        // из массива req_method_charm.params_type.
+        size_t method_params_count_real =
+            min(static_cast<size_t>(req_method_charm.params_definer.param_types_count), req_method_charm.params_type.size());
+        // Переносим на выход основную часть элементов MethodParamType из массива req_method_charm.params_type.
+        target_area = reinterpret_cast<char*>(target_area) + sizeof(PluginMethodDefiner);
+        memcpy(target_area, req_method_charm.params_type.data(), method_params_count_real * sizeof(uint32_t));
+        // Если в req_method_charm.params_type элементов почему-то не хватает (хотя такого быть никогда и не должно), дополним приёмную
+        // область заполнителями.
+        if (method_params_count_real < static_cast<size_t>(req_method_charm.params_definer.param_types_count))
+        {
+            target_area = reinterpret_cast<char*>(target_area) + method_params_count_real * sizeof(uint32_t);
+            uint32_t params_type_filler = static_cast<uint32_t>(MethodParamType::PARAM_TYPE_ANY);
+            while (method_params_count_real < static_cast<size_t>(req_method_charm.params_definer.param_types_count))
+            {
+                memcpy(target_area, &params_type_filler, sizeof(uint32_t));
+                target_area = reinterpret_cast<char*>(target_area) + sizeof(uint32_t);
+                ++method_params_count_real;
+            }
+        }
+        return {total_data_length, CopyCharmResult ::COPY_CHARM_OK};
+    }
+    else
+    {
+        return {0, CopyCharmResult::COPY_CHARM_METHOD_NOT_FOUND};
+    }
+}

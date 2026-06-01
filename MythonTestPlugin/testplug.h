@@ -16,67 +16,52 @@
     #define MYTHLON_MODULE_EXPORT
 #endif
 
-namespace runtime
-{
-    class PluginInstance
-    { // Экземпляр "двоичного дополнения МУФЛОНа" - специального загружаемого объекта с предопределенным
-      // набором методов.
-    public:
+#define MYTHLON_PLUGIN
+#include "plugin_helpers.h"
 
-        //using PluginCallMethod = ObjectHolder(PluginInstance::*)(const std::string&, const std::vector<ObjectHolder>&, Context&);
-        
-        using PluginCallMethod = intptr_t(PluginInstance::*)(intptr_t, intptr_t, intptr_t);
+class PluginInstance
+{ // Экземпляр "двоичного дополнения МУФЛОНа" - специального загружаемого объекта с предопределенным набором методов.
+public:       
+    using PluginCallMethod = void(PluginInstance::*)(uintptr_t);
 
-        PluginInstance() = default;
-        void Print(intptr_t ostream, intptr_t context);
-
-        intptr_t Call(intptr_t method, intptr_t actual_args, intptr_t context, intptr_t parent_name = 0);
-        bool HasMethod(intptr_t method_name, size_t argument_count) const;
-
-    private:
-        static const std::unordered_map<std::string_view, PluginCallMethod> plugin_method_table_;
-        static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> plugin_method_argument_count_;
-
-        // Обработчики методов класса двоичного дополнения МУФЛОНа
-        intptr_t MethodTestAddAll(const std::string& method, const std::vector<intptr_t>& actual_args,
-                                  intptr_t context);
-        intptr_t MethodTestFindZero(const std::string& method, const std::vector<intptr_t>& actual_args,
-                                    intptr_t context);
-        intptr_t MethodTestFindChar(const std::string& method, const std::vector<intptr_t>& actual_args,
-                                    intptr_t context);
-        intptr_t MethodTestSton(const std::string& method, const std::vector<intptr_t>& actual_args,
-                                intptr_t context);
-        intptr_t MethodTestPrintHello(const std::string& method, const std::vector<intptr_t>& actual_args,
-                                      intptr_t context);
-    };
-} // namespace runtime
-
-namespace ast
-{
-    // Класс NewPlugin - фабричный класс, создающий рабочий объект данной "втыкалы" - экземпляр основного ее класса PluginInstance.
-    class NewPlugin
+    PluginInstance() = default;
+    void Call(const char* method_name, uintptr_t plugin_method_call_id);
+    enum class CopyCharmResult
     {
-    public:
-        NewPlugin(const NewPlugin&) = delete;
-        NewPlugin(NewPlugin&&) = default;
-        NewPlugin(const std::vector<intptr_t>& args);
-        NewPlugin& operator=(const NewPlugin&) = delete;
-        NewPlugin& operator=(NewPlugin&&) = default;
-        // Возвращает объект, содержащий значение типа PluginInstance,
-        // представляющее собой созданный экземпляр специального объекта двоичного дополнения интерпретатора МУФЛОНа.
-        intptr_t Execute(intptr_t closure, intptr_t context);
-
-    private:
-        std::vector<intptr_t> args_;
+        COPY_CHARM_OK = 0,
+        COPY_CHARM_METHOD_NOT_FOUND,
+        COPY_CHARM_BUFFER_TOO_SMALL
     };
+    static std::pair<size_t, CopyCharmResult> CopyCharm(const std::string& req_method_name, void* target_area, size_t target_area_size);
 
-    std::unordered_map<intptr_t, runtime::PluginInstance> plugin_instance_storage;
-    intptr_t CreateNewPlugin(intptr_t args_list_handle);
+private:
+    static const std::unordered_map<std::string_view, PluginCallMethod> plugin_method_table_;
 
-} //namespace ast
+    struct ParamsCharm
+    {
+        PluginMethodDefiner params_definer;          // Количественная характеристика списка фактических параметров.
+        std::vector<MethodParamType> params_type;    // Типовое описание каждого фактического параметра, если оно используется.
+    };
+    static const std::unordered_map<std::string_view, ParamsCharm> plugin_method_params_charm_;
+
+    // Обработчики методов класса двоичного дополнения МУФЛОНа
+    void MethodInit(uintptr_t plugin_method_call_id);
+    void MethodStringize(uintptr_t plugin_method_call_id);
+    void MethodTestAddAll(uintptr_t plugin_method_call_id);
+    void MethodTestFindZero(uintptr_t plugin_method_call_id);
+    void MethodTestFindChar(uintptr_t plugin_method_call_id);
+    void MethodTestSton(uintptr_t plugin_method_call_id);
+    void MethodTestPrintHello(uintptr_t plugin_method_call_id);
+};
 
 extern "C"
 {
-    MYTHLON_MODULE_EXPORT intptr_t CreatePlugin(intptr_t args);
-    MYTHLON_MODULE_EXPORT intptr_t LoadPluginList();
+    // Головная функция с предопределённым и фиксированным именем, предоставляющая список имён информирующих функций, по одной для
+    // каждой втыкалы, существующей в составе данной библиотеки. Так как у нас втыкала в библиотеке всего одна, то и список имён будет состоять только из
+    // одного элемента.
+    MYTHLON_MODULE_EXPORT const char* GetPluginsInfoFunction(uint32_t load_level);
+    // Информирующая функция (информатор) для данной втыкалы.
+    MYTHLON_MODULE_EXPORT int32_t GetPluginInfo(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
+    // Её вызывная функция, служащая для обращения к методам класса втыкалы.
+    MYTHLON_MODULE_EXPORT void CallPluginMethod(const char* method_name, uintptr_t plugin_method_call_id);
 }

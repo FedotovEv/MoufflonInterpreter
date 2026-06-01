@@ -295,6 +295,7 @@ namespace runtime
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
+    RuntimeError CreateErrorObject(const ProgramCommandDescriptor& command_desc, ThrowMessageNumber msg_num, const std::string& except_text);
     [[noreturn]] void ThrowRuntimeError(runtime::Executable* exec_obj_ptr, ThrowMessageNumber msg_num, const std::string& except_text = {});
     [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num, const std::string& except_text = {});
     [[noreturn]] void RethrowRuntimeError(Context& context, TempError& orig_temp_error);

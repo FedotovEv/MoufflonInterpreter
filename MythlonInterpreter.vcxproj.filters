@@ -54,7 +54,7 @@
     <ClCompile Include="error_classes.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="plugin_helpers.cpp">
+    <ClCompile Include="plugin_caller.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -93,6 +93,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="error_classes.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="plugin_caller.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="plugin_helpers.h">

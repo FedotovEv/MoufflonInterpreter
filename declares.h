@@ -15,16 +15,11 @@
     #include <dlfcn.h>
 #endif
 
-#if defined (_WIN64) || defined(_WIN32)
-    #define MYTHLON_KERNEL_EXPORT __declspec(dllexport)
-#else
-    #define MYTHLON_INTERPRETER_EXPORT
-#endif
-
 #define ZERO_TOLERANCE 0.000000001
 
-const std::string ADD_METHOD = "__add__";
 const std::string INIT_METHOD = "__init__";
+const std::string DESTROY_METHOD = "__destroy__";
+const std::string ADD_METHOD = "__add__";
 const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
 const std::string EQUAL_CMP_METHOD = "__eq__";
 const std::string LESS_CMP_METHOD = "__lt__";
@@ -52,13 +47,13 @@ namespace runtime
         int module_id = -1;
         int module_string_number = 0;
 
-        bool operator==(const ProgramCommandDescriptor& other)
+        bool operator==(const ProgramCommandDescriptor& other) const
         {
             return module_id == other.module_id &&
                    module_string_number == other.module_string_number;
         }
     
-        bool operator!=(const ProgramCommandDescriptor& other)
+        bool operator!=(const ProgramCommandDescriptor& other) const
         {
             return module_id != other.module_id ||
                    module_string_number != other.module_string_number;

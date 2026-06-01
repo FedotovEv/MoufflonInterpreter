@@ -4,9 +4,9 @@
 #include "statement.h"
 #include "error_classes.h"
 #include "throw_messages.h"
+#include "plugin_caller.h"
 
 using namespace std;
-using runtime::ThrowMessageNumber;
 using runtime::ThrowMessages;
 
 namespace ITokenType = parse::token_type;
@@ -90,7 +90,7 @@ namespace
             throw ParseError(command_desc + except_text);
         }
 
-        [[noreturn]] void ThrowParseError(runtime::ThrowMessageNumber msg_num)
+        [[noreturn]] void ThrowParseError(ThrowMessageNumber msg_num)
         {
             string command_desc = to_string(lexer_.GetCurrentCommandDesc().module_id) + "("s +
                 to_string(lexer_.GetCurrentCommandDesc().module_string_number) + "):"s;
@@ -496,7 +496,7 @@ namespace
 
             if (lexer_.CurrentToken() == '(')
             {
-                // various calls
+                // Различные вызовы методов или свободных функций.
                 vector<unique_ptr<ast::Statement>> args;
                 if (lexer_.NextToken() != ')')
                     args = ParseTestList();
@@ -514,13 +514,24 @@ namespace
                          std::move(args)));
                 }
 
+                // Далее анализируются конструкции, эквивалентные вызову именно свободных функций.
                 try
                 {
-                    if (auto it = internal_classes_.find(method_name); it != internal_classes_.end())
-                    {
-                        unique_ptr<ast::Statement> internal_class_ptr = (it->second)(std::move(args));
+                    if (auto int_class_it = internal_classes_.find(method_name); int_class_it != internal_classes_.end())
+                    { // Проверка совпадения имени вызываемой свободной функции к одному из имён внутренних классов. В этом случае
+                      // имеет место операция создания такого класса (вызов его производящей функции).
+                        unique_ptr<ast::Statement> internal_class_ptr = (int_class_it->second)(std::move(args));
                         exec_factory_.AddCommandDesc(internal_class_ptr.get());
                         return internal_class_ptr;
+                    }
+
+                    if (auto plug_it = plugines_.find(method_name); plug_it != plugines_.end())
+                    { // А тут выполним проверку имени вызываемой свободной функции на принадлежность к множеству имён классов втыкал,
+                      // подключённых к данному моменту к интерпретатору. Если имя принадлежит этому множеству, то происходит операция
+                      // создания класса соответствующей втыкалы.
+                        unique_ptr<ast::Statement> plugin_class_ptr = ast::CreateNewPluginInstance(method_name, plug_it->second, std::move(args));
+                        exec_factory_.AddCommandDesc(plugin_class_ptr.get());
+                        return plugin_class_ptr;
                     }
                 }
                 catch (ParseError& parse_error)
@@ -742,37 +753,37 @@ namespace
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::Less, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             if (tok == '>')
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::Greater, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             if (tok.Is<ITokenType::Eq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::Equal, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             if (tok.Is<ITokenType::NotEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::NotEqual, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             if (tok.Is<ITokenType::LessOrEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::LessOrEqual, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             if (tok.Is<ITokenType::GreaterOrEq>())
             {
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::Comparison(runtime::GreaterOrEqual, std::move(result),
-                                                    ParseExpression()));
+                                            ParseExpression()));
             }
             return result;
         }
@@ -814,6 +825,311 @@ namespace
                 if (result.has_value())
                     return move(result.value());
             }
+        }
+
+        // 
+        // Головная функция, которуя обязана экспортировать динамическая библиотека, содержащей коллекцию втыкал, - это функция с
+        // именем, заданным символической константой GET_PLUGINS_INFO_FUNCTION. Она определена следующим образом:
+        // 
+        // const char* GetPluginsInfoFunction(uint32_t load_level);
+        // 
+        // Анализ и поиск втыкал после загрузки такой библиотеки начинается именно с её импорта и вызова. Данная функция должна
+        // возвращать указатель на коллекцию строк, заверщающихся нулём, по одной строке для каждой втыкалы, которую предоставляет
+        // данная динамическая библиотека. Вся коллекция должна завершаться пустой строкой, т. е. содержащий только один нуль. Эта
+        // строка - имя информирующей функции (условно будем далее называть её GetPluginInfo) втыкалы. Аргумент load_level может
+        // использоваться кодом втыкалы для выбора различных их вариантов, возвращаемых по тому или иному запросу. По умолчанию
+        // (для запроса некоего "общего", типового варианта втыкал) это поле должно быть равно 0.
+        // 
+        // Втыкала, подключаемая из памяти, всегда индивидуальна (представляет собой единственный класс), поэтому такой функции-перечислителя
+        // не содержит. Её обработка начинается непосредственно с обращения за данными к её информирующей функции.
+        // 
+        // Функция-информатор предоставляет всю информацию, необходимую для последующей работы со втыкалой, а её сигнатура выглядит так:
+        //      int32_t GetPluginInfo(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
+        // Здесь request_type - тип запроса (один из членов перечисления PluginInfoRequest),
+        //       source_area - указатель на область-источник, в которой хранятся входные параметры запроса.
+        //       source_length - длина этой источниковой области, содержащей полезные данные.
+        //       target_area - указатель на целевую область, куда будет сохранена информация по запросу request_type,
+        //       target_length - предельная её длина.
+        // Возвращаемое значение: при нормальном завершении запроса - длина скопированных в приёмное поле данных (значение более или
+        //                        равно 0).
+        //                        при ошибке - один из кодов ошибки из состава перечисления PluginErrorCode (всегда меньше нуля).
+        // Все типы запросов, которые необходимо поддержать в обязательном порядке, указаны в перечислении PluginInfoRequest.
+        //
+        //      PLUG_REQUEST_PLUGIN_NAME - получение имени втыкалы.
+        // В ответ на этот запрос в область получателя будет сохранена заканчивающаяся нулём строка с именем данной втыкалы.
+        //
+        //    PLUG_REQUEST_CALL_FUNCTION_NAME - получение имени функции, выполняющей вызов методов данной втыкалы (поддерживается только
+        //                                      для втыкалы, размещённой в DLL).
+        // Результатом выполнения этого запроса будет заполнение целевой области именем функции в виде C-строки, которая экспортируется
+        // динамической библиотекой втыкалы и служит для обращения к её методам (условно будем называть эту функцию CallPluginMethod).
+        // Для втыкал из памяти (ОЗУ) запрос должен завершиться ошибкой.
+        // 
+        //    PLUG_REQUEST_CALL_FUNCTION_ADDR - получение адреса функции, выполняющей вызов методов данной втыкалы (поддерживается только для
+        //                                      втыкалы, сформированной и загружаемой из памяти).
+        // В ходе этого запроса в целевую область сохраняется адрес (указатель на) "вызывной" функции соответствующей втыкалы. Для втыкал,
+        // оформленных как динамические библиотеки, запрос должен оканчиваться возникновением ошибки.
+        // 
+        // В обоих случаях сигнатура этой вызывающей функции должна быть следующей:
+        // void CallPluginMethod(const char* method_name, uintptr_t plugin_method_call_id);
+        //      method_name - имя вызываемого метода (завершается нулём).
+        //      plugin_method_call_id - идентификатор вызова, который далее может использоваться кодом втыкалы для обращения к прочим
+        //                              вспомогательным функциям, экспортируемым ядром интерпретатора.
+        // 
+        //    PLUG_REQUEST_METHOD_LIST - получение списка имён методов класса втыкалы, доступных для вызова.
+        // В приёмную область записывается коллекция C-строк, завершающихся нулём. Каждая такая строка указывает на один доступный для вызова
+        // метод класса. Коллекция завершается пустой строкой.
+        //
+        //    PLUG_REQUEST_METHOD_PARAMS - предоставление описания входных параметров некоторого метода, предоставляемого втыкалой для обращения.
+        // Область источника source_area содержит структуру типа RequestMethodParams. Первое её поле method_name указывает на C-строку с именем метода,
+        // к которому относится запрос. Второе поле - method_ordinal - ординал (порядковый номер) метода. Это номер интересующего нас метода в списке,
+        // возвращаемом по запросу PLUG_REQUEST_METHOD_LIST. Данное поле служит для обеспечения возможности перегрузки методов, то есть существования
+        // методов с одинаковыми именами, но разными требованиями на фактические аргументы. Если данный метод не перегружен, то это поле должно
+        // игнорироваться и может содержать любое значение.
+        // В ответ целевая область заполняется данными структуры PluginMethodDefiner. Сразу после её завершения в приёмную область записывается также
+        // содержимое массива param_types, количество членов в котором определяется полем param_types_count структуры PluginMethodDefiner. Каждый из
+        // них яляется переменной типа uint32_t (эквивалентной какому-либо члену перечисления MethodParamType) и указывает требуемый тип очередного
+        // фактического параметра метода.
+
+        // Сначала создадим подпрограмму, содержащую общую часть функциональности, необходимой для загрузки втыкал как из разделяемых библиотек,
+        // так и из памяти. К моменту вызова этой функции модуль втыкалы должен быть загружен в память, а также должны быть выяснены адреса его
+        // экспортируемых функций - информирующей и вызывной.
+        void LoadCommonLibrary(const std::string& plugin_name, PluginGetInfoFunc plugin_info_func,
+                               PluginCallMethodFunc plugins_call_func, const std::string& library_alias)
+        {
+            #define IN_BUFFER_SIZE 256
+            char in_buffer[IN_BUFFER_SIZE];
+            #define OUT_BUFFER_SIZE 2048
+            char out_buffer[OUT_BUFFER_SIZE];
+
+            // Получаем информацию о существующих методах класса втыкалы.
+            if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_METHOD_LIST, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) == 0)
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получен пустой ответ вместо списка методов.
+            const char* plugin_methods_scan_ptr = out_buffer;
+            std::vector<std::string> plugin_methods_names;
+            while (true)
+            {
+                std::string plugin_method_name(plugin_methods_scan_ptr); // Строка, простирающаяся от plugin_methods_scan_ptr до ближайшего нуля.
+                if (plugin_method_name.empty())
+                    break;  // Список методов, принадлежащих классу втыкалы, закончен.
+
+                plugin_methods_scan_ptr += (plugin_method_name.size() + 1);  // Перенацеливаем указатель на начало следующей строки коллекции.
+                plugin_methods_names.push_back(std::move(plugin_method_name));
+            }
+
+            // Теперь предстоит получить у информатора описание каждого из методов класса, то есть сведения о допустимых его формальных и
+            // фактических аргументах и предварительных условиях, которые на них накладываются.
+            std::unordered_multimap<std::string, ast::MethodDefiner> plugin_method_definers;
+            uint32_t method_index = 0;
+            for (const std::string& method_name : plugin_methods_names)
+            {
+                RequestMethodParams* request_params_ptr = reinterpret_cast<RequestMethodParams*>(in_buffer);
+                request_params_ptr->method_name = method_name.c_str();
+                request_params_ptr->method_ordinal = method_index++;
+                if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_METHOD_PARAMS, in_buffer, sizeof(RequestMethodParams), out_buffer, OUT_BUFFER_SIZE) <
+                    sizeof(PluginMethodDefiner))
+                    // Ответ на запрос о характеристиках фактических параметров метода должен как минимум содержать запись типа PluginMethodDefiner.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+                // Структура PluginMethodDefiner упакованная, поэтому типовой указатель на неё может ссылаться на любой адрес, без учёта выравнивания.
+                PluginMethodDefiner* ext_method_definer = reinterpret_cast<PluginMethodDefiner*>(out_buffer);
+                ast::MethodDefiner new_method;
+                new_method.name = method_name;                // Имя метода.
+                new_method.arg_count_min = ext_method_definer->arg_count_min;       // Минимально допустимое количество его параметров.
+                new_method.arg_count_max = ext_method_definer->arg_count_max;       // Максимально допустимое количество его параметров.
+                // Режим проверки допустимости фактических параметров метода.
+                new_method.check_mode = static_cast<MethodParamCheckMode>(ext_method_definer->check_mode);
+                // Заполним массив типовых требований на фактические параметры.
+                char* param_types_ptr = reinterpret_cast<char*>(out_buffer) + sizeof(PluginMethodDefiner);
+                for (uint32_t param_type_index = 0; param_type_index < ext_method_definer->param_types_count;
+                    ++param_type_index, param_types_ptr += sizeof(uint32_t))
+                {
+                    uint32_t new_method_param_type; // Выровненное значение типа uint32_t.
+                    memcpy(&new_method_param_type, param_types_ptr, sizeof(MethodParamType));
+                    new_method.param_types.push_back(static_cast<MethodParamType>(new_method_param_type));
+                }
+                plugin_method_definers.emplace(method_name, std::move(new_method));
+            }
+            // Итак, подытожим результаты проделанной работы. Вся необходимая информация о втыкале получена. Осталось только сохранить
+            // её в очередной элемент накопителя plugines_.
+            ast::PluginDescData new_plugin_desc;
+            new_plugin_desc.info_func = plugin_info_func;
+            new_plugin_desc.call_func = plugins_call_func;
+            new_plugin_desc.methods = std::move(plugin_method_definers);
+            // Описатель класса, предоставляемого текущей обрабатываемой втыкалой, полностью сформирован.
+            plugines_.emplace(library_alias + "_"s + plugin_name, new_plugin_desc);
+            // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса.
+            if (plugines_.count(library_alias) == 0 && internal_classes_.count(library_alias) == 0)
+                plugines_.emplace(library_alias, new_plugin_desc);
+        }
+
+        // Пробуем загружать втыкало из разделяемой (динамической) библиотеки.
+        // Внутри этой функции реализована процедура загрузки динамической библиотеки для разных ОС.
+        void LoadImportLibrary(const string& library_filename, const string& library_alias)
+        {
+            #define WCHAR_FILENAME_SIZE 2048
+            wchar_t wchar_buffer[WCHAR_FILENAME_SIZE];
+
+            #if defined (_WIN64) || defined(_WIN32)
+                // Вариант загрузки динамической библиотеки для Виндоус.
+                if (mbstowcs(wchar_buffer, library_filename.c_str(), WCHAR_FILENAME_SIZE - 1) ==
+                    static_cast<size_t>(-1))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME);
+                HMODULE hAddonDll = LoadLibraryW(wchar_buffer);
+                if (!hAddonDll || hAddonDll == INVALID_HANDLE_VALUE)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
+                // Оборудуем небольшой RAII-нный фантик вокруг обработчика загруженной динамической библиотеки.
+                std::unique_ptr<void, decltype([](void* dll_handle)
+                    {
+                        if (dll_handle)
+                            FreeLibrary((HMODULE)dll_handle);
+                    })> AddonDllDeleter((void*)hAddonDll);
+                FuncGetPluginInfoNames get_plugins_info_func_name =
+                    reinterpret_cast<FuncGetPluginInfoNames>(GetProcAddress(hAddonDll, GET_PLUGINS_INFO_FUNCTION));
+            #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+                // Здесь реализована загрузка .SO линукса/юникса.
+                void* hAddonDll = dlopen(library_filename.c_str(), RTLD_NOW | RTLD_GLOBAL);
+                if (!hAddonDll)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
+                // RAII-нная обертка для обработчика динамической библиотеки будет выглядеть здесь так.
+                std::unique_ptr<void, decltype([](void* dll_handle)
+                    {
+                        if (dll_handle)
+                            dlclose(hAddonDll);
+                    }) > AddonDllDeleter(hAddonDll);
+                FuncGetPluginInfoNames get_plugins_info_func_name =
+                    reinterpret_cast<FuncGetPluginInfoNames>(dlsym(hAddonDll, GET_PLUGINS_INFO_FUNCTION));
+            #else
+                // Какие-то другие, неподдерживаемые варианты платформ.
+                return;
+            #endif
+            if (!get_plugins_info_func_name) // Корневая функция-перечислитель динамической библиотеки не найдена.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
+
+            // Получаем от функции-перечислителя список доступных втыкал, предоставляемых загруженной библиотекой.
+            // Для каждой из них нам возвращают имя информирующей функции, через которую мы получим всю прочую необходимую нам информацию.
+            const char* plugin_names_scan_ptr = get_plugins_info_func_name(0);
+            std::vector<std::string> inform_func_names;
+            while (true)
+            {
+                std::string inform_func_name(plugin_names_scan_ptr); // Строка, простирающаяся от plugin_names_scan_ptr до ближайшего нуля.
+                if (inform_func_name.empty())
+                    break;  // Список доступных втыкал (точнее, их информирующих функций) закончен.
+
+                plugin_names_scan_ptr += (inform_func_name.size() + 1);  // Перенацеливаем указатель на начало следующей строки коллекции.
+                inform_func_names.push_back(std::move(inform_func_name));
+            }
+
+            // Перебираем все полученные имена функций-информаторы, получаем от них все необходимые сведения о втыкалах и производим прочие действия,
+            // необходимые для подключения их к исполнительной системе.
+            for (const std::string inform_func_name : inform_func_names)
+            {
+                // Получаем адрес функции-информатора.
+                #if defined (_WIN64) || defined(_WIN32)
+                    // Вариант для Виндоус.
+                    PluginGetInfoFunc plugin_info_func =
+                        reinterpret_cast<PluginGetInfoFunc>(GetProcAddress(hAddonDll, inform_func_name.c_str()));
+                #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+                    // Линукс и прочие POSIX-совместимые.
+                    PluginGetInfoFunc plugin_info_func =
+                        reinterpret_cast<PluginGetInfoFunc>(dlsym(hAddonDll, inform_func_name.c_str()));
+                #endif
+                if (!plugin_info_func) // Функция-информатор втыкалы не найдена среди экспорта динамической библиотеки.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+                // Запрашиваем у неё имя обслуживаемой ей втыкалы.
+                if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0,
+                                     wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.
+                std::string plugin_name(reinterpret_cast<char*>(wchar_buffer));
+
+                // Далее выясним сначала имя "вызывной" функции, а затем её адрес.
+                if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_NAME, nullptr, 0,
+                                     wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос имени вызывной функции.
+                std::string plugin_call_func_name(reinterpret_cast<char*>(wchar_buffer));
+                if (plugin_name.empty() || plugin_call_func_name.empty())   // Имя втыкалы или имя его вызываюшей функции некорректное.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+                // Разрешение адреса вызывающей функции класса втыкалы в различных вариантах для разных ОС.
+                #if defined (_WIN64) || defined(_WIN32)
+                    // Вариант для Виндоус.
+                    PluginCallMethodFunc plugins_call_func =
+                        reinterpret_cast<PluginCallMethodFunc>(GetProcAddress(hAddonDll, plugin_call_func_name.c_str()));
+                #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+                    // Линукс и прочие POSIX-совместимые.
+                    PluginCallMethodFunc plugins_call_func =
+                        reinterpret_cast<PluginCallMethodFunc>(dlsym(hAddonDll, plugin_call_func_name.c_str()));
+                #endif
+                if (!plugins_call_func) // Не удалось установить адрес вызывающей функции.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+                // Выполняем операции по дальнейшей обработке втыкалы, оформленные как отдельная процедура.
+                LoadCommonLibrary(plugin_name, plugin_info_func, plugins_call_func, library_alias);
+            }
+
+            AddonDllDeleter.release();
+            parse_context_.AddDLLEntry(hAddonDll);
+        }
+
+        // Подключение втыкалы, модуль которой находится в ОЗУ.
+        void LoadRAMLibrary(PluginGetInfoFunc plugin_inform_func, const string& library_alias)
+        {
+            #define OUT_BUFFER_SIZE 2048
+            char out_buffer[OUT_BUFFER_SIZE];
+            #define IN_BUFFER_SIZE 256
+            char in_buffer[IN_BUFFER_SIZE];
+
+            // В качествен аргумента нам передан указатель на информирующую функцию втыкалы, которая уже подготовлена к работе. Её нужно
+            // только опросить для получения всех необходимых сведений о данной втыкале и произвести дальнейшие действия по её включению
+            // в исполнительский комплекс.
+            // Сначала запрашиваем у неё имя обслуживаемой ей втыкалы.
+            if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) == 0)
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.
+            std::string plugin_name(out_buffer);
+            if (plugin_name.empty())   // Имя втыкалы некорректное.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+            // Далее выясним адрес "вызывной" функции.
+            if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_ADDR, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) < sizeof(PluginCallMethodFunc))
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос имени вызывной функции.
+            PluginCallMethodFunc plugins_call_func;
+            memcpy(&plugins_call_func, out_buffer, sizeof(PluginCallMethodFunc));
+            if (!plugins_call_func) // Не удалось установить адрес вызывающей функции.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+
+            // Выполняем операции по дальнейшей обработке втыкалы, оформленные как отдельная процедура.
+            LoadCommonLibrary(plugin_name, plugin_inform_func, plugins_call_func, library_alias);
+        }
+
+        void ProcessImportLibrary(vector<parse::Token> args, const parse::ParseContext& parse_context)
+        {
+            string library_filename, library_alias;
+            if (args.size() != 1 && args.size() != 2)
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
+            for (parse::Token& current_token : args)
+            {
+                if (!current_token.Is<ITokenType::String>())
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
+            }
+
+            library_filename = args[0].As<ITokenType::String>().value;
+            if (args.size() == 2)
+                library_alias = args[1].As<ITokenType::String>().value;
+            // Пробуем загрузить разделяемую библиотеку по имени library_filename.
+            LoadLibraryDefine lib_desc = parse_context.GetLoadLibraryDesc(library_filename);
+            if (holds_alternative<monostate>(lib_desc))
+                return;
+            if (holds_alternative<PluginGetInfoFunc>(lib_desc))
+            { // Подсоединение втыкала, уже существующего в памяти.
+                if (library_alias.empty())
+                    library_alias = library_filename;
+                LoadRAMLibrary(get<PluginGetInfoFunc>(lib_desc), library_alias);
+                return;
+            }
+            // Далее будем пытыться загрузить втыкало из разделяемой библиотеки
+            if (library_alias.empty())
+                library_alias = GetStemExt(library_filename).first;
+            LoadImportLibrary(get<string>(lib_desc), library_alias);
         }
 
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
@@ -947,124 +1263,6 @@ namespace
             return ParseAssignmentOrCall();
         }
 
-        using PluginListType = vector<pair<string, string>>;
-        using FuncGetPluginList = PluginListType*();
-        static constexpr char LOAD_PLUGIN_LIST_NAME[] = "LoadPluginList";
-        // Пробуем загружать втыкало из разделяемой библиотеки.
-        #if defined (_WIN64) || defined(_WIN32)
-            // Загрузка .DLL для винды
-            void LoadImportLibrary(const string& library_filename, const string& library_alias)
-            {
-                #define WCHAR_FILENAME_SIZE 2048
-                wchar_t wchar_buffer[WCHAR_FILENAME_SIZE];
-                if (mbstowcs(wchar_buffer, library_filename.c_str(), WCHAR_FILENAME_SIZE - 1) ==
-                    static_cast<size_t>(-1))
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME);
-
-                HMODULE hAddonDll = LoadLibraryW(wchar_buffer);
-                if (!hAddonDll || hAddonDll == INVALID_HANDLE_VALUE)
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
-
-                FuncGetPluginList* load_plugin_list_proc = reinterpret_cast<FuncGetPluginList*>
-                                                           (GetProcAddress(hAddonDll, LOAD_PLUGIN_LIST_NAME));
-                if (!load_plugin_list_proc)
-                {
-                    FreeLibrary(hAddonDll);
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
-                }
-
-                for (const auto& current_plugin_pair : *load_plugin_list_proc())
-                {
-                    FuncInternalObjectCreator* create_plugin_proc = reinterpret_cast<FuncInternalObjectCreator*>
-                                                    (GetProcAddress(hAddonDll, current_plugin_pair.first.c_str()));
-                    if (!create_plugin_proc)
-                    {
-                        FreeLibrary(hAddonDll);
-                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND);
-                    }
-                    internal_classes_[library_alias + "_"s + current_plugin_pair.second] = create_plugin_proc;
-                    // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса
-                    if (!internal_classes_.count(library_alias))
-                        internal_classes_[library_alias] = create_plugin_proc;
-                }
-                parse_context_.AddDLLEntry(hAddonDll);
-                return;
-            }
-        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-            // Здесь реализована загрузка .SO линукса/юникса
-            void LoadImportLibrary(const string& library_filename, const string& library_alias)
-            {
-                void* hAddonDll = dlopen(library_filename.c_str(), RTLD_NOW | RTLD_GLOBAL);
-                if (!hAddonDll)
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED);
-
-                FuncGetPluginList* load_plugin_list_proc = reinterpret_cast<FuncGetPluginList*>
-                                                           (dlsym(hAddonDll, LOAD_PLUGIN_LIST_NAME));
-                if (!load_plugin_list_proc)
-                {
-                    dlclose(hAddonDll);
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
-                }
-
-                for (const auto& current_plugin_pair : *load_plugin_list_proc())
-                {
-                    FuncInternalObjectCreator* create_plugin_proc = reinterpret_cast<FuncInternalObjectCreator*>
-                                                    (dlsym(hAddonDll, current_plugin_pair.first.c_str()));
-                    if (!create_plugin_proc)
-                    {
-                        dlclose(hAddonDll);
-                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_CREATE_PLUGIN_NOT_FOUND);
-                    }
-                    internal_classes_[library_alias + "_"s + current_plugin_pair.second] = create_plugin_proc;
-                    // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса
-                    if (!internal_classes_.count(library_alias))
-                        internal_classes_[library_alias] = create_plugin_proc;
-                }
-                parse_context_.AddDLLEntry(hAddonDll);
-                return;
-            }
-        #else
-            // Какие-то другие, неподдерживаемые варианты платформ
-            void LoadImportLibrary(const string& library_filename, const string& library_alias)
-            {
-                return;
-            }
-        #endif
-
-        void ProcessImportLibrary(vector<parse::Token> args, const parse::ParseContext& parse_context)
-        {
-            string library_filename, library_alias;
-            if (args.size() != 1 && args.size() != 2)
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
-            for (parse::Token& current_token : args)
-            {
-                if (!current_token.Is<ITokenType::String>())
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
-            }
-
-            library_filename = args[0].As<ITokenType::String>().value;
-            if (args.size() == 2)
-                library_alias = args[1].As<ITokenType::String>().value;
-            // Пробуем загружить разделяемую библиотеку по имени library_filename.
-            LoadLibraryDefine lib_desc = parse_context.GetLoadLibraryDesc(library_filename);
-            if (holds_alternative<monostate>(lib_desc))
-                return;
-            if (holds_alternative<InternalObjectCreatorList>(lib_desc))
-            { // Подсоединение втыкала, уже существующего в памяти.
-                if (library_alias.empty())
-                    library_alias = library_filename;
-
-                for (auto& internal_object_creator_pair : get<InternalObjectCreatorList>(lib_desc))
-                    internal_classes_[library_alias + "_"s + internal_object_creator_pair.first] =
-                        internal_object_creator_pair.second;
-                return;
-            }
-            // Далее будем пытыться загрузить втыкало из разделяемой библиотеки
-            if (library_alias.empty())
-                library_alias = GetStemExt(library_filename).first;
-            LoadImportLibrary(get<string>(lib_desc), library_alias);
-        }
-
         vector<parse::Token> ParseTokenList()
         {
             vector<parse::Token> result;
@@ -1105,6 +1303,7 @@ namespace
         StatementFactory exec_factory_;
         runtime::Closure declared_classes_;
         unordered_map<string, InternalObjectCreator> internal_classes_;
+        unordered_map<string, ast::PluginDescData> plugines_;
         parse::ParseContext& parse_context_;
     }; // class Parser
 }  // namespace

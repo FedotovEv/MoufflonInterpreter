@@ -368,7 +368,7 @@ namespace runtime
             for (auto scan_method_it = eq_name_pair.first; scan_method_it != eq_name_pair.second; ++scan_method_it)
             { // Проверка на отсутствие в составе класса метода с аналогичной сигнатурой (именем и количеством параметров).
                 if (scan_method_it->second.formal_params.size() == method.formal_params.size())
-                    throw ParseError(runtime::ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD);
+                    throw ParseError(ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD);
             }
 
             virtual_method_table_.insert({method.name, move(method)});

@@ -2,6 +2,9 @@
 
 #include "declares.h"
 #include "throw_messages.h"
+#undef MYTHLON_PLUGIN
+#include "plugin_helpers.h"
+
 #include <memory>
 #include <sstream>
 #include <string>
@@ -19,39 +22,6 @@ namespace ast
 
 namespace runtime
 {
-    enum MethodParamCheckMode
-    { // Тип требуемых проверок.
-        PARAM_CHECK_NONE = 0,                           // Проверок не выполнять.
-        PARAM_CHECK_QUANTITY_EQUAL = 1,                 // Количество фактических параметров должно строго совпадать с указанным.
-        PARAM_CHECK_QUANTITY_LESS_EQ = 2,               // Количество параметров может быть менее или равным указанному.
-        PARAM_CHECK_QUANTITY_GREATER_EQ = 3,            // Количество параметров может быть более или равным указанному.
-        PARAM_CHECK_TYPE = 4,                           // Проверять соответствие типа фактического параметра.
-        PARAM_CHECK_TYPE_QUANTITY_EQUAL = 5,
-        PARAM_CHECK_TYPE_QUANTITY_LESS_EQ = 6,
-        PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ = 7
-    };
-
-    enum MethodParamType
-    {
-        PARAM_TYPE_ANY = 0,                             // Контроль типа параметра не выполняется.
-        PARAM_TYPE_NUMERIC = 1,                         // Параметр может быть числовым.
-        PARAM_TYPE_STRING = 2,                          // Параметр может быть строковым.
-        PARAM_TYPE_LOGICAL = 4,                         // Параметр может быть логическим значением.
-        PARAM_TYPE_NONE = 8,                            // Параметр может быть пустым (ничего не содержать или, иначе, содержать значение None).
-        // Следующие значения перечисления предназначены для тех случаев, если фактический параметр может содержать различные типы значений.
-        PARAM_TYPE_NUMERIC_STRING = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING,
-        PARAM_TYPE_NUMERIC_LOGICAL = PARAM_TYPE_NUMERIC | PARAM_TYPE_LOGICAL,
-        PARAM_TYPE_STRING_LOGICAL = PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL,
-        PARAM_TYPE_NUMERIC_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_NONE,
-        PARAM_TYPE_STRING_NONE = PARAM_TYPE_STRING | PARAM_TYPE_NONE,
-        PARAM_TYPE_LOGICAL_NONE = PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
-        PARAM_TYPE_NUMERIC_STRING_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_NONE,
-        PARAM_TYPE_NUMERIC_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
-        PARAM_TYPE_STRING_LOGICAL_NONE = PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE,
-        PARAM_TYPE_NUMERIC_STRING_LOGICAL = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL,
-        PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE
-    };
-    
     enum class CommandGenus
     {
         CMD_GENUS_UNKNOWN = 0,
@@ -172,6 +142,12 @@ namespace runtime
         {}
         RuntimeError(const std::string& error_message) : std::runtime_error(error_message)
         {}
+
+        // Возвращает true, если контейнер не пуст (то есть содержит внутри себя некоторую конкретную ошибку).
+        explicit operator bool() const
+        {
+            return static_cast<bool>(error_object_);
+        }
 
         runtime::ObjectHolder error_object_ = {}; // Здесь размещается какой-либо из конкретных классов ошибки.
     };
@@ -519,12 +495,12 @@ namespace runtime
         // Анализ отношений родства классов. Методы возвращают "ИСТИНУ", если класс test_my_parent
         // является предком класса, экземпляром которого является данный объект.
         [[nodiscard]] virtual bool IsSuccessorOf(const std::string& test_my_parent) const
-        {
+        { // Это тривиальная реализация по умолчанию. Базовый класс иерархии не имеет иных предков, кроме самого себя.
             return GetClassName() == test_my_parent;
         }
         
         [[nodiscard]] virtual bool IsSuccessorOf(const Class& test_my_parent) const
-        {
+        { // Это также тривиальная реализация по умолчанию. Базовый класс может быть потомком только себя самого.
             return GetClassName() == test_my_parent.GetName();
         }
 
