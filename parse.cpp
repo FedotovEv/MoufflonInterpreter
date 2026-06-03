@@ -525,7 +525,7 @@ namespace
                         return internal_class_ptr;
                     }
 
-                    if (auto plug_it = plugines_.find(method_name); plug_it != plugines_.end())
+                    if (auto plug_it = parse_context_.GetPlugines().find(method_name); plug_it != parse_context_.GetPlugines().end())
                     { // А тут выполним проверку имени вызываемой свободной функции на принадлежность к множеству имён классов втыкал,
                       // подключённых к данному моменту к интерпретатору. Если имя принадлежит этому множеству, то происходит операция
                       // создания класса соответствующей втыкалы.
@@ -908,6 +908,10 @@ namespace
             std::vector<std::string> plugin_methods_names;
             while (true)
             {
+                // Проверка очередного полученного имени публичного метода втыкалы на соблюдение правила предельной длины.
+                if (!CheckStringMaxLength(out_buffer, MAX_PLUGIN_NAMES_LEN))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя метода превышает допустимую длину.
+
                 std::string plugin_method_name(plugin_methods_scan_ptr); // Строка, простирающаяся от plugin_methods_scan_ptr до ближайшего нуля.
                 if (plugin_method_name.empty())
                     break;  // Список методов, принадлежащих классу втыкалы, закончен.
@@ -926,14 +930,14 @@ namespace
                 request_params_ptr->method_name = method_name.c_str();
                 request_params_ptr->method_ordinal = method_index++;
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_METHOD_PARAMS, in_buffer, sizeof(RequestMethodParams), out_buffer, OUT_BUFFER_SIZE) <
-                    sizeof(PluginMethodDefiner))
+                    static_cast<int32_t>(sizeof(PluginMethodDefiner)))
                     // Ответ на запрос о характеристиках фактических параметров метода должен как минимум содержать запись типа PluginMethodDefiner.
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
 
                 // Структура PluginMethodDefiner упакованная, поэтому типовой указатель на неё может ссылаться на любой адрес, без учёта выравнивания.
                 PluginMethodDefiner* ext_method_definer = reinterpret_cast<PluginMethodDefiner*>(out_buffer);
                 ast::MethodDefiner new_method;
-                new_method.name = method_name;                // Имя метода.
+                new_method.name = method_name;                                      // Имя метода.
                 new_method.arg_count_min = ext_method_definer->arg_count_min;       // Минимально допустимое количество его параметров.
                 new_method.arg_count_max = ext_method_definer->arg_count_max;       // Максимально допустимое количество его параметров.
                 // Режим проверки допустимости фактических параметров метода.
@@ -944,7 +948,7 @@ namespace
                     ++param_type_index, param_types_ptr += sizeof(uint32_t))
                 {
                     uint32_t new_method_param_type; // Выровненное значение типа uint32_t.
-                    memcpy(&new_method_param_type, param_types_ptr, sizeof(MethodParamType));
+                    memcpy(&new_method_param_type, param_types_ptr, sizeof(uint32_t));
                     new_method.param_types.push_back(static_cast<MethodParamType>(new_method_param_type));
                 }
                 plugin_method_definers.emplace(method_name, std::move(new_method));
@@ -956,10 +960,10 @@ namespace
             new_plugin_desc.call_func = plugins_call_func;
             new_plugin_desc.methods = std::move(plugin_method_definers);
             // Описатель класса, предоставляемого текущей обрабатываемой втыкалой, полностью сформирован.
-            plugines_.emplace(library_alias + "_"s + plugin_name, new_plugin_desc);
+            parse_context_.GetPlugines().emplace(library_alias + "_"s + plugin_name, new_plugin_desc);
             // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса.
-            if (plugines_.count(library_alias) == 0 && internal_classes_.count(library_alias) == 0)
-                plugines_.emplace(library_alias, new_plugin_desc);
+            if (parse_context_.GetPlugines().count(library_alias) == 0 && internal_classes_.count(library_alias) == 0)
+                parse_context_.GetPlugines().emplace(library_alias, new_plugin_desc);
         }
 
         // Пробуем загружать втыкало из разделяемой (динамической) библиотеки.
@@ -1011,6 +1015,10 @@ namespace
             std::vector<std::string> inform_func_names;
             while (true)
             {
+                // Проверим очередную строку коллекции (предполагаемое имя функции-информатора) на соблюдение ей правила предельной длины.
+                if (!CheckStringMaxLength(plugin_names_scan_ptr, MAX_PLUGIN_NAMES_LEN))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_LOAD_PLUGIN_LIST); // Имя функции слишком длинное.
+
                 std::string inform_func_name(plugin_names_scan_ptr); // Строка, простирающаяся от plugin_names_scan_ptr до ближайшего нуля.
                 if (inform_func_name.empty())
                     break;  // Список доступных втыкал (точнее, их информирующих функций) закончен.
@@ -1019,8 +1027,8 @@ namespace
                 inform_func_names.push_back(std::move(inform_func_name));
             }
 
-            // Перебираем все полученные имена функций-информаторы, получаем от них все необходимые сведения о втыкалах и производим прочие действия,
-            // необходимые для подключения их к исполнительной системе.
+            // Перебираем все полученные имена функций-информаторы, получаем от них все необходимые сведения о втыкалах и производим прочие
+            // действия, необходимые для подключения их к исполнительной системе.
             for (const std::string inform_func_name : inform_func_names)
             {
                 // Получаем адрес функции-информатора.
@@ -1040,12 +1048,19 @@ namespace
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0,
                                      wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.
+                // Проверим возвращённое нам имя втыкалы на ограничение максимальной длины.
+                if (!CheckStringMaxLength(reinterpret_cast<char*>(wchar_buffer), MAX_PLUGIN_NAMES_LEN))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя втыкалы слишком длинное.
                 std::string plugin_name(reinterpret_cast<char*>(wchar_buffer));
 
                 // Далее выясним сначала имя "вызывной" функции, а затем её адрес.
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_NAME, nullptr, 0,
                                      wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос имени вызывной функции.
+
+                // Проверим полученное нами имя вызывающей функции на непревышение им предельной длины.
+                if (!CheckStringMaxLength(reinterpret_cast<char*>(wchar_buffer), MAX_PLUGIN_NAMES_LEN))
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Ошибка - имя функции превышает макс. длину.
                 std::string plugin_call_func_name(reinterpret_cast<char*>(wchar_buffer));
                 if (plugin_name.empty() || plugin_call_func_name.empty())   // Имя втыкалы или имя его вызываюшей функции некорректное.
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
@@ -1076,22 +1091,24 @@ namespace
         {
             #define OUT_BUFFER_SIZE 2048
             char out_buffer[OUT_BUFFER_SIZE];
-            #define IN_BUFFER_SIZE 256
-            char in_buffer[IN_BUFFER_SIZE];
 
             // В качествен аргумента нам передан указатель на информирующую функцию втыкалы, которая уже подготовлена к работе. Её нужно
             // только опросить для получения всех необходимых сведений о данной втыкале и произвести дальнейшие действия по её включению
             // в исполнительский комплекс.
             // Сначала запрашиваем у неё имя обслуживаемой ей втыкалы.
             if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) == 0)
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.            
+            // Проверим возвращённую нам информацию (имя втыкалы) в out_buffer на предельную длину.
+            if (!CheckStringMaxLength(out_buffer, MAX_PLUGIN_NAMES_LEN))
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя втыкалы превышает допустимую длину.
+
             std::string plugin_name(out_buffer);
             if (plugin_name.empty())   // Имя втыкалы некорректное.
                 exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
 
-            // Далее выясним адрес "вызывной" функции.
+            // Далее выясним адрес "вызывной" функции (получим указатель на неё).
             if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_ADDR, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) < sizeof(PluginCallMethodFunc))
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос имени вызывной функции.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос адреса вызывной функции.
             PluginCallMethodFunc plugins_call_func;
             memcpy(&plugins_call_func, out_buffer, sizeof(PluginCallMethodFunc));
             if (!plugins_call_func) // Не удалось установить адрес вызывающей функции.
@@ -1101,9 +1118,9 @@ namespace
             LoadCommonLibrary(plugin_name, plugin_inform_func, plugins_call_func, library_alias);
         }
 
-        void ProcessImportLibrary(vector<parse::Token> args, const parse::ParseContext& parse_context)
+        void ProcessImportLibrary(std::vector<parse::Token> args, const parse::ParseContext& parse_context)
         {
-            string library_filename, library_alias;
+            std::string library_filename, library_alias;
             if (args.size() != 1 && args.size() != 2)
                 exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST);
             for (parse::Token& current_token : args)
@@ -1129,7 +1146,7 @@ namespace
             // Далее будем пытыться загрузить втыкало из разделяемой библиотеки
             if (library_alias.empty())
                 library_alias = GetStemExt(library_filename).first;
-            LoadImportLibrary(get<string>(lib_desc), library_alias);
+            LoadImportLibrary(get<std::string>(lib_desc), library_alias);
         }
 
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
@@ -1303,7 +1320,6 @@ namespace
         StatementFactory exec_factory_;
         runtime::Closure declared_classes_;
         unordered_map<string, InternalObjectCreator> internal_classes_;
-        unordered_map<string, ast::PluginDescData> plugines_;
         parse::ParseContext& parse_context_;
     }; // class Parser
 }  // namespace

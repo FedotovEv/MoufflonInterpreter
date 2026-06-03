@@ -116,25 +116,34 @@ inline void Assert(bool b, const std::string& hint)
     AssertEqual(b, true, hint);
 }
 
-class TestRunner {
+class TestRunner
+{
 public:
     template <class TestFunc>
-    void RunTest(TestFunc func, const std::string& test_name) {
-        try {
+    void RunTest(TestFunc func, const std::string& test_name)
+    {
+        try
+        {
             func();
             std::cerr << test_name << " OK" << std::endl;
-        } catch (std::exception& e) {
+        }
+        catch (std::exception& e)
+        {
             ++fail_count;
             std::cerr << test_name << " fail: " << e.what() << std::endl;
-        } catch (...) {
+        }
+        catch (...)
+        {
             ++fail_count;
             std::cerr << "Unknown exception caught" << std::endl;
         }
     }
 
-    ~TestRunner() {
+    ~TestRunner()
+    {
         std::cerr.flush();
-        if (fail_count > 0) {
+        if (fail_count > 0)
+        {
             std::cerr << fail_count << " unit tests failed. Terminate" << std::endl;
             exit(1);
         }
@@ -145,7 +154,7 @@ private:
 };
 
 #ifndef FILE_NAME
-#define FILE_NAME __FILE__
+    #define FILE_NAME __FILE__
 #endif
 
 #define ASSERT_EQUAL(x, y)                                                                       \

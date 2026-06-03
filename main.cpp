@@ -618,6 +618,7 @@ print m.atan(1), m.atan2(1, 1)
         {
             istringstream input(R"--(
 import "MythonTestPlugin"
+# Если префикс класса втыкалы не задан явно (вторым параметром директивы import), то таким префиксом будет являться имя библиотеки (в нашем случае MythonTestPlugin).
 tst = MythonTestPlugin()
 print tst.print_hello()
 print tst.add_all(5, 6, 7, 8)
@@ -635,7 +636,9 @@ print zp, zc, tst.ston("56"), tst.ston("5.6")
         {
             istringstream input(R"--(
 import "MythonTestPlugin", "plug"
-tst = plug_test()
+# Имя единственного класса втыкалы, которая содержится в библиотеке MythonTestPlugin - TestPlugin.
+# Поэтому после такой директивы import доступен он будет либо как plug_TestPlugin, либо как просто plug.
+tst = plug_TestPlugin()
 s = tst.print_hello()
 print tst.add_all(5, 6, 7.7, 8.8), s
 zp = tst.find_zero(5, 6, 9, 5, 0, 9, 10)
@@ -1010,6 +1013,8 @@ print "Всего", i
 
 int main()
 {
+    // Переключим отображение текста в консоль в UTF-8 режим. Ну, по крайней мере, попытаемся...
+    setlocale(LC_CTYPE, "ru_RU.UTF-8");
     try
     {
         TestAll();

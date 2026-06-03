@@ -30,6 +30,8 @@ using LoadLibraryDefine = std::variant<std::monostate, std::string, PluginGetInf
 
 // Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.
 constexpr char GET_PLUGINS_INFO_FUNCTION[] = PLUGINS_GET_INFO_FUNCTION;
+// Максимальная длина имён функций и методов, которые могут использоваться при взаимодействии с модулями втыкал.
+constexpr size_t MAX_PLUGIN_NAMES_LEN = 1024;
 
 namespace ast
 {
@@ -81,6 +83,11 @@ namespace parse
         #endif
         void DeallocateGlobalResources();
 
+        std::unordered_map<std::string, ast::PluginDescData>& GetPlugines()
+        {
+            return plugines_;
+        }
+
     private:
         bool is_auto_deallocate_ = false;
         #if defined (_WIN64) || defined(_WIN32)
@@ -88,6 +95,8 @@ namespace parse
         #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
             std::vector<void*> dll_list_;
         #endif
+        // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
+        std::unordered_map<std::string, ast::PluginDescData> plugines_;
     };
 
     class TrivialParseContext : public ParseContext

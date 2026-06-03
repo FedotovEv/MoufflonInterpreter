@@ -15,7 +15,7 @@
 namespace runtime
 {
     class TempError : public std::exception
-    { // Временный класс ошибки, используемый тогда, когда внутрипрограммные координаты сбойного оператора пока неизвестны.
+    { // Р’СЂРµРјРµРЅРЅС‹Р№ РєР»Р°СЃСЃ РѕС€РёР±РєРё, РёСЃРїРѕР»СЊР·СѓРµРјС‹Р№ С‚РѕРіРґР°, РєРѕРіРґР° РІРЅСѓС‚СЂРёРїСЂРѕРіСЂР°РјРјРЅС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹ СЃР±РѕР№РЅРѕРіРѕ РѕРїРµСЂР°С‚РѕСЂР° РїРѕРєР° РЅРµРёР·РІРµСЃС‚РЅС‹.
     public:
         TempError(ThrowMessageNumber p_msg_num, const std::string& p_except_text) :
             msg_num(p_msg_num), except_text(p_except_text)
@@ -25,11 +25,11 @@ namespace runtime
         std::string except_text;
     };
 
-    // Основные классы ошибок, которые могут выбрасывать при своей работе внутренние функциии и классы окружения
-    // периода исполнения программы на Муфлоне, которую обеспечивает для неё данный интерпретатор.
+    // РћСЃРЅРѕРІРЅС‹Рµ РєР»Р°СЃСЃС‹ РѕС€РёР±РѕРє, РєРѕС‚РѕСЂС‹Рµ РјРѕРіСѓС‚ РІС‹Р±СЂР°СЃС‹РІР°С‚СЊ РїСЂРё СЃРІРѕРµР№ СЂР°Р±РѕС‚Рµ РІРЅСѓС‚СЂРµРЅРЅРёРµ С„СѓРЅРєС†РёРёРё Рё РєР»Р°СЃСЃС‹ РѕРєСЂСѓР¶РµРЅРёСЏ
+    // РїРµСЂРёРѕРґР° РёСЃРїРѕР»РЅРµРЅРёСЏ РїСЂРѕРіСЂР°РјРјС‹ РЅР° РњСѓС„Р»РѕРЅРµ, РєРѕС‚РѕСЂСѓСЋ РѕР±РµСЃРїРµС‡РёРІР°РµС‚ РґР»СЏ РЅРµС‘ РґР°РЅРЅС‹Р№ РёРЅС‚РµСЂРїСЂРµС‚Р°С‚РѕСЂ.
     class CommonError : public CommonClassInstance
-    { // Общий класс ошибки, являющийся предком всех прочих таких классов, а также использующийся в том случае, если более
-      // глубокая детализация ошибки невозможна.
+    { // РћР±С‰РёР№ РєР»Р°СЃСЃ РѕС€РёР±РєРё, СЏРІР»СЏСЋС‰РёР№СЃСЏ РїСЂРµРґРєРѕРј РІСЃРµС… РїСЂРѕС‡РёС… С‚Р°РєРёС… РєР»Р°СЃСЃРѕРІ, Р° С‚Р°РєР¶Рµ РёСЃРїРѕР»СЊР·СѓСЋС‰РёР№СЃСЏ РІ С‚РѕРј СЃР»СѓС‡Р°Рµ, РµСЃР»Рё Р±РѕР»РµРµ
+      // РіР»СѓР±РѕРєР°СЏ РґРµС‚Р°Р»РёР·Р°С†РёСЏ РѕС€РёР±РєРё РЅРµРІРѕР·РјРѕР¶РЅР°.
     public:
         static constexpr const char* COMMON_ERROR_CLASS_NAME = "CommonError";
         using CommonErrorCallMethod = ObjectHolder(CommonError::*)(const std::string&, const std::vector<ObjectHolder>&,
@@ -47,13 +47,13 @@ namespace runtime
         bool HasMethod(const std::string& method_name, size_t argument_count) const override;
         ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        std::string GetClassName() const override // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРјСЏ РґР°РЅРЅРѕРіРѕ РєР»Р°СЃСЃР°.
         {
             return COMMON_ERROR_CLASS_NAME;
         }
 
-        // Классы ошибок имеют двухуровневую иерархию - родоначальник класс CommonError (с именем COMMON_ERROR_CLASS_NAME)
-        // и один уровень производных от него классов. Поэтому среди наших предков могуит быть либо класс CommonError, 
+        // РљР»Р°СЃСЃС‹ РѕС€РёР±РѕРє РёРјРµСЋС‚ РґРІСѓС…СѓСЂРѕРІРЅРµРІСѓСЋ РёРµСЂР°СЂС…РёСЋ - СЂРѕРґРѕРЅР°С‡Р°Р»СЊРЅРёРє РєР»Р°СЃСЃ CommonError (СЃ РёРјРµРЅРµРј COMMON_ERROR_CLASS_NAME)
+        // Рё РѕРґРёРЅ СѓСЂРѕРІРµРЅСЊ РїСЂРѕРёР·РІРѕРґРЅС‹С… РѕС‚ РЅРµРіРѕ РєР»Р°СЃСЃРѕРІ. РџРѕСЌС‚РѕРјСѓ СЃСЂРµРґРё РЅР°С€РёС… РїСЂРµРґРєРѕРІ РјРѕРіСѓРёС‚ Р±С‹С‚СЊ Р»РёР±Рѕ РєР»Р°СЃСЃ CommonError, 
         [[nodiscard]] bool IsSuccessorOf(const std::string& test_my_parent) const override
         {
             return COMMON_ERROR_CLASS_NAME == test_my_parent || GetClassName() == test_my_parent;
@@ -68,7 +68,7 @@ namespace runtime
             return msg_text_;
         }
         std::string GetFullText() const;
-        // Выводит в os код и текст ошибки в виде строки.
+        // Р’С‹РІРѕРґРёС‚ РІ os РєРѕРґ Рё С‚РµРєСЃС‚ РѕС€РёР±РєРё РІ РІРёРґРµ СЃС‚СЂРѕРєРё.
         void Print(std::ostream& os, Context& context) override
         {
             os << GetFullText();
@@ -108,8 +108,8 @@ namespace runtime
         ThrowMessageNumber msg_num_ = ThrowMessageNumber::THRM_UNKNOWN;
         std::string msg_text_;
 
-        // Обработчики методов всех классов ошибки, доступные для вызова из программы на Муфлоне. Их назначение - информирование
-        // программы о сущности произошедшего события.
+        // РћР±СЂР°Р±РѕС‚С‡РёРєРё РјРµС‚РѕРґРѕРІ РІСЃРµС… РєР»Р°СЃСЃРѕРІ РѕС€РёР±РєРё, РґРѕСЃС‚СѓРїРЅС‹Рµ РґР»СЏ РІС‹Р·РѕРІР° РёР· РїСЂРѕРіСЂР°РјРјС‹ РЅР° РњСѓС„Р»РѕРЅРµ. РС… РЅР°Р·РЅР°С‡РµРЅРёРµ - РёРЅС„РѕСЂРјРёСЂРѕРІР°РЅРёРµ
+        // РїСЂРѕРіСЂР°РјРјС‹ Рѕ СЃСѓС‰РЅРѕСЃС‚Рё РїСЂРѕРёР·РѕС€РµРґС€РµРіРѕ СЃРѕР±С‹С‚РёСЏ.
         ObjectHolder MethodGetText(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
         ObjectHolder MethodGetFullText(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
         ObjectHolder MethodGetErrorCode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
@@ -118,37 +118,37 @@ namespace runtime
     };
 
     class ErrorDivisionByZero : public CommonError
-    { // Класс ошибки деления на нуль.
+    { // РљР»Р°СЃСЃ РѕС€РёР±РєРё РґРµР»РµРЅРёСЏ РЅР° РЅСѓР»СЊ.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        std::string GetClassName() const override // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРјСЏ РґР°РЅРЅРѕРіРѕ РєР»Р°СЃСЃР°.
         {
             return "ErrorDivisionByZero";
         }
     };
 
     class OverflowError : public CommonError
-    { // Ошибка переполнения.
+    { // РћС€РёР±РєР° РїРµСЂРµРїРѕР»РЅРµРЅРёСЏ.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        std::string GetClassName() const override // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРјСЏ РґР°РЅРЅРѕРіРѕ РєР»Р°СЃСЃР°.
         {
             return "OverflowError";
         }
     };
 
     class DomainError : public CommonError
-    { // Аргумент функции вне области определения.
+    { // РђСЂРіСѓРјРµРЅС‚ С„СѓРЅРєС†РёРё РІРЅРµ РѕР±Р»Р°СЃС‚Рё РѕРїСЂРµРґРµР»РµРЅРёСЏ.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        std::string GetClassName() const override // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРјСЏ РґР°РЅРЅРѕРіРѕ РєР»Р°СЃСЃР°.
         {
             return "DomainError";
         }
     };
 
     class ErrorParamsInconsistency : public CommonError
-    { // Несогласованность по типу и/или количеству параметров.
+    { // РќРµСЃРѕРіР»Р°СЃРѕРІР°РЅРЅРѕСЃС‚СЊ РїРѕ С‚РёРїСѓ Рё/РёР»Рё РєРѕР»РёС‡РµСЃС‚РІСѓ РїР°СЂР°РјРµС‚СЂРѕРІ.
     public:
         using CommonError::CommonError;
         std::string GetClassName() const override
@@ -158,7 +158,7 @@ namespace runtime
     };
 
     class SyntaxError : public CommonError
-    { // Общая синтаксическая ошибка.
+    { // РћР±С‰Р°СЏ СЃРёРЅС‚Р°РєСЃРёС‡РµСЃРєР°СЏ РѕС€РёР±РєР°.
     public:
         using CommonError::CommonError;
         std::string GetClassName() const override
@@ -168,7 +168,7 @@ namespace runtime
     };
 
     class ModuleError : public CommonError
-    { // Ошибка при работк с внешними модулями.
+    { // РћС€РёР±РєР° РїСЂРё СЂР°Р±РѕС‚Рє СЃ РІРЅРµС€РЅРёРјРё РјРѕРґСѓР»СЏРјРё.
     public:
         using CommonError::CommonError;
         std::string GetClassName() const override
@@ -178,7 +178,7 @@ namespace runtime
     };
 
     class LogicError : public CommonError
-    { // Общая логическая ошибка.
+    { // РћР±С‰Р°СЏ Р»РѕРіРёС‡РµСЃРєР°СЏ РѕС€РёР±РєР°.
     public:
         using CommonError::CommonError;
         std::string GetClassName() const override
@@ -188,7 +188,7 @@ namespace runtime
     };
 
     class ReferenceError : public CommonError
-    { // Ошибка при работе со ссылками.
+    { // РћС€РёР±РєР° РїСЂРё СЂР°Р±РѕС‚Рµ СЃРѕ СЃСЃС‹Р»РєР°РјРё.
     public:
         using CommonError::CommonError;
         std::string GetClassName() const override
@@ -197,18 +197,18 @@ namespace runtime
         }
     };
 
-    // Далее описаны классы-фабрики объектов-экземпляров описанных выше классов ошибок, предусмотренных интерпретатором.
-    // Это аналоги фабричного класса NewInstance, который служит фабрикой объектов классов общего вида (программно определенных).
-    // Эти же классы специализированы на изготовление экземпляров лишь одного определённого класса - какого-либо из описанных выше
-    // классов ошибок. При своём исполнении (вызове функции-члена Execute()) они возвращают новый экземпляр соответствующего
-    // класса, изготовлением которого они занимаются.
+    // Р”Р°Р»РµРµ РѕРїРёСЃР°РЅС‹ РєР»Р°СЃСЃС‹-С„Р°Р±СЂРёРєРё РѕР±СЉРµРєС‚РѕРІ-СЌРєР·РµРјРїР»СЏСЂРѕРІ РѕРїРёСЃР°РЅРЅС‹С… РІС‹С€Рµ РєР»Р°СЃСЃРѕРІ РѕС€РёР±РѕРє, РїСЂРµРґСѓСЃРјРѕС‚СЂРµРЅРЅС‹С… РёРЅС‚РµСЂРїСЂРµС‚Р°С‚РѕСЂРѕРј.
+    // Р­С‚Рѕ Р°РЅР°Р»РѕРіРё С„Р°Р±СЂРёС‡РЅРѕРіРѕ РєР»Р°СЃСЃР° NewInstance, РєРѕС‚РѕСЂС‹Р№ СЃР»СѓР¶РёС‚ С„Р°Р±СЂРёРєРѕР№ РѕР±СЉРµРєС‚РѕРІ РєР»Р°СЃСЃРѕРІ РѕР±С‰РµРіРѕ РІРёРґР° (РїСЂРѕРіСЂР°РјРјРЅРѕ РѕРїСЂРµРґРµР»РµРЅРЅС‹С…).
+    // Р­С‚Рё Р¶Рµ РєР»Р°СЃСЃС‹ СЃРїРµС†РёР°Р»РёР·РёСЂРѕРІР°РЅС‹ РЅР° РёР·РіРѕС‚РѕРІР»РµРЅРёРµ СЌРєР·РµРјРїР»СЏСЂРѕРІ Р»РёС€СЊ РѕРґРЅРѕРіРѕ РѕРїСЂРµРґРµР»С‘РЅРЅРѕРіРѕ РєР»Р°СЃСЃР° - РєР°РєРѕРіРѕ-Р»РёР±Рѕ РёР· РѕРїРёСЃР°РЅРЅС‹С… РІС‹С€Рµ
+    // РєР»Р°СЃСЃРѕРІ РѕС€РёР±РѕРє. РџСЂРё СЃРІРѕС‘Рј РёСЃРїРѕР»РЅРµРЅРёРё (РІС‹Р·РѕРІРµ С„СѓРЅРєС†РёРё-С‡Р»РµРЅР° Execute()) РѕРЅРё РІРѕР·РІСЂР°С‰Р°СЋС‚ РЅРѕРІС‹Р№ СЌРєР·РµРјРїР»СЏСЂ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРіРѕ
+    // РєР»Р°СЃСЃР°, РёР·РіРѕС‚РѕРІР»РµРЅРёРµРј РєРѕС‚РѕСЂРѕРіРѕ РѕРЅРё Р·Р°РЅРёРјР°СЋС‚СЃСЏ.
     using Statement = runtime::Executable;
     class NewCommonError : public Statement
     {
     public:
         NewCommonError(std::vector<std::unique_ptr<Statement>> args);
         std::pair<ThrowMessageNumber, std::string> CountParams(runtime::Closure& closure, runtime::Context& context);
-        // Возвращает объект, содержащий значение типа CommonError - экземпляр класса ошибки CommonError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° CommonError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё CommonError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
     protected:
@@ -221,7 +221,7 @@ namespace runtime
         NewErrorDivisionByZero(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа ErrorDivisionByZero - экземпляр класса ошибки ErrorDivisionByZero.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ErrorDivisionByZero - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ErrorDivisionByZero.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -231,17 +231,17 @@ namespace runtime
         NewOverflowError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа OverflowError - экземпляр класса ошибки OverflowError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° OverflowError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё OverflowError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
     class NewDomainError : public NewCommonError
-    { // Фабричный класс для класса ошибки NewDomainError.
+    { // Р¤Р°Р±СЂРёС‡РЅС‹Р№ РєР»Р°СЃСЃ РґР»СЏ РєР»Р°СЃСЃР° РѕС€РёР±РєРё NewDomainError.
     public:
         NewDomainError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа DomainError - экземпляр класса ошибки DomainError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° DomainError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё DomainError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -251,17 +251,17 @@ namespace runtime
         NewErrorParamsInconsistency(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа ErrorParamsInconsistency - экземпляр класса ошибки ErrorParamsInconsistency.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ErrorParamsInconsistency - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ErrorParamsInconsistency.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
     class NewSyntaxError : public NewCommonError
-    { // Фабричный класс для порождения экземпляров класса ошибки SyntaxError.
+    { // Р¤Р°Р±СЂРёС‡РЅС‹Р№ РєР»Р°СЃСЃ РґР»СЏ РїРѕСЂРѕР¶РґРµРЅРёСЏ СЌРєР·РµРјРїР»СЏСЂРѕРІ РєР»Р°СЃСЃР° РѕС€РёР±РєРё SyntaxError.
     public:
         NewSyntaxError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа SyntaxError - экземпляр класса ошибки SyntaxError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° SyntaxError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё SyntaxError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -271,7 +271,7 @@ namespace runtime
         NewModuleError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа ModuleError - экземпляр класса ошибки ModuleError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ModuleError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ModuleError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -281,7 +281,7 @@ namespace runtime
         NewLogicError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа LogicError - экземпляр класса ошибки LogicError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° LogicError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё LogicError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -291,7 +291,7 @@ namespace runtime
         NewReferenceError(std::vector<std::unique_ptr<Statement>> args) :
             NewCommonError(std::move(args))
         {}
-        // Возвращает объект, содержащий значение типа ReferenceError - экземпляр класса ошибки ReferenceError.
+        // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ReferenceError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ReferenceError.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
@@ -304,7 +304,7 @@ namespace runtime
 namespace ast
 {
     using Statement = runtime::Executable;
-    // Подборка фабричных функций - переходников к соответствующим фабричным класса для создания объектов ошибок.
+    // РџРѕРґР±РѕСЂРєР° С„Р°Р±СЂРёС‡РЅС‹С… С„СѓРЅРєС†РёР№ - РїРµСЂРµС…РѕРґРЅРёРєРѕРІ Рє СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РёРј С„Р°Р±СЂРёС‡РЅС‹Рј РєР»Р°СЃСЃР° РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РѕР±СЉРµРєС‚РѕРІ РѕС€РёР±РѕРє.
     std::unique_ptr<Statement> CreateCommonError(std::vector<std::unique_ptr<Statement>> args);
     std::unique_ptr<Statement> CreateErrorDivisionByZero(std::vector<std::unique_ptr<Statement>> args);
     std::unique_ptr<Statement> CreateOverflowError(std::vector<std::unique_ptr<Statement>> args);

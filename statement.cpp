@@ -10,7 +10,6 @@
 #include <cassert>
 
 using namespace std;
-using runtime::ThrowMessageNumber;
 using runtime::ThrowMessages;
 using runtime::Closure;
 using runtime::Context;
@@ -33,7 +32,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
         if (current_genus == runtime::CommandGenus::CMD_GENUS_CALL_METHOD)
         { // Это пседокоманда-уведомление от функции ClassInstance::Call, вызывающей какой-либо метод
           // пользовательского (не встроенного) класса. Создаём запись о новом стековом кадре. Она пока будет
-          // неполна, но позже будет дополнена при исполнении первой команды тела вызванного метода.            
+          // неполна, но позже будет дополнена при исполнении первой команды тела вызванного метода.
             runtime::CallStackEntry new_stack_rec;
             new_stack_rec.call_command = last_command;
             new_stack_rec.info_data = *static_cast<runtime::PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr;

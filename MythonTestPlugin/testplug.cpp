@@ -92,9 +92,11 @@ extern "C"
             }
             case PluginInfoRequest::PLUG_REQUEST_METHOD_PARAMS:  // Характеристики параметров некоторого метода, предоставляемого втыкалой для обращения.
             {
-                if (!source_area)
+                if (!source_area || source_length < static_cast<int32_t>(sizeof(RequestMethodParams)))
                     return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
-                std::string req_method_name(reinterpret_cast<const char*>(source_area));
+
+                RequestMethodParams* request_params_ptr = reinterpret_cast<RequestMethodParams*>(source_area);
+                std::string req_method_name(request_params_ptr->method_name);
                 // 
                 std::pair<size_t, PluginInstance::CopyCharmResult> copy_result =
                     PluginInstance::CopyCharm(req_method_name, target_area, static_cast<size_t>(target_length));
@@ -146,8 +148,8 @@ extern "C"
 const unordered_map<string_view, PluginInstance::PluginCallMethod> PluginInstance::plugin_method_table_
 {
     // Специальные стандартные методы Муфлон-классов.
-    {{plugin_init_method_name, std::size(plugin_init_method_name)}, &PluginInstance::MethodInit},
-    {{plugin_str_function_name, std::size(plugin_str_function_name)}, &PluginInstance::MethodStringize},
+    {{plugin_init_method_name, std::size(plugin_init_method_name) - 1}, &PluginInstance::MethodInit},
+    {{plugin_str_function_name, std::size(plugin_str_function_name) - 1}, &PluginInstance::MethodStringize},
     // Прочие свободно определяемые методы класса втыкалы.
     {"add_all"sv, &PluginInstance::MethodTestAddAll},
     {"AddAll"sv, &PluginInstance::MethodTestAddAll},
@@ -165,11 +167,11 @@ const std::unordered_map<std::string_view, PluginInstance::ParamsCharm> PluginIn
 {
     // Стандартные специальные методы в нашем случае не принимают никаких параметров.
     {
-        {plugin_init_method_name, std::size(plugin_init_method_name)},
+        {plugin_init_method_name, std::size(plugin_init_method_name) - 1},
         {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
     },
     {
-        {plugin_str_function_name, std::size(plugin_str_function_name)},
+        {plugin_str_function_name, std::size(plugin_str_function_name) - 1},
         {.params_definer = {.check_mode = MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL}}
     },
     //
@@ -488,8 +490,8 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
                          &int_char_position, static_cast<int32_t>(sizeof(int32_t)));
 }
 
-// Функция ston(string_argument) - преобразование строки в число (целое либо дробное с плавающей точкой). Нестроковый аргумент - возврат ошибки
-// периода исполнения.
+// Функция ston(string_argument) - преобразование строки в число (целое либо дробное с плавающей точкой). Нестроковый аргумент -
+// - возврат ошибки периода исполнения.
 void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
 {
     if (PluginParamsCount(plugin_method_call_id) != 1)
@@ -522,29 +524,43 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
         return;
     }
 
-    try
-    {
-        int32_t int_result = static_cast<int32_t>(stoi(*arg_0_ptr));
-        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
-                             &int_result, static_cast<int32_t>(sizeof(int32_t)));
-        return;
-    }
-    catch (...)
-    {}
+    // Сначала преобразуем строку как целое число.
+    const char* arg_0_value_src = arg_0_ptr->c_str();
+    char* int_value_end_pos;
+    long long_result = strtol(arg_0_value_src, &int_value_end_pos, 10);
+    size_t int_result_len = int_value_end_pos - arg_0_value_src;
 
-    try
+    // Далее попробуем преобразовать строку как дробное число с плавающей точкой.
+    char* double_value_end_pos;
+    double double_result = strtod(arg_0_value_src, &double_value_end_pos);
+    size_t double_result_len = double_value_end_pos - arg_0_value_src;
+    // Выберем тот тип значения, который использовал все символы исходника.
+    if (int_result_len == arg_0_ptr->size())
     {
-        double double_result = stod(*arg_0_ptr);
+        if (long_result < INT32_MIN || long_result > INT32_MAX)
+        {
+            // Строка кодирует целое число, но за пределами типа int32_t.
+            PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_OVERFLOW),
+                                  "Целочисленное переполнение");
+        }
+        else
+        {
+            int32_t int_result = static_cast<int32_t>(long_result);
+            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+                                 &int_result, static_cast<int32_t>(sizeof(int32_t)));
+        }
+    }
+    else if (double_result_len == arg_0_ptr->size())
+    {
         PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE),
                              &double_result, static_cast<int32_t>(sizeof(double)));
-        return;
     }
-    catch(...)
-    {}
-
-    // Обе функции преобразования строки в число (stoi() и stod()) привели к ошибке при работе.
-    PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                          "Строка не содержит корректного числа");
+    else
+    {
+        // Обе функции преобразования строки в число (strtol() и strtod()) не могут преобразовать весь исходник в число.
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
+                              "Строка не содержит корректного числа");
+    }
 }
 
 // Функция не принимает аргументов, печатает и возвращает как результат строку "Hello".
@@ -558,10 +574,13 @@ void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
     }
 
     std::string hello_string = "Hello"s;
-
-
-    context.GetOutputStream() << hello_string;
-    
+    if (PluginPrintToContext(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING),
+                             hello_string.data(), static_cast<int32_t>(hello_string.size())) != static_cast<int32_t>(hello_string.size()))
+    {
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_CONTEXT_OUT_FAIL),
+                              "Печать данных в контекст завершилась неудачно");
+        return;
+    }
 
     PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING),
                          hello_string.data(), static_cast<int32_t>(hello_string.size()));

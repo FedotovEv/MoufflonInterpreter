@@ -10,7 +10,7 @@ namespace runtime
     {
         switch (msg_num)
         {
-            // Различные типы несогласованности параметров по типу или количеству.
+            // Р Р°Р·Р»РёС‡РЅС‹Рµ С‚РёРїС‹ РЅРµСЃРѕРіР»Р°СЃРѕРІР°РЅРЅРѕСЃС‚Рё РїР°СЂР°РјРµС‚СЂРѕРІ РїРѕ С‚РёРїСѓ РёР»Рё РєРѕР»РёС‡РµСЃС‚РІСѓ.
         case ThrowMessageNumber::THRM_ARRAY_MUST_HAVE_DIMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MAP_CTOR_HAS_NO_PARAMS:
@@ -49,7 +49,7 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IN_METHOD:
             return RuntimeError(ObjectHolder::Own(ErrorParamsInconsistency(msg_num, command_desc, except_text)));
-            // Синтаксические ошибки.
+            // РЎРёРЅС‚Р°РєСЃРёС‡РµСЃРєРёРµ РѕС€РёР±РєРё.
         case ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL:
@@ -78,19 +78,19 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE:
             return RuntimeError(ObjectHolder::Own(SyntaxError(msg_num, command_desc, except_text)));
-            // Неверная работа со ссылками.
+            // РќРµРІРµСЂРЅР°СЏ СЂР°Р±РѕС‚Р° СЃРѕ СЃСЃС‹Р»РєР°РјРё.
         case ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR:
             return RuntimeError(ObjectHolder::Own(ReferenceError(msg_num, command_desc, except_text)));
-            // Деление на нуль.
+            // Р”РµР»РµРЅРёРµ РЅР° РЅСѓР»СЊ.
         case ThrowMessageNumber::THRM_DIVISION_BY_ZERO:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MODULO_DIVISION_BY_ZERO:
             return RuntimeError(ObjectHolder::Own(ErrorDivisionByZero(msg_num, command_desc, except_text)));
-            // Неопределённые или недопустимые операции.
+            // РќРµРѕРїСЂРµРґРµР»С‘РЅРЅС‹Рµ РёР»Рё РЅРµРґРѕРїСѓСЃС‚РёРјС‹Рµ РѕРїРµСЂР°С†РёРё.
         case ThrowMessageNumber::THRM_IMPOSSIBLE_ADDITION:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION:
@@ -107,7 +107,7 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INVALID_PARAM_VALUE:
             return RuntimeError(ObjectHolder::Own(DomainError(msg_num, command_desc, except_text)));
-            // Некорректная работа со встроенными классами.
+            // РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ СЂР°Р±РѕС‚Р° СЃРѕ РІСЃС‚СЂРѕРµРЅРЅС‹РјРё РєР»Р°СЃСЃР°РјРё.
         case ThrowMessageNumber::THRM_INVALID_ARRAY_INDEX:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_PUSH_BACK_ONE_DIM_ONLY:
@@ -124,7 +124,7 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_ITERATOR_INVALID:
             return RuntimeError(ObjectHolder::Own(LogicError(msg_num, command_desc, except_text)));
-            // Неверная работа с подключением внешних модулей - в исходниках или двоичных("втыкал").
+            // РќРµРІРµСЂРЅР°СЏ СЂР°Р±РѕС‚Р° СЃ РїРѕРґРєР»СЋС‡РµРЅРёРµРј РІРЅРµС€РЅРёС… РјРѕРґСѓР»РµР№ - РІ РёСЃС…РѕРґРЅРёРєР°С… РёР»Рё РґРІРѕРёС‡РЅС‹С…("РІС‚С‹РєР°Р»").
         case ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED:
@@ -135,7 +135,7 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS:
             return RuntimeError(ObjectHolder::Own(ModuleError(msg_num, command_desc, except_text)));
-            // Прочие ошибки.
+            // РџСЂРѕС‡РёРµ РѕС€РёР±РєРё.
         case ThrowMessageNumber::THRM_RAISE_CALL:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_URGENT_TERMINATE:
@@ -180,7 +180,7 @@ namespace runtime
     };
 
     bool CommonError::HasMethod(const std::string& method_name, size_t argument_count) const
-    { // Все методы класса CommonError не имеют аргументов (имеют 0 аргументов).
+    { // Р’СЃРµ РјРµС‚РѕРґС‹ РєР»Р°СЃСЃР° CommonError РЅРµ РёРјРµСЋС‚ Р°СЂРіСѓРјРµРЅС‚РѕРІ (РёРјРµСЋС‚ 0 Р°СЂРіСѓРјРµРЅС‚РѕРІ).
         return argument_count == 0 && common_error_method_table_.count(method_name) != 0;
     }
 
@@ -232,7 +232,7 @@ namespace runtime
 
     NewCommonError::NewCommonError(std::vector<std::unique_ptr<Statement>> args) : args_(move(args))
     {
-        if (args_.size() > 2) // Класс ошибки всегда имеет не более двух аргументов - тип и дополнительное сопровождающее сообщение.
+        if (args_.size() > 2) // РљР»Р°СЃСЃ РѕС€РёР±РєРё РІСЃРµРіРґР° РёРјРµРµС‚ РЅРµ Р±РѕР»РµРµ РґРІСѓС… Р°СЂРіСѓРјРµРЅС‚РѕРІ - С‚РёРї Рё РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕРµ СЃРѕРїСЂРѕРІРѕР¶РґР°СЋС‰РµРµ СЃРѕРѕР±С‰РµРЅРёРµ.
             throw ParseError(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT);
     }
 
@@ -241,7 +241,7 @@ namespace runtime
         ThrowMessageNumber msg_num = ThrowMessageNumber::THRM_UNKNOWN;
         string except_text;
         if (args_.size())
-        { // Первый аргумент - условный номер ошибки. Число, указывающее на какой-либо член перечисления ThrowMessageNumber.
+        { // РџРµСЂРІС‹Р№ Р°СЂРіСѓРјРµРЅС‚ - СѓСЃР»РѕРІРЅС‹Р№ РЅРѕРјРµСЂ РѕС€РёР±РєРё. Р§РёСЃР»Рѕ, СѓРєР°Р·С‹РІР°СЋС‰РµРµ РЅР° РєР°РєРѕР№-Р»РёР±Рѕ С‡Р»РµРЅ РїРµСЂРµС‡РёСЃР»РµРЅРёСЏ ThrowMessageNumber.
             ObjectHolder throw_message_number_object = args_[0]->Execute(closure, context);
             if (runtime::Number* throw_message_number_ptr = throw_message_number_object.TryAs<runtime::Number>())
                 msg_num = static_cast<ThrowMessageNumber>(throw_message_number_ptr->GetIntValue());
@@ -249,7 +249,7 @@ namespace runtime
                 ThrowRuntimeError(this, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY);
         }
         if (args_.size() > 1)
-        { // Второй аргумент - сопровождающий пояснительный текст.
+        { // Р’С‚РѕСЂРѕР№ Р°СЂРіСѓРјРµРЅС‚ - СЃРѕРїСЂРѕРІРѕР¶РґР°СЋС‰РёР№ РїРѕСЏСЃРЅРёС‚РµР»СЊРЅС‹Р№ С‚РµРєСЃС‚.
             ObjectHolder except_text_object = args_[0]->Execute(closure, context);
             if (runtime::String* except_text_ptr = except_text_object.TryAs<runtime::String>())
                 except_text = except_text_ptr->GetValue();
@@ -259,7 +259,7 @@ namespace runtime
         return {msg_num,  move(except_text)};
     }
 
-    // Возвращает объект, содержащий значение типа CommonError - экземпляр класса ошибки CommonError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° CommonError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё CommonError.
     runtime::ObjectHolder NewCommonError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -268,7 +268,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::CommonError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа ErrorDivisionByZero - экземпляр класса ошибки ErrorDivisionByZero.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ErrorDivisionByZero - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ErrorDivisionByZero.
     runtime::ObjectHolder NewErrorDivisionByZero::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -277,7 +277,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::ErrorDivisionByZero(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа OverflowError - экземпляр класса ошибки OverflowError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° OverflowError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё OverflowError.
     runtime::ObjectHolder NewOverflowError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -286,7 +286,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::OverflowError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа DomainError - экземпляр класса ошибки DomainError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° DomainError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё DomainError.
     runtime::ObjectHolder NewDomainError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -295,7 +295,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::DomainError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа ErrorParamsInconsistency - экземпляр класса ошибки ErrorParamsInconsistency.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ErrorParamsInconsistency - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ErrorParamsInconsistency.
     runtime::ObjectHolder NewErrorParamsInconsistency::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -304,7 +304,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::ErrorParamsInconsistency(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа SyntaxError - экземпляр класса ошибки SyntaxError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° SyntaxError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё SyntaxError.
     runtime::ObjectHolder NewSyntaxError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -313,7 +313,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::SyntaxError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа ModuleError - экземпляр класса ошибки ModuleError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ModuleError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ModuleError.
     runtime::ObjectHolder NewModuleError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -322,7 +322,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::ModuleError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа LogicError - экземпляр класса ошибки LogicError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° LogicError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё LogicError.
     runtime::ObjectHolder NewLogicError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -331,7 +331,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::LogicError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
-    // Возвращает объект, содержащий значение типа ReferenceError - экземпляр класса ошибки ReferenceError.
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Р·РЅР°С‡РµРЅРёРµ С‚РёРїР° ReferenceError - СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РѕС€РёР±РєРё ReferenceError.
     runtime::ObjectHolder NewReferenceError::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);

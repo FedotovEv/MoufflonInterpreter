@@ -490,6 +490,7 @@ namespace ast
 
         // Последовательно выполняет добавленные инструкции. Возвращает None
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    
     protected:
         template <typename FirstArg, typename... Args>
         void PacketAddStatement(FirstArg&& first_arg, Args&& ... args)
@@ -503,6 +504,28 @@ namespace ast
         runtime::ProgramCommandDescriptor last_body_command_desc_; // дескриптор последней команды сплотки
     };
 
+    /*
+    // "Головная" сплотка - составная инструкция, представляющая тело самой программы как таковое (находится
+    // на самом верхнем уровне её блочной структуры). В каждой программе такая сплотка всегда есть и всегда только одна,
+    // она создаётся в методе ParseProgram() синтаксического анализатора Parser. По сравнению с обычной составной
+    // инструкцией класса Compound в структуре ProgramCompound хранится некоторая дополнительная метаинформация,
+    // характеризующая всю программу в целом и необходимая для работы некоторым прочим её узлам.
+    class ProgramCompound : public Compound
+    {
+    public:
+        explicit ProgramCompound() = default;
+
+        std::unordered_map<std::string, ast::PluginDescData>& GetPlugines()
+        {
+            return plugines_;
+        }
+
+    private:
+        // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
+        std::unordered_map<std::string, ast::PluginDescData> plugines_;
+    };
+    */
+
     // Тело метода. Как правило, содержит составную инструкцию
     class MethodBody : public Statement
     {
@@ -513,6 +536,7 @@ namespace ast
         // Если внутри body была выполнена инструкция return, возвращает результат return
         // В противном случае возвращает None
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    
     private:
         std::unique_ptr<Statement> body_;
         std::unique_ptr<runtime::PsevdoExecutable> dummy_statement_ = std::make_unique<runtime::PsevdoExecutable>();
@@ -529,6 +553,7 @@ namespace ast
 
         // Выбрасывает исключение RuntimeError с объектом ошибки, возвращаемом при вычислении выражения statement_.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    
     private:
         std::unique_ptr<Statement> statement_;
     };
@@ -545,6 +570,7 @@ namespace ast
         // Останавливает выполнение текущего метода. После выполнения инструкции return метод,
         // внутри которого она была исполнена, должен вернуть результат вычисления выражения statement.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    
     private:
         std::unique_ptr<Statement> statement_;
     };
@@ -563,6 +589,7 @@ namespace ast
         // промежуточный (очередной) результат своей деятельности в дескриптор сопрограммы, а также возвращает его как свое
         // возвращаемое значение.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    
     private:
         std::unique_ptr<Statement> statement_;
     };

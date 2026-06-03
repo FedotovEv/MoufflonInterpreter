@@ -9,16 +9,24 @@
 using namespace std;
 using namespace runtime;
 
-static constexpr char ERROR_WITHOUT_TEXT[] = "Нет текста";
+static constexpr char ERROR_WITHOUT_TEXT[] = "РќРµС‚ С‚РµРєСЃС‚Р°";
 
-// Структура, описывающая один конкретный вызов некоторого метода какой-либо отдельной втыкалы. Такая запись создаётся для каждого такого
-// вызова в начале работы с ним (перед его исполнением), а удаляется после его полного завершения и обработки возвращенного им результата.
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РїСЂРѕРІРµСЂРєРё СѓРґРѕРІР»РµС‚РІРѕСЂРµРЅРёСЏ C-СЃС‚СЂРѕРєРѕР№ РїСЂР°РІРёР»Р° РїСЂРµРґРµР»СЊРЅРѕР№ РґР»РёРЅС‹.
+bool CheckStringMaxLength(const char* test_string, size_t max_length)
+{
+    size_t current_length = 0;
+    for (; *(test_string + current_length) != 0 && current_length <= max_length; ++current_length);
+    return current_length <= max_length;
+}
+
+// РЎС‚СЂСѓРєС‚СѓСЂР°, РѕРїРёСЃС‹РІР°СЋС‰Р°СЏ РѕРґРёРЅ РєРѕРЅРєСЂРµС‚РЅС‹Р№ РІС‹Р·РѕРІ РЅРµРєРѕС‚РѕСЂРѕРіРѕ РјРµС‚РѕРґР° РєР°РєРѕР№-Р»РёР±Рѕ РѕС‚РґРµР»СЊРЅРѕР№ РІС‚С‹РєР°Р»С‹. РўР°РєР°СЏ Р·Р°РїРёСЃСЊ СЃРѕР·РґР°С‘С‚СЃСЏ РґР»СЏ РєР°Р¶РґРѕРіРѕ С‚Р°РєРѕРіРѕ
+// РІС‹Р·РѕРІР° РІ РЅР°С‡Р°Р»Рµ СЂР°Р±РѕС‚С‹ СЃ РЅРёРј (РїРµСЂРµРґ РµРіРѕ РёСЃРїРѕР»РЅРµРЅРёРµРј), Р° СѓРґР°Р»СЏРµС‚СЃСЏ РїРѕСЃР»Рµ РµРіРѕ РїРѕР»РЅРѕРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ Рё РѕР±СЂР°Р±РѕС‚РєРё РІРѕР·РІСЂР°С‰РµРЅРЅРѕРіРѕ РёРј СЂРµР·СѓР»СЊС‚Р°С‚Р°.
 struct FullPluginMethodCallDefiner
 {
-    PluginInstance* plugin_instance;                // Указатель на экземпляр втыкалы, метод которой вызван.
-    const ast::MethodDefiner* method = nullptr;     // Указатель на описание вызванного метода.
-    ProgramCommandDescriptor call_command;          // Описание строки программы, в которой совершён данный вызов метода.
-    Context* context = nullptr;                     // Указатель на контекст исполнения вызова.
+    PluginInstance* plugin_instance;                // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° СЌРєР·РµРјРїР»СЏСЂ РІС‚С‹РєР°Р»С‹, РјРµС‚РѕРґ РєРѕС‚РѕСЂРѕР№ РІС‹Р·РІР°РЅ.
+    const ast::MethodDefiner* method = nullptr;     // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° РѕРїРёСЃР°РЅРёРµ РІС‹Р·РІР°РЅРЅРѕРіРѕ РјРµС‚РѕРґР°.
+    ProgramCommandDescriptor call_command;          // РћРїРёСЃР°РЅРёРµ СЃС‚СЂРѕРєРё РїСЂРѕРіСЂР°РјРјС‹, РІ РєРѕС‚РѕСЂРѕР№ СЃРѕРІРµСЂС€С‘РЅ РґР°РЅРЅС‹Р№ РІС‹Р·РѕРІ РјРµС‚РѕРґР°.
+    Context* context = nullptr;                     // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° РєРѕРЅС‚РµРєСЃС‚ РёСЃРїРѕР»РЅРµРЅРёСЏ РІС‹Р·РѕРІР°.
 
     bool operator==(const FullPluginMethodCallDefiner& other) const
     {
@@ -39,7 +47,7 @@ namespace std
     template<>
     struct hash<FullPluginMethodCallDefiner>
     {
-        static constexpr size_t HASH_MULTIPLICATOR = 43; // Простое число, удалённое от степени 2.
+        static constexpr size_t HASH_MULTIPLICATOR = 43; // РџСЂРѕСЃС‚РѕРµ С‡РёСЃР»Рѕ, СѓРґР°Р»С‘РЅРЅРѕРµ РѕС‚ СЃС‚РµРїРµРЅРё 2.
         static constexpr size_t HASH_MULTIPLICATOR_2 = HASH_MULTIPLICATOR * HASH_MULTIPLICATOR;
         static constexpr size_t HASH_MULTIPLICATOR_3 = HASH_MULTIPLICATOR_2 * HASH_MULTIPLICATOR;
         static constexpr size_t HASH_MULTIPLICATOR_4 = HASH_MULTIPLICATOR_3 * HASH_MULTIPLICATOR;
@@ -55,59 +63,59 @@ namespace std
     };
 }
 
-// Мультимножество, хранящее записи описания активных (пока ещё выполняющихся или не полностью завершённых) вызовов методов втыкал.
-// Используется именно мультимножество для возможности хранить информацию о параллельно исполняющихся запросах, выполненному одной и
-// той же строкой кода в параллельных потоках. Пока это просто резерв на будущее, так как в настощее время интерпретатор не поддерживает
-// параллелизм.
+// РњСѓР»СЊС‚РёРјРЅРѕР¶РµСЃС‚РІРѕ, С…СЂР°РЅСЏС‰РµРµ Р·Р°РїРёСЃРё РѕРїРёСЃР°РЅРёСЏ Р°РєС‚РёРІРЅС‹С… (РїРѕРєР° РµС‰С‘ РІС‹РїРѕР»РЅСЏСЋС‰РёС…СЃСЏ РёР»Рё РЅРµ РїРѕР»РЅРѕСЃС‚СЊСЋ Р·Р°РІРµСЂС€С‘РЅРЅС‹С…) РІС‹Р·РѕРІРѕРІ РјРµС‚РѕРґРѕРІ РІС‚С‹РєР°Р».
+// РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РёРјРµРЅРЅРѕ РјСѓР»СЊС‚РёРјРЅРѕР¶РµСЃС‚РІРѕ РґР»СЏ РІРѕР·РјРѕР¶РЅРѕСЃС‚Рё С…СЂР°РЅРёС‚СЊ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїР°СЂР°Р»Р»РµР»СЊРЅРѕ РёСЃРїРѕР»РЅСЏСЋС‰РёС…СЃСЏ Р·Р°РїСЂРѕСЃР°С…, РІС‹РїРѕР»РЅРµРЅРЅС‹С… РѕРґРЅРѕР№ Рё
+// С‚РѕР№ Р¶Рµ СЃС‚СЂРѕРєРѕР№ РєРѕРґР° РІ РїР°СЂР°Р»Р»РµР»СЊРЅС‹С… РїРѕС‚РѕРєР°С…. РџРѕРєР° СЌС‚Рѕ РїСЂРѕСЃС‚Рѕ СЂРµР·РµСЂРІ РЅР° Р±СѓРґСѓС‰РµРµ, С‚Р°Рє РєР°Рє РІ РЅР°СЃС‚РѕС‰РµРµ РІСЂРµРјСЏ РёРЅС‚РµСЂРїСЂРµС‚Р°С‚РѕСЂ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚
+// РїР°СЂР°Р»Р»РµР»РёР·Рј.
 std::unordered_multiset<FullPluginMethodCallDefiner> call_definers;
 
-// Хранители символов (входных параметров, а также выходных значений и ошибок), связанных с каким-либо активным вызовом некоторого метода
-// определённой втыкалы.
+// РҐСЂР°РЅРёС‚РµР»Рё СЃРёРјРІРѕР»РѕРІ (РІС…РѕРґРЅС‹С… РїР°СЂР°РјРµС‚СЂРѕРІ, Р° С‚Р°РєР¶Рµ РІС‹С…РѕРґРЅС‹С… Р·РЅР°С‡РµРЅРёР№ Рё РѕС€РёР±РѕРє), СЃРІСЏР·Р°РЅРЅС‹С… СЃ РєР°РєРёРј-Р»РёР±Рѕ Р°РєС‚РёРІРЅС‹Рј РІС‹Р·РѕРІРѕРј РЅРµРєРѕС‚РѕСЂРѕРіРѕ РјРµС‚РѕРґР°
+// РѕРїСЂРµРґРµР»С‘РЅРЅРѕР№ РІС‚С‹РєР°Р»С‹.
 std::unordered_map<const FullPluginMethodCallDefiner*, std::vector<runtime::ObjectHolder>> plug_params;
 std::unordered_map<const FullPluginMethodCallDefiner*, runtime::ObjectHolder> plug_retvals;
 std::unordered_map<const FullPluginMethodCallDefiner*, runtime::RuntimeError> plug_errors;
 
 extern "C"
 {
-    // Функция возвращает идент (фактически, указатель) на экземпляр(объект)-оболочку класса PluginInstance, оборачивающий тот экземпляр класса
-    // втыкалы, к которому направлен вызов plugin_method_call_id.
+    // Р¤СѓРЅРєС†РёСЏ РІРѕР·РІСЂР°С‰Р°РµС‚ РёРґРµРЅС‚ (С„Р°РєС‚РёС‡РµСЃРєРё, СѓРєР°Р·Р°С‚РµР»СЊ) РЅР° СЌРєР·РµРјРїР»СЏСЂ(РѕР±СЉРµРєС‚)-РѕР±РѕР»РѕС‡РєСѓ РєР»Р°СЃСЃР° PluginInstance, РѕР±РѕСЂР°С‡РёРІР°СЋС‰РёР№ С‚РѕС‚ СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР°
+    // РІС‚С‹РєР°Р»С‹, Рє РєРѕС‚РѕСЂРѕРјСѓ РЅР°РїСЂР°РІР»РµРЅ РІС‹Р·РѕРІ plugin_method_call_id.
     HELPERS_EXPORT_IMPORT uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id)
     {
         FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer == 0 || plug_errors.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!call_definer || plug_errors.count(call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
 
         return reinterpret_cast<uintptr_t>(call_definer->plugin_instance);
     }
 
-    // Функция экспортируется ядром, импортируется втыкалой и вызывается изнутри её методов для передачи исполнительской среде информации
-    // о том, что работа текущего метода завершилась событием, которое после его завершения должно привести к выбросу исключения msg_num
-    // с сообщением except_text.
+    // Р¤СѓРЅРєС†РёСЏ СЌРєСЃРїРѕСЂС‚РёСЂСѓРµС‚СЃСЏ СЏРґСЂРѕРј, РёРјРїРѕСЂС‚РёСЂСѓРµС‚СЃСЏ РІС‚С‹РєР°Р»РѕР№ Рё РІС‹Р·С‹РІР°РµС‚СЃСЏ РёР·РЅСѓС‚СЂРё РµС‘ РјРµС‚РѕРґРѕРІ РґР»СЏ РїРµСЂРµРґР°С‡Рё РёСЃРїРѕР»РЅРёС‚РµР»СЊСЃРєРѕР№ СЃСЂРµРґРµ РёРЅС„РѕСЂРјР°С†РёРё
+    // Рѕ С‚РѕРј, С‡С‚Рѕ СЂР°Р±РѕС‚Р° С‚РµРєСѓС‰РµРіРѕ РјРµС‚РѕРґР° Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СЃРѕР±С‹С‚РёРµРј, РєРѕС‚РѕСЂРѕРµ РїРѕСЃР»Рµ РµРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ РґРѕР»Р¶РЅРѕ РїСЂРёРІРµСЃС‚Рё Рє РІС‹Р±СЂРѕСЃСѓ РёСЃРєР»СЋС‡РµРЅРёСЏ msg_num
+    // СЃ СЃРѕРѕР±С‰РµРЅРёРµРј except_text.
     MYTHLON_KERNEL_EXPORT int32_t PluginSetRuntimeError(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text)
     {
         FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer == 0 || plug_errors.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-        if (msg_num >= static_cast<uint32_t>(ThrowMessageNumber::THRM_MAX_VALUE))
-            return PluginErrorCode::PLUGIN_ERR_INCORRECT_RUNTIME_ERROR; // Недопустимый тип ошибки.
+        if (!call_definer || plug_errors.count(call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
+        if (msg_num > static_cast<uint32_t>(ThrowMessageNumber::THRM_MAX_VALUE))
+            return PluginErrorCode::PLUGIN_ERR_INCORRECT_RUNTIME_ERROR; // РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ С‚РёРї РѕС€РёР±РєРё.
 
         if (!except_text)
             except_text = ERROR_WITHOUT_TEXT;
         plug_errors[call_definer] =
             CreateErrorObject(call_definer->context->GetLastCommandDesc(), static_cast<ThrowMessageNumber>(msg_num), except_text);
-        return PluginErrorCode::PLUGIN_ERR_NONE;   // Код нормального завершения.
+        return PluginErrorCode::PLUGIN_ERR_NONE;   // РљРѕРґ РЅРѕСЂРјР°Р»СЊРЅРѕРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ.
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginSetResultValue(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length)
-    { // Функция установки значения, возвращаемого вызванным методом втыкалы. Значение считывается из поля source_field длиной не более source_length.
-      // Возвращаемое значение указывает истинное количество считанных байт (при успешном выполнеии запроса) либо код ошибки (при её возникновении).
+    { // Р¤СѓРЅРєС†РёСЏ СѓСЃС‚Р°РЅРѕРІРєРё Р·РЅР°С‡РµРЅРёСЏ, РІРѕР·РІСЂР°С‰Р°РµРјРѕРіРѕ РІС‹Р·РІР°РЅРЅС‹Рј РјРµС‚РѕРґРѕРј РІС‚С‹РєР°Р»С‹. Р—РЅР°С‡РµРЅРёРµ СЃС‡РёС‚С‹РІР°РµС‚СЃСЏ РёР· РїРѕР»СЏ source_field РґР»РёРЅРѕР№ РЅРµ Р±РѕР»РµРµ source_length.
+      // Р’РѕР·РІСЂР°С‰Р°РµРјРѕРµ Р·РЅР°С‡РµРЅРёРµ СѓРєР°Р·С‹РІР°РµС‚ РёСЃС‚РёРЅРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‡РёС‚Р°РЅРЅС‹С… Р±Р°Р№С‚ (РїСЂРё СѓСЃРїРµС€РЅРѕРј РІС‹РїРѕР»РЅРµРёРё Р·Р°РїСЂРѕСЃР°) Р»РёР±Рѕ РєРѕРґ РѕС€РёР±РєРё (РїСЂРё РµС‘ РІРѕР·РЅРёРєРЅРѕРІРµРЅРёРё).
         if (!source_field)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;    // Не указан буфер-источник возвращаемого значения.
+            return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;    // РќРµ СѓРєР°Р·Р°РЅ Р±СѓС„РµСЂ-РёСЃС‚РѕС‡РЅРёРє РІРѕР·РІСЂР°С‰Р°РµРјРѕРіРѕ Р·РЅР°С‡РµРЅРёСЏ.
         if (source_length < 0)
             return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
         FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer == 0 || plug_retvals.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!full_call_definer || plug_retvals.count(full_call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
 
         ObjectHolder& retval_holder = plug_retvals[full_call_definer];
         switch (static_cast<ObjectTypes>(result_type))
@@ -163,85 +171,83 @@ extern "C"
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginParamsCount(uintptr_t plugin_method_call_id)
-    { // Экспортируемая функция возвращает вызвавшему её методу втыкалы количество параданных в неё параметров.
+    { // Р­РєСЃРїРѕСЂС‚РёСЂСѓРµРјР°СЏ С„СѓРЅРєС†РёСЏ РІРѕР·РІСЂР°С‰Р°РµС‚ РІС‹Р·РІР°РІС€РµРјСѓ РµС‘ РјРµС‚РѕРґСѓ РІС‚С‹РєР°Р»С‹ РєРѕР»РёС‡РµСЃС‚РІРѕ РїР°СЂР°РґР°РЅРЅС‹С… РІ РЅРµС‘ РїР°СЂР°РјРµС‚СЂРѕРІ.
         FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer == 0 || plug_params.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!call_definer || plug_params.count(call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
 
-        return plug_params[call_definer].size();
+        return static_cast<int32_t>(plug_params[call_definer].size());
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginParamType(uintptr_t plugin_method_call_id, uint32_t arg_number)
-    { // Данная экспортируемая ядром функция сообщает вызывающему коду тип входного аргумента с номером arg_number.
+    { // Р”Р°РЅРЅР°СЏ СЌРєСЃРїРѕСЂС‚РёСЂСѓРµРјР°СЏ СЏРґСЂРѕРј С„СѓРЅРєС†РёСЏ СЃРѕРѕР±С‰Р°РµС‚ РІС‹Р·С‹РІР°СЋС‰РµРјСѓ РєРѕРґСѓ С‚РёРї РІС…РѕРґРЅРѕРіРѕ Р°СЂРіСѓРјРµРЅС‚Р° СЃ РЅРѕРјРµСЂРѕРј arg_number.
         FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer == 0 || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
         uint32_t plug_params_count =
             static_cast<uint32_t>(plug_params[full_call_definer].size());
         if (arg_number >= plug_params_count)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // РРЅРґРµРєСЃ Р°СЂРіСѓРјРµРЅС‚Р° Р·Р° РїСЂРµРґРµР»Р°РјРё РґРѕРїСѓСЃС‚РёРјРѕРіРѕ.
 
         ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
         if (!selected_param)
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_NONE);    // В контейнере хранится значение None.
+            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_NONE);    // Р’ РєРѕРЅС‚РµР№РЅРµСЂРµ С…СЂР°РЅРёС‚СЃСЏ Р·РЅР°С‡РµРЅРёРµ None.
         else if (selected_param.TryAs<runtime::Bool>())
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_LOGICAL); // В контейнере находится логическое значение.
+            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_LOGICAL); // Р’ РєРѕРЅС‚РµР№РЅРµСЂРµ РЅР°С…РѕРґРёС‚СЃСЏ Р»РѕРіРёС‡РµСЃРєРѕРµ Р·РЅР°С‡РµРЅРёРµ.
         else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
-        { // Какое-то число, целое или с плавающей точкой.
+        { // РљР°РєРѕРµ-С‚Рѕ С‡РёСЃР»Рѕ, С†РµР»РѕРµ РёР»Рё СЃ РїР»Р°РІР°СЋС‰РµР№ С‚РѕС‡РєРѕР№.
             if (std::holds_alternative<int>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER);     // Это целое число.
+                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER);     // Р­С‚Рѕ С†РµР»РѕРµ С‡РёСЃР»Рѕ.
             else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE);      // Число с плавающей точкой.
+                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE);      // Р§РёСЃР»Рѕ СЃ РїР»Р°РІР°СЋС‰РµР№ С‚РѕС‡РєРѕР№.
             else
                 return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_OTHER);
         }
         else if (selected_param.TryAs<runtime::String>())
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING);  // Строка.
+            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING);  // РЎС‚СЂРѕРєР°.
         else
             return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_OTHER);
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number)
-    { // Функция возвращает длину строки аргумента с номером arg_number, если данный аргумент является строковым.
+    { // Р¤СѓРЅРєС†РёСЏ РІРѕР·РІСЂР°С‰Р°РµС‚ РґР»РёРЅСѓ СЃС‚СЂРѕРєРё Р°СЂРіСѓРјРµРЅС‚Р° СЃ РЅРѕРјРµСЂРѕРј arg_number, РµСЃР»Рё РґР°РЅРЅС‹Р№ Р°СЂРіСѓРјРµРЅС‚ СЏРІР»СЏРµС‚СЃСЏ СЃС‚СЂРѕРєРѕРІС‹Рј.
         FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer == 0 || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
 
         uint32_t plug_params_count =
             static_cast<uint32_t>(plug_params[full_call_definer].size());
         if (arg_number >= plug_params_count)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // РРЅРґРµРєСЃ Р°СЂРіСѓРјРµРЅС‚Р° Р·Р° РїСЂРµРґРµР»Р°РјРё РґРѕРїСѓСЃС‚РёРјРѕРіРѕ.
 
         if (runtime::String* string_val_ptr = plug_params[full_call_definer][arg_number].TryAs<runtime::String>())
             return static_cast<int32_t>(string_val_ptr->SizeOf());
         else
-            return PluginErrorCode::PLUGIN_ERR_IT_IS_NOT_STRING;   // Это не строка.
+            return PluginErrorCode::PLUGIN_ERR_IT_IS_NOT_STRING;   // Р­С‚Рѕ РЅРµ СЃС‚СЂРѕРєР°.
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginParamGetValue(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length)
-    { // Функция копирует содержимое параметра arg_number в поле-приёмник, на которое указывает target_field. Предполагается, что
-      // места там не менее, чем target_length байт. Возвращаемое значение - количество скопированных байт.
+    { // Р¤СѓРЅРєС†РёСЏ РєРѕРїРёСЂСѓРµС‚ СЃРѕРґРµСЂР¶РёРјРѕРµ РїР°СЂР°РјРµС‚СЂР° arg_number РІ РїРѕР»Рµ-РїСЂРёС‘РјРЅРёРє, РЅР° РєРѕС‚РѕСЂРѕРµ СѓРєР°Р·С‹РІР°РµС‚ target_field. РџСЂРµРґРїРѕР»Р°РіР°РµС‚СЃСЏ, С‡С‚Рѕ
+      // РјРµСЃС‚Р° С‚Р°Рј РЅРµ РјРµРЅРµРµ, С‡РµРј target_length Р±Р°Р№С‚. Р’РѕР·РІСЂР°С‰Р°РµРјРѕРµ Р·РЅР°С‡РµРЅРёРµ - РєРѕР»РёС‡РµСЃС‚РІРѕ СЃРєРѕРїРёСЂРѕРІР°РЅРЅС‹С… Р±Р°Р№С‚.
         if (!target_field)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_TARGET_FIELD;    // Не указан буфер-приемник получаемого значения.
+            return PluginErrorCode::PLUGIN_ERR_INVALID_TARGET_FIELD;    // РќРµ СѓРєР°Р·Р°РЅ Р±СѓС„РµСЂ-РїСЂРёРµРјРЅРёРє РїРѕР»СѓС‡Р°РµРјРѕРіРѕ Р·РЅР°С‡РµРЅРёСЏ.
         if (target_length < 0)
             return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
 
         FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer == 0 || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
 
-        uint32_t plug_params_count =
-            static_cast<uint32_t>(plug_params[full_call_definer].size());
-        if (arg_number >= plug_params_count)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+        if (arg_number >= static_cast<uint32_t>(plug_params[full_call_definer].size()))
+            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // РРЅРґРµРєСЃ Р°СЂРіСѓРјРµРЅС‚Р° Р·Р° РїСЂРµРґРµР»Р°РјРё РґРѕРїСѓСЃС‚РёРјРѕРіРѕ.
         ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
 
         if (!selected_param)
-        { // Значение None.
+        { // Р—РЅР°С‡РµРЅРёРµ None.
             return 0;
         }
         else if (runtime::Bool* bool_ptr = selected_param.TryAs<runtime::Bool>())
-        { // Однобайтовое логическое значение.
+        { // РћРґРЅРѕР±Р°Р№С‚РѕРІРѕРµ Р»РѕРіРёС‡РµСЃРєРѕРµ Р·РЅР°С‡РµРЅРёРµ.
             if (target_length >= sizeof(bool))
             {
                 *reinterpret_cast<bool*>(target_field) = bool_ptr->GetValue();
@@ -253,9 +259,9 @@ extern "C"
             }
         }
         else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
-        { // Некоторое число.
+        { // РќРµРєРѕС‚РѕСЂРѕРµ С‡РёСЃР»Рѕ.
             if (std::holds_alternative<int>(number_val_ptr->GetValue()))
-            { // Целое.
+            { // Р¦РµР»РѕРµ.
                 if (target_length >= sizeof(int))
                 {
                     *reinterpret_cast<int*>(target_field) = std::get<int>(number_val_ptr->GetValue());
@@ -267,7 +273,7 @@ extern "C"
                 }
             }
             else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
-            { // Дробное с плавающей точкой.
+            { // Р”СЂРѕР±РЅРѕРµ СЃ РїР»Р°РІР°СЋС‰РµР№ С‚РѕС‡РєРѕР№.
                 if (target_length >= sizeof(double))
                 {
                     *reinterpret_cast<double*>(target_field) = std::get<double>(number_val_ptr->GetValue());
@@ -295,6 +301,72 @@ extern "C"
             return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
         }
     }
+
+    HELPERS_EXPORT_IMPORT int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length)
+    { // Р¤СѓРЅРєС†РёСЏ РЅР°РїСЂР°РІР»РµРЅРёСЏ РґР°РЅРЅС‹С… С‚РёРїР° source_type РёР· Р±СѓС„РµСЂР° (source_field, source_length) РІ РІС‹С…РѕРґРЅРѕР№ РїРѕС‚РѕРє, СЃРІСЏР·Р°РЅРЅС‹Р№ СЃ РєРѕРЅС‚РµРєСЃС‚РѕРј, РєРѕС‚РѕСЂС‹Р№, РІ СЃРІРѕСЋ РѕС‡РµСЂРµРґСЊ,
+      // Р°СЃСЃРѕС†РёРёСЂРѕРІР°РЅ СЃ РІС‹Р·РѕРІРѕРј plugin_method_call_id.
+        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // РќРµРёР·РІРµСЃС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РІС‹Р·РѕРІР° РјРµС‚РѕРґР°.
+
+        switch (static_cast<ObjectTypes>(source_type))
+        {
+        case ObjectTypes::OBJECT_TYPE_NONE:
+            return 0;   // РўРёРї None - РЅРёС‡РµРіРѕ РЅРµ СЃС‡РёС‚С‹РІР°РµРј Рё РЅРёС‡РµРіРѕ РЅРµ РѕС‚РїСЂР°РІР»СЏРµРј РІ РїРѕС‚РѕРє РєРѕРЅС‚РµРєСЃС‚Р°.
+        case ObjectTypes::OBJECT_TYPE_LOGICAL:
+            if (source_field && source_length >= sizeof(bool))
+            {
+                full_call_definer->context->GetOutputStream() << *reinterpret_cast<bool*>(source_field);
+                return sizeof(bool);
+            }
+            else
+            {
+                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+            }
+        case ObjectTypes::OBJECT_TYPE_INTEGER:
+            if (source_field && source_length >= sizeof(int))
+            {
+                full_call_definer->context->GetOutputStream() << *reinterpret_cast<int*>(source_field);
+                return sizeof(int);
+            }
+            else
+            {
+                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+            }
+        case ObjectTypes::OBJECT_TYPE_DOUBLE:
+            if (source_field && source_length >= sizeof(double))
+            {
+                full_call_definer->context->GetOutputStream() << *reinterpret_cast<double*>(source_field);
+                return sizeof(double);
+            }
+            else
+            {
+                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+            }
+        case ObjectTypes::OBJECT_TYPE_STRING:
+            if (source_field)
+            {
+                full_call_definer->context->GetOutputStream() << std::string(reinterpret_cast<char*>(source_field), source_length);
+                return source_length;
+            }
+            else
+            {
+                return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
+            }
+        case ObjectTypes::OBJECT_TYPE_SYMBOL:
+            if (source_field && source_length >= sizeof(char))
+            {
+                full_call_definer->context->GetOutputStream() << *reinterpret_cast<char*>(source_field);
+                return sizeof(char);
+            }
+            else
+            {
+                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+            }
+        default:
+            return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
+        }
+    }
 }
 
 namespace ast
@@ -305,21 +377,22 @@ namespace ast
         (const std::string& class_name, std::vector<std::unique_ptr<Statement>>&& expression_args, const PluginDescData& plugin_desc) :
             class_name_(class_name), expression_args_(move(expression_args)), plugin_desc_(plugin_desc)
     {
-        // Уже на этапе синтаксического анализа попытаемся выполнить некоторый предварительный контроль соответствия формата декларации,
-        // создающей экземпляр класса данной втыкалы, требованиям, которые предъявляются самой втыкалой к составу формальных параметров
-        // своего конструктора. Так как истинные типы фактических параметров будут нам известны только в процессе исполнения, пока всё,
-        // что мы можем проверить прямо в процессе разбора - это их имеющееся количество, которое должно подходить к требованиям какого-либо
-        // предусморенного втыкалой конструктора.
+        // РЈР¶Рµ РЅР° СЌС‚Р°РїРµ СЃРёРЅС‚Р°РєСЃРёС‡РµСЃРєРѕРіРѕ Р°РЅР°Р»РёР·Р° РїРѕРїС‹С‚Р°РµРјСЃСЏ РІС‹РїРѕР»РЅРёС‚СЊ РЅРµРєРѕС‚РѕСЂС‹Р№ РїСЂРµРґРІР°СЂРёС‚РµР»СЊРЅС‹Р№ РєРѕРЅС‚СЂРѕР»СЊ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёСЏ С„РѕСЂРјР°С‚Р° РґРµРєР»Р°СЂР°С†РёРё,
+        // СЃРѕР·РґР°СЋС‰РµР№ СЌРєР·РµРјРїР»СЏСЂ РєР»Р°СЃСЃР° РґР°РЅРЅРѕР№ РІС‚С‹РєР°Р»С‹, С‚СЂРµР±РѕРІР°РЅРёСЏРј, РєРѕС‚РѕСЂС‹Рµ РїСЂРµРґСЉСЏРІР»СЏСЋС‚СЃСЏ СЃР°РјРѕР№ РІС‚С‹РєР°Р»РѕР№ Рє СЃРѕСЃС‚Р°РІСѓ С„РѕСЂРјР°Р»СЊРЅС‹С… РїР°СЂР°РјРµС‚СЂРѕРІ
+        // СЃРІРѕРµРіРѕ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР°. РўР°Рє РєР°Рє РёСЃС‚РёРЅРЅС‹Рµ С‚РёРїС‹ С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ Р±СѓРґСѓС‚ РЅР°Рј РёР·РІРµСЃС‚РЅС‹ С‚РѕР»СЊРєРѕ РІ РїСЂРѕС†РµСЃСЃРµ РёСЃРїРѕР»РЅРµРЅРёСЏ, РїРѕРєР° РІСЃС‘,
+        // С‡С‚Рѕ РјС‹ РјРѕР¶РµРј РїСЂРѕРІРµСЂРёС‚СЊ РїСЂСЏРјРѕ РІ РїСЂРѕС†РµСЃСЃРµ СЂР°Р·Р±РѕСЂР° - СЌС‚Рѕ РёС… РёРјРµСЋС‰РµРµСЃСЏ РєРѕР»РёС‡РµСЃС‚РІРѕ, РєРѕС‚РѕСЂРѕРµ РґРѕР»Р¶РЅРѕ РїРѕРґС…РѕРґРёС‚СЊ Рє С‚СЂРµР±РѕРІР°РЅРёСЏРј РєР°РєРѕРіРѕ-Р»РёР±Рѕ
+        // РїСЂРµРґСѓСЃРјРѕСЂРµРЅРЅРѕРіРѕ РІС‚С‹РєР°Р»РѕР№ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР°.
         if (!plugin_desc_.methods.count(USE_INIT_METHOD_NAME))
-        { // Никаких конструкторов нет вовсе. В этом случае expression_args_ должен быть пустым.
+        { // РќРёРєР°РєРёС… РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂРѕРІ РЅРµС‚ РІРѕРІСЃРµ. Р’ СЌС‚РѕРј СЃР»СѓС‡Р°Рµ expression_args_ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј.
             if (expression_args_.size())
                 throw ParseError(ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS);
         }
         else
-        { // Какие-то конструкторы есть. Проверим возможность приёма ими expression_args_.size() параметров.
-            if (GetMethodResult init_check_result = GetMethod(plugin_desc_, USE_INIT_METHOD_NAME, expression_args_.size()); !init_check_result.method_definer)
-                // Конструктора, принимающего expression_args_.size() параметров, не обнаружено.
-                // Выбросим исключение с наиболее подходящим кодом ошибки, возвращенном в init_check_result при поиске.
+        { // РљР°РєРёРµ-С‚Рѕ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂС‹ РµСЃС‚СЊ. РџСЂРѕРІРµСЂРёРј РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ РїСЂРёС‘РјР° РёРјРё expression_args_.size() РїР°СЂР°РјРµС‚СЂРѕРІ.
+            if (GetMethodResult init_check_result = GetMethod(plugin_desc_, USE_INIT_METHOD_NAME, expression_args_.size());
+                !init_check_result.method_definer)
+                // РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР°, РїСЂРёРЅРёРјР°СЋС‰РµРіРѕ expression_args_.size() РїР°СЂР°РјРµС‚СЂРѕРІ, РЅРµ РѕР±РЅР°СЂСѓР¶РµРЅРѕ.
+                // Р’С‹Р±СЂРѕСЃРёРј РёСЃРєР»СЋС‡РµРЅРёРµ СЃ РЅР°РёР±РѕР»РµРµ РїРѕРґС…РѕРґСЏС‰РёРј РєРѕРґРѕРј РѕС€РёР±РєРё, РІРѕР·РІСЂР°С‰РµРЅРЅРѕРј РІ init_check_result РїСЂРё РїРѕРёСЃРєРµ.
                 throw ParseError(init_check_result.err_num);
         }
     }
@@ -328,17 +401,18 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
 
-        ObjectHolder plugin_holder = ObjectHolder::Own(PluginInstance(class_name_, plugin_desc_, context));
+        ObjectHolder plugin_holder = ObjectHolder::Own(std::move(PluginInstance(class_name_, plugin_desc_, context)));
         PluginInstance* plugin_object = plugin_holder.TryAs<PluginInstance>();
-        // Вычислим фактические значения аргументов, которые требуется передать конструктору.
+        // Р’С‹С‡РёСЃР»РёРј С„Р°РєС‚РёС‡РµСЃРєРёРµ Р·РЅР°С‡РµРЅРёСЏ Р°СЂРіСѓРјРµРЅС‚РѕРІ, РєРѕС‚РѕСЂС‹Рµ С‚СЂРµР±СѓРµС‚СЃСЏ РїРµСЂРµРґР°С‚СЊ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂСѓ.
         std::vector<ObjectHolder> actual_args;
         for (auto& cur_param_ptr : expression_args_)
             actual_args.push_back(cur_param_ptr->Execute(closure, context));
 
-        if (GetMethodResult init_check_result = GetMethod(plugin_desc_, USE_INIT_METHOD_NAME, actual_args); init_check_result.method_definer)
-            // Существует метод конструктора объекта втыкалы, принимающий аргументы actual_args.
+        if (GetMethodResult init_check_result = GetMethod(plugin_desc_, USE_INIT_METHOD_NAME, actual_args);
+            init_check_result.method_definer)
+            // РЎСѓС‰РµСЃС‚РІСѓРµС‚ РјРµС‚РѕРґ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР° РѕР±СЉРµРєС‚Р° РІС‚С‹РєР°Р»С‹, РїСЂРёРЅРёРјР°СЋС‰РёР№ Р°СЂРіСѓРјРµРЅС‚С‹ actual_args.
             plugin_object->Call(USE_INIT_METHOD_NAME, actual_args, context);
-        else   // Перегрузки конструктивного метода, способного принять аргументы actual_args, у втыкалы не оказалось.
+        else   // РџРµСЂРµРіСЂСѓР·РєРё РєРѕРЅСЃС‚СЂСѓРєС‚РёРІРЅРѕРіРѕ РјРµС‚РѕРґР°, СЃРїРѕСЃРѕР±РЅРѕРіРѕ РїСЂРёРЅСЏС‚СЊ Р°СЂРіСѓРјРµРЅС‚С‹ actual_args, Сѓ РІС‚С‹РєР°Р»С‹ РЅРµ РѕРєР°Р·Р°Р»РѕСЃСЊ.
             ThrowRuntimeError(context, init_check_result.err_num, init_check_result.err_text);
 
         return plugin_holder;
@@ -389,17 +463,17 @@ namespace runtime
     {
         static constexpr int PARAM_CHECK_QUANTITY_MASK = 3;
 
-        // Сначала, если это требуется полем check_mode определителя вызываемого метода, проверим количественное соответствие между
-        // actual_args и требованиями к количеству фактическаих параметров, предъявляемых вызываемым методом втыкалы.
+        // РЎРЅР°С‡Р°Р»Р°, РµСЃР»Рё СЌС‚Рѕ С‚СЂРµР±СѓРµС‚СЃСЏ РїРѕР»РµРј check_mode РѕРїСЂРµРґРµР»РёС‚РµР»СЏ РІС‹Р·С‹РІР°РµРјРѕРіРѕ РјРµС‚РѕРґР°, РїСЂРѕРІРµСЂРёРј РєРѕР»РёС‡РµСЃС‚РІРµРЅРЅРѕРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ РјРµР¶РґСѓ
+        // actual_args Рё С‚СЂРµР±РѕРІР°РЅРёСЏРјРё Рє РєРѕР»РёС‡РµСЃС‚РІСѓ С„Р°РєС‚РёС‡РµСЃРєР°РёС… РїР°СЂР°РјРµС‚СЂРѕРІ, РїСЂРµРґСЉСЏРІР»СЏРµРјС‹С… РІС‹Р·С‹РІР°РµРјС‹Рј РјРµС‚РѕРґРѕРј РІС‚С‹РєР°Р»С‹.
         if (method_def.check_mode & PARAM_CHECK_QUANTITY_MASK)
-        { // Проверка на количественное соответствие формальных и фактических параметров нужна.
+        { // РџСЂРѕРІРµСЂРєР° РЅР° РєРѕР»РёС‡РµСЃС‚РІРµРЅРЅРѕРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ С„РѕСЂРјР°Р»СЊРЅС‹С… Рё С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ РЅСѓР¶РЅР°.
             if (method_def.arg_count_min == method_def.arg_count_max)
-            { // При этих условиях проводим проверку на точное соответствие числа затребованных и действительных фактических параметров.
-                if (actual_args.size() != method_def.arg_count_min) // Наличное число фактических параметров неверное (не соответствует требованиям).
+            { // РџСЂРё СЌС‚РёС… СѓСЃР»РѕРІРёСЏС… РїСЂРѕРІРѕРґРёРј РїСЂРѕРІРµСЂРєСѓ РЅР° С‚РѕС‡РЅРѕРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ С‡РёСЃР»Р° Р·Р°С‚СЂРµР±РѕРІР°РЅРЅС‹С… Рё РґРµР№СЃС‚РІРёС‚РµР»СЊРЅС‹С… С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ.
+                if (actual_args.size() != method_def.arg_count_min) // РќР°Р»РёС‡РЅРѕРµ С‡РёСЃР»Рѕ С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ РЅРµРІРµСЂРЅРѕРµ (РЅРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚ С‚СЂРµР±РѕРІР°РЅРёСЏРј).
                     return {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
                             GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
             }
-            // При неравных величинах method_def.arg_count_min и method_def.arg_count_max применяем другие способы количественной проверки.
+            // РџСЂРё РЅРµСЂР°РІРЅС‹С… РІРµР»РёС‡РёРЅР°С… method_def.arg_count_min Рё method_def.arg_count_max РїСЂРёРјРµРЅСЏРµРј РґСЂСѓРіРёРµ СЃРїРѕСЃРѕР±С‹ РєРѕР»РёС‡РµСЃС‚РІРµРЅРЅРѕР№ РїСЂРѕРІРµСЂРєРё.
             else if (actual_args.size() > method_def.arg_count_max)
                 return {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
                         GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
@@ -408,7 +482,7 @@ namespace runtime
                         GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
         }
 
-        // Далее, если нужно, проверим типовое соответствие фактических параметров требованиям метода втыкалы.
+        // Р”Р°Р»РµРµ, РµСЃР»Рё РЅСѓР¶РЅРѕ, РїСЂРѕРІРµСЂРёРј С‚РёРїРѕРІРѕРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ С‚СЂРµР±РѕРІР°РЅРёСЏРј РјРµС‚РѕРґР° РІС‚С‹РєР°Р»С‹.
         if (method_def.check_mode & MethodParamCheckMode::PARAM_CHECK_TYPE)
         {
             size_t i = 1;
@@ -442,11 +516,11 @@ namespace runtime
                 ++i;
             }
         }
-        // Аргументы удовлетворяют требованиям данной перегрузки метода.
+        // РђСЂРіСѓРјРµРЅС‚С‹ СѓРґРѕРІР»РµС‚РІРѕСЂСЏСЋС‚ С‚СЂРµР±РѕРІР°РЅРёСЏРј РґР°РЅРЅРѕР№ РїРµСЂРµРіСЂСѓР·РєРё РјРµС‚РѕРґР°.
         return {ThrowMessageNumber::THRM_UNKNOWN, {}};
     }
 
-    // Грубый поиск подходящей перегрузки метода с именем method_name только по количеству формальных параметров.
+    // Р“СЂСѓР±С‹Р№ РїРѕРёСЃРє РїРѕРґС…РѕРґСЏС‰РµР№ РїРµСЂРµРіСЂСѓР·РєРё РјРµС‚РѕРґР° СЃ РёРјРµРЅРµРј method_name С‚РѕР»СЊРєРѕ РїРѕ РєРѕР»РёС‡РµСЃС‚РІСѓ С„РѕСЂРјР°Р»СЊРЅС‹С… РїР°СЂР°РјРµС‚СЂРѕРІ.
     GetMethodResult GetMethod(const ast::PluginDescData& plugin_desc, const std::string& method_name, size_t arg_count)
     {
         ThrowMessageNumber err_num = ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
@@ -454,23 +528,23 @@ namespace runtime
 
         auto methods_range_pair = plugin_desc.methods.equal_range(method_name);
         if (methods_range_pair.first != methods_range_pair.second)
-        {
+        { // РљР°РєРёРµ-С‚Рѕ РјРµС‚РѕРґС‹ СЃ РёСЃРєРѕРјС‹Рј РёРјРµРЅРµРј РєР»Р°СЃСЃ РІС‚С‹РєР°Р»С‹ РїСЂРµРґРѕСЃС‚Р°РІР»СЏРµС‚. РўР°Рє С‡С‚Рѕ РїСЂРѕР±Р»РµРјС‹ РјРѕРіСѓС‚ Р±С‹С‚СЊ С‚РѕР»СЊРєРѕ СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј РїР°СЂР°РјРµС‚СЂРѕРІ.
             err_num = ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT;
             err_mess.clear();
         }
 
         for (auto& scan_method = methods_range_pair.first; scan_method != methods_range_pair.second; ++scan_method)
-        { // Перебор всех имеющихся методов втыкалы с именем method_name в поисках того, который сможет принять arg_count параметров.
+        { // РџРµСЂРµР±РѕСЂ РІСЃРµС… РёРјРµСЋС‰РёС…СЃСЏ РјРµС‚РѕРґРѕРІ РІС‚С‹РєР°Р»С‹ СЃ РёРјРµРЅРµРј method_name РІ РїРѕРёСЃРєР°С… С‚РѕРіРѕ, РєРѕС‚РѕСЂС‹Р№ СЃРјРѕР¶РµС‚ РїСЂРёРЅСЏС‚СЊ arg_count РїР°СЂР°РјРµС‚СЂРѕРІ.
             if (arg_count >= scan_method->second.arg_count_min && arg_count <= scan_method->second.arg_count_max)
-                return &methods_range_pair.first->second;  // Подходящий метод method_name, способный принять arg_count параметров, найден.
-            // Рассматрвиаемый метод не подошёл. Выберем для него корректное сообщение об ошибке.
+                return &methods_range_pair.first->second;  // РџРѕРґС…РѕРґСЏС‰РёР№ РјРµС‚РѕРґ method_name, СЃРїРѕСЃРѕР±РЅС‹Р№ РїСЂРёРЅСЏС‚СЊ arg_count РїР°СЂР°РјРµС‚СЂРѕРІ, РЅР°Р№РґРµРЅ.
+            // Р Р°СЃСЃРјР°С‚СЂРІРёР°РµРјС‹Р№ РјРµС‚РѕРґ РЅРµ РїРѕРґРѕС€С‘Р». Р’С‹Р±РµСЂРµРј РґР»СЏ РЅРµРіРѕ РєРѕСЂСЂРµРєС‚РЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ РѕР± РѕС€РёР±РєРµ.
             err_mess = GenMethodParamsErrMess(method_name, arg_count, scan_method->second.arg_count_min, scan_method->second.arg_count_max);
         }
-        // Подходящий по имени и количеству формальных параметров метод не найден.
+        // РџРѕРґС…РѕРґСЏС‰РёР№ РїРѕ РёРјРµРЅРё Рё РєРѕР»РёС‡РµСЃС‚РІСѓ С„РѕСЂРјР°Р»СЊРЅС‹С… РїР°СЂР°РјРµС‚СЂРѕРІ РјРµС‚РѕРґ РЅРµ РЅР°Р№РґРµРЅ.
         return {err_num, std::move(err_mess)};
     }
 
-    // Более точный метод поиска перегрузки метода method_name с учётом истинных типов фактических параметров actual_args.
+    // Р‘РѕР»РµРµ С‚РѕС‡РЅС‹Р№ РјРµС‚РѕРґ РїРѕРёСЃРєР° РїРµСЂРµРіСЂСѓР·РєРё РјРµС‚РѕРґР° method_name СЃ СѓС‡С‘С‚РѕРј РёСЃС‚РёРЅРЅС‹С… С‚РёРїРѕРІ С„Р°РєС‚РёС‡РµСЃРєРёС… РїР°СЂР°РјРµС‚СЂРѕРІ actual_args.
     GetMethodResult GetMethod(const ast::PluginDescData& plugin_desc, const std::string& method_name, const std::vector<ObjectHolder>& actual_args)
     {
         std::pair<ThrowMessageNumber, std::string> check_result{ThrowMessageNumber::THRM_METHOD_NOT_FOUND, GenMethodNotFoundErrMess(method_name)};
@@ -484,33 +558,39 @@ namespace runtime
         }
 
         for (auto& scan_method = methods_range_pair.first; scan_method != methods_range_pair.second; ++scan_method)
-        { // Перебор всех имеющихся методов втыкалы с именем method_name в поисках того, который сможет принять аргументы actual_args.
+        { // РџРµСЂРµР±РѕСЂ РІСЃРµС… РёРјРµСЋС‰РёС…СЃСЏ РјРµС‚РѕРґРѕРІ РІС‚С‹РєР°Р»С‹ СЃ РёРјРµРЅРµРј method_name РІ РїРѕРёСЃРєР°С… С‚РѕРіРѕ, РєРѕС‚РѕСЂС‹Р№ СЃРјРѕР¶РµС‚ РїСЂРёРЅСЏС‚СЊ Р°СЂРіСѓРјРµРЅС‚С‹ actual_args.
             if (arg_count >= scan_method->second.arg_count_min && arg_count <= scan_method->second.arg_count_max)
-            { // Подходящий метод method_name, способный принять arg_count параметров, найден.
+            { // РџРѕРґС…РѕРґСЏС‰РёР№ РјРµС‚РѕРґ method_name, СЃРїРѕСЃРѕР±РЅС‹Р№ РїСЂРёРЅСЏС‚СЊ arg_count РїР°СЂР°РјРµС‚СЂРѕРІ, РЅР°Р№РґРµРЅ.
                 check_result = CheckActualParamLegality(scan_method->second, actual_args);
                 if (check_result.first == ThrowMessageNumber::THRM_UNKNOWN)
-                    return &methods_range_pair.first->second;   // Найдена перегрузка метода, подходящая как по количеству, так и по качеству аргументов.
+                    return &methods_range_pair.first->second;   // РќР°Р№РґРµРЅР° РїРµСЂРµРіСЂСѓР·РєР° РјРµС‚РѕРґР°, РїРѕРґС…РѕРґСЏС‰Р°СЏ РєР°Рє РїРѕ РєРѕР»РёС‡РµСЃС‚РІСѓ, С‚Р°Рє Рё РїРѕ РєР°С‡РµСЃС‚РІСѓ Р°СЂРіСѓРјРµРЅС‚РѕРІ.
             }
         }
-        // Не одной пригодной перегрузки метода method_name, способной принять параметры actual_args, так и не обнаружено.
+        // РќРµ РѕРґРЅРѕР№ РїСЂРёРіРѕРґРЅРѕР№ РїРµСЂРµРіСЂСѓР·РєРё РјРµС‚РѕРґР° method_name, СЃРїРѕСЃРѕР±РЅРѕР№ РїСЂРёРЅСЏС‚СЊ РїР°СЂР°РјРµС‚СЂС‹ actual_args, С‚Р°Рє Рё РЅРµ РѕР±РЅР°СЂСѓР¶РµРЅРѕ.
         return {check_result.first, check_result.second};
     }
 
     PluginInstance::PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc, Context& context) :
-        class_name_(class_name), plugin_desc_(plugin_desc_), context_(context)
+        class_name_(class_name), plugin_desc_(plugin_desc), context_(context)
     {}
+
+    PluginInstance::PluginInstance(PluginInstance&& other) noexcept :
+        class_name_(std::move(other.class_name_)), plugin_desc_(other.plugin_desc_), context_(other.context_)
+    {
+        other.class_name_.clear();
+    }
 
     PluginInstance::~PluginInstance()
     {
-        // Если втыкала опеределяет специальный метод PLUGIN_DESTROY_METHOD, то он будет использоваться как внутренний её деструктор (будет вызываться
-        // при разрушении объекта).
-        if (HasMethod(PLUGIN_DESTROY_METHOD, 0))
+        // Р•СЃР»Рё РІС‚С‹РєР°Р»Р° РѕРїРµСЂРµРґРµР»СЏРµС‚ СЃРїРµС†РёР°Р»СЊРЅС‹Р№ РјРµС‚РѕРґ PLUGIN_DESTROY_METHOD, С‚Рѕ РѕРЅ Р±СѓРґРµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РєР°Рє РІРЅСѓС‚СЂРµРЅРЅРёР№ РµС‘ РґРµСЃС‚СЂСѓРєС‚РѕСЂ (Р±СѓРґРµС‚ РІС‹Р·С‹РІР°С‚СЊСЃСЏ
+        // РїСЂРё СЂР°Р·СЂСѓС€РµРЅРёРё РѕР±СЉРµРєС‚Р°).
+        if (!class_name_.empty() && HasMethod(PLUGIN_DESTROY_METHOD, 0))
             Call(PLUGIN_DESTROY_METHOD, {}, context_);
     }
 
     void PluginInstance::Print(std::ostream& os, Context& context)
     {
-        // Если втыкала определяет метод PLUGIN_STR_FUNCTION_METHOD, то для печати состояния класса используем именно его результат.
+        // Р•СЃР»Рё РІС‚С‹РєР°Р»Р° РѕРїСЂРµРґРµР»СЏРµС‚ РјРµС‚РѕРґ PLUGIN_STR_FUNCTION_METHOD, С‚Рѕ РґР»СЏ РїРµС‡Р°С‚Рё СЃРѕСЃС‚РѕСЏРЅРёСЏ РєР»Р°СЃСЃР° РёСЃРїРѕР»СЊР·СѓРµРј РёРјРµРЅРЅРѕ РµРіРѕ СЂРµР·СѓР»СЊС‚Р°С‚.
         if (HasMethod(PLUGIN_STR_FUNCTION_METHOD, 0))
             Call(PLUGIN_STR_FUNCTION_METHOD, {}, context)->Print(os, context);
         else
@@ -523,9 +603,9 @@ namespace runtime
         GetMethodResult method_check_result = GetMethod(plugin_desc_, method, actual_args);
         if (method_check_result.method_definer)
         {
-            // Вызов метода втыкалы состоит из следующих шагов. Создание записи-определителя данного вызова,
-            // подготовка аргументов - передача их в ассоциативное хранилице входных аргументов, непосредственно вызов,
-            // обработка выходного возвращённого методом результата.
+            // Р’С‹Р·РѕРІ РјРµС‚РѕРґР° РІС‚С‹РєР°Р»С‹ СЃРѕСЃС‚РѕРёС‚ РёР· СЃР»РµРґСѓСЋС‰РёС… С€Р°РіРѕРІ. РЎРѕР·РґР°РЅРёРµ Р·Р°РїРёСЃРё-РѕРїСЂРµРґРµР»РёС‚РµР»СЏ РґР°РЅРЅРѕРіРѕ РІС‹Р·РѕРІР°,
+            // РїРѕРґРіРѕС‚РѕРІРєР° Р°СЂРіСѓРјРµРЅС‚РѕРІ - РїРµСЂРµРґР°С‡Р° РёС… РІ Р°СЃСЃРѕС†РёР°С‚РёРІРЅРѕРµ С…СЂР°РЅРёР»РёС†Рµ РІС…РѕРґРЅС‹С… Р°СЂРіСѓРјРµРЅС‚РѕРІ, РЅРµРїРѕСЃСЂРµРґСЃС‚РІРµРЅРЅРѕ РІС‹Р·РѕРІ,
+            // РѕР±СЂР°Р±РѕС‚РєР° РІС‹С…РѕРґРЅРѕРіРѕ РІРѕР·РІСЂР°С‰С‘РЅРЅРѕРіРѕ РјРµС‚РѕРґРѕРј СЂРµР·СѓР»СЊС‚Р°С‚Р°.
             auto definer_it = call_definers.emplace
                 (FullPluginMethodCallDefiner{.plugin_instance = this, .method = method_check_result.method_definer,
                                              .call_command = context.GetLastCommandDesc(), .context = &context});
@@ -533,14 +613,14 @@ namespace runtime
             plug_retvals[&(*definer_it)] = runtime::ObjectHolder();
             plug_errors[&(*definer_it)] = runtime::RuntimeError();
             struct DeleteDefiner
-            { // Небольшой сторожок (типа ScopeGuard), который удалит все реквизиты, связанные с определителем совершаемого
-              // вызова (*definer_it), когда они уже будут нам не нужны.
+            { // РќРµР±РѕР»СЊС€РѕР№ СЃС‚РѕСЂРѕР¶РѕРє (С‚РёРїР° ScopeGuard), РєРѕС‚РѕСЂС‹Р№ СѓРґР°Р»РёС‚ РІСЃРµ СЂРµРєРІРёР·РёС‚С‹, СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РѕРїСЂРµРґРµР»РёС‚РµР»РµРј СЃРѕРІРµСЂС€Р°РµРјРѕРіРѕ
+              // РІС‹Р·РѕРІР° (*definer_it), РєРѕРіРґР° РѕРЅРё СѓР¶Рµ Р±СѓРґСѓС‚ РЅР°Рј РЅРµ РЅСѓР¶РЅС‹.
                 DeleteDefiner(decltype(definer_it)& p_definer_it) : m_definer_it(p_definer_it)
                 {}
                
                 ~DeleteDefiner()
-                { // При выходе сторожка из области видимости уничтожаем элемент definer_it описания вызова и все связанные с
-                  // ним реквизиты - процедура вызова закончилась, они нам более не нужны.
+                { // РџСЂРё РІС‹С…РѕРґРµ СЃС‚РѕСЂРѕР¶РєР° РёР· РѕР±Р»Р°СЃС‚Рё РІРёРґРёРјРѕСЃС‚Рё СѓРЅРёС‡С‚РѕР¶Р°РµРј СЌР»РµРјРµРЅС‚ definer_it РѕРїРёСЃР°РЅРёСЏ РІС‹Р·РѕРІР° Рё РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ
+                  // РЅРёРј СЂРµРєРІРёР·РёС‚С‹ - РїСЂРѕС†РµРґСѓСЂР° РІС‹Р·РѕРІР° Р·Р°РєРѕРЅС‡РёР»Р°СЃСЊ, РѕРЅРё РЅР°Рј Р±РѕР»РµРµ РЅРµ РЅСѓР¶РЅС‹.
                     plug_params.erase(&(*m_definer_it));
                     plug_retvals.erase(&(*m_definer_it));
                     plug_errors.erase(&(*m_definer_it));
@@ -550,16 +630,16 @@ namespace runtime
                 decltype(definer_it)& m_definer_it;
             } delete_definer(definer_it);
 
-            // Все параметры и приёмники результата подготовлены. А теперь сам вызов метода.
+            // Р’СЃРµ РїР°СЂР°РјРµС‚СЂС‹ Рё РїСЂРёС‘РјРЅРёРєРё СЂРµР·СѓР»СЊС‚Р°С‚Р° РїРѕРґРіРѕС‚РѕРІР»РµРЅС‹. Рђ С‚РµРїРµСЂСЊ СЃР°Рј РІС‹Р·РѕРІ РјРµС‚РѕРґР°.
             plugin_desc_.call_func(method.c_str(), reinterpret_cast<uintptr_t>(&(*definer_it)));
-            // Обрабатываем установленный методом втыкалы в definer_it выходной результат своей работы - значение или ошибку.
+            // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹Р№ РјРµС‚РѕРґРѕРј РІС‚С‹РєР°Р»С‹ РІ definer_it РІС‹С…РѕРґРЅРѕР№ СЂРµР·СѓР»СЊС‚Р°С‚ СЃРІРѕРµР№ СЂР°Р±РѕС‚С‹ - Р·РЅР°С‡РµРЅРёРµ РёР»Рё РѕС€РёР±РєСѓ.
             runtime::ObjectHolder& plug_retval = plug_retvals[&(*definer_it)];
             runtime::RuntimeError& plug_error = plug_errors[&(*definer_it)];
             if (plug_error)
-                // Метод выставил ошибку исполнения. Выбросим её в виде исключения.
+                // РњРµС‚РѕРґ РІС‹СЃС‚Р°РІРёР» РѕС€РёР±РєСѓ РёСЃРїРѕР»РЅРµРЅРёСЏ. Р’С‹Р±СЂРѕСЃРёРј РµС‘ РІ РІРёРґРµ РёСЃРєР»СЋС‡РµРЅРёСЏ.
                 throw plug_error;
             else
-                // Метод возвратил нормальный результат. Вернём его как итог работы данной функции.
+                // РњРµС‚РѕРґ РІРѕР·РІСЂР°С‚РёР» РЅРѕСЂРјР°Р»СЊРЅС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚. Р’РµСЂРЅС‘Рј РµРіРѕ РєР°Рє РёС‚РѕРі СЂР°Р±РѕС‚С‹ РґР°РЅРЅРѕР№ С„СѓРЅРєС†РёРё.
                 return plug_retvals[&(*definer_it)];
         }
         else
