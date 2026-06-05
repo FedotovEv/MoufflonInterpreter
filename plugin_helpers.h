@@ -4,7 +4,7 @@
 // частями комплекса. Некоторые особенности структуры данного заголовка и использованных в нём грамматических конструкций связаны с тем,
 // что он может использоваться и должен правильно транслироваться как в C, так и в C++-модулях.
 
-#include <cstdint>
+#include <stdint.h>
 
 #if defined (_WIN64) || defined(_WIN32)
     #define MYTHLON_KERNEL_EXPORT __declspec(dllexport)
@@ -23,7 +23,11 @@
 #endif
 
 // Перечисление типов значений, которые могут быть переданы методам втыкал, а также приняты от них как результаты их работы.
-enum ObjectTypes : uint32_t
+#ifdef __cplusplus
+    enum ObjectType : uint32_t
+#else
+    enum ObjectType
+#endif
 {
     OBJECT_TYPE_UNKNOWN = 0,
     OBJECT_TYPE_NONE = 1,           // Пустой параметр (и, соответственно, контейнер) None.
@@ -38,7 +42,11 @@ enum ObjectTypes : uint32_t
 // Коды ошибок, возникающих при работе со втыкалами. Эти коды возвращаются функциями типа GetPluginInfo, а также всеми функциями, экспортируемыми
 // ядром интерпретатора (PluginSetRuntimeError(), PluginSetResultValue(), и.т.д.) для нужд методов выткал. Все такие коды в обязательном порядке
 // имеют величину < 0 (значения >= 0 служат для указания на нормальное завершение запроса и содержат количество переданных данных).
-enum PluginErrorCode : int32_t
+#ifdef __cplusplus
+    enum PluginErrorCode : int32_t
+#else
+    enum PluginErrorCode
+#endif
 {
     PLUGIN_ERR_NONE = 0,  // Нормальное завершение
     PLUGIN_ERR_INVALID_METHOD_CALL_ID = -1,
@@ -55,7 +63,11 @@ enum PluginErrorCode : int32_t
 };
 
 // Перечисление, определяющее типы запросов к информирующей функции втыкалы GetPluginInfo().
-enum PluginInfoRequest : uint32_t
+#ifdef __cplusplus
+    enum PluginInfoRequest : uint32_t
+#else
+    enum PluginInfoRequest
+#endif
 {
     PLUG_REQUEST_PLUGIN_NAME = 1,           // Получение имени втыкалы.
     PLUG_REQUEST_CALL_FUNCTION_NAME = 2,    // Получение имени функции, выполняющей вызов методов данной втыкалы (поддерживается для втыкалы, размещённой в DLL).
@@ -66,7 +78,11 @@ enum PluginInfoRequest : uint32_t
 };
 
 // Перечисление возможных проверок фактических параметров метода по их количеству.
-enum MethodParamCheckMode : uint32_t
+#ifdef __cplusplus
+    enum MethodParamCheckMode : uint32_t
+#else
+    enum MethodParamCheckMode
+#endif
 { // Тип требуемых проверок.
     PARAM_CHECK_NONE = 0,                           // Проверок не выполнять.
     PARAM_CHECK_QUANTITY_EQUAL = 1,                 // Количество фактических параметров должно строго совпадать с указанным.
@@ -82,7 +98,11 @@ enum MethodParamCheckMode : uint32_t
 };
 
 // Перечисление возможных проверок фактических параметров метода по их типу (соответствию требуемому типу).
-enum MethodParamType : uint32_t
+#ifdef __cplusplus
+    enum MethodParamType : uint32_t
+#else
+    enum MethodParamType
+#endif
 {
     PARAM_TYPE_ANY = 0,                             // Контроль типа параметра не выполняется.
     PARAM_TYPE_NUMERIC = 1,                         // Параметр может быть числовым.
@@ -103,7 +123,11 @@ enum MethodParamType : uint32_t
     PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE
 };
 
-enum ThrowMessageNumber : uint32_t
+#ifdef __cplusplus
+    enum ThrowMessageNumber : uint32_t
+#else
+    enum ThrowMessageNumber
+#endif
 {
     THRM_UNKNOWN = 0,
     THRM_NOT_SUPPORT_FREE_FUNCTION,
@@ -142,6 +166,7 @@ enum ThrowMessageNumber : uint32_t
     THRM_INVALID_PARAMS_COUNT,
     THRM_INVALID_PARAM_VALUE,
     THRM_INVALID_PARAM_TYPE,
+    THRM_INVALID_PARAM_LENGTH,
     THRM_CONTEXT_OUT_FAIL,
     THRM_METHOD,
     THRM_ARGUMENTS,
@@ -179,37 +204,60 @@ enum ThrowMessageNumber : uint32_t
 
 #pragma pack(push, 1)
 
-struct RequestMethodParams
-{ // Структура входных данных запроса характеристик фактических параметров методов втыкалы.
-    const char* method_name = nullptr;
-    uint32_t method_ordinal = 0;
-};
+#ifdef __cplusplus
+    struct RequestMethodParams
+    { // Структура входных данных запроса характеристик фактических параметров методов втыкалы.
+        const char* method_name = nullptr;
+        uint32_t method_ordinal = 0;
+    };
 
-struct PluginMethodDefiner
-{ // "Внешняя" (применяемая для обмена с функциями втыкалы) структура описания некоторого метода, предоставляемого классом-втыкалой.
-    uint32_t arg_count_min = 0;       // Минимально допустимое количество его параметров.
-    uint32_t arg_count_max = 0;       // Максимально допустимое количество его параметров.
-    // Если метод имеет фиксированное и однозначно определённое количество параметров, можно выполнить контроль соответствия их
-    // фактического типа требуемому.
-    // Режим проверки допустимости фактических параметров метода (один из членов перечислимого типа MethodParamCheckMode).
-    uint32_t check_mode = static_cast<uint32_t>(MethodParamCheckMode::PARAM_CHECK_NONE);
-    // Список, указывающий допустимый тип для очередного фактического параметра.
-    uint32_t param_types_count = 0;     // Размер списка param_types (количество его элементов).
-    // ..............
-    // В сформированном ответе сразу вслед за этой фиксированной структурой следует тело списка контроля типов фактических параметров
-    // метода втыкалы. Содержит ровно param_types_count значений типа uint32_t, эквивалентных членам перечисления MethodParamType.
-};
+    struct PluginMethodDefiner
+    { // "Внешняя" (применяемая для обмена с функциями втыкалы) структура описания некоторого метода, предоставляемого классом-втыкалой.
+        uint32_t arg_count_min = 0;       // Минимально допустимое количество его параметров.
+        uint32_t arg_count_max = 0;       // Максимально допустимое количество его параметров.
+        // Если метод имеет фиксированное и однозначно определённое количество параметров, можно выполнить контроль соответствия их
+        // фактического типа требуемому.
+        // Режим проверки допустимости фактических параметров метода (один из членов перечислимого типа MethodParamCheckMode).
+        uint32_t check_mode = static_cast<uint32_t>(MethodParamCheckMode::PARAM_CHECK_NONE);
+        // Список, указывающий допустимый тип для очередного фактического параметра.
+        uint32_t param_types_count = 0;     // Размер списка param_types (количество его элементов).
+        // ..............
+        // В сформированном ответе сразу вслед за этой фиксированной структурой следует тело списка контроля типов фактических параметров
+        // метода втыкалы. Содержит ровно param_types_count значений типа uint32_t, эквивалентных членам перечисления MethodParamType.
+    };
+#else
+    struct RequestMethodParams
+    { // Структура входных данных запроса характеристик фактических параметров методов втыкалы.
+        const char* method_name;
+        uint32_t method_ordinal;
+    };
+
+    struct PluginMethodDefiner
+    { // "Внешняя" (применяемая для обмена с функциями втыкалы) структура описания некоторого метода, предоставляемого классом-втыкалой.
+        uint32_t arg_count_min;       // Минимально допустимое количество его параметров.
+        uint32_t arg_count_max;       // Максимально допустимое количество его параметров.
+        // Если метод имеет фиксированное и однозначно определённое количество параметров, можно выполнить контроль соответствия их
+        // фактического типа требуемому.
+        // Режим проверки допустимости фактических параметров метода (один из членов перечислимого типа MethodParamCheckMode).
+        uint32_t check_mode;
+        // Список, указывающий допустимый тип для очередного фактического параметра.
+        uint32_t param_types_count;     // Размер списка param_types (количество его элементов).
+        // ..............
+        // В сформированном ответе сразу вслед за этой фиксированной структурой следует тело списка контроля типов фактических параметров
+        // метода втыкалы. Содержит ровно param_types_count значений типа uint32_t, эквивалентных членам перечисления MethodParamType.
+    };
+#endif
 
 #pragma pack(pop)
 
 // Функциональный тип головной функции динамической библиотеки, содержащей одну или несколько втыкал. Наличие этого уровня абстракции
 // для динамических библиотек предусмотрено именно с целью возможности объединять в одну такую библиотеку сразу целый набор из
 // нескольких втыкал.
-using FuncGetPluginInfoNames = const char* (*)(uint32_t load_level);
+typedef const char* (*FuncGetPluginInfoNames)(uint32_t load_level);
 // Функциональный тип, определяющий информирующую функцию втыкалы.
-using PluginGetInfoFunc = int32_t(*)(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
+typedef int32_t(*PluginGetInfoFunc)(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
 // Функциональный тип, определяющий "вызывную" функцию, выполняющую вызов методов класса некоторой втыкалы.
-using PluginCallMethodFunc = void(*)(const char* method_name, uintptr_t plugin_method_call_id);
+typedef void(*PluginCallMethodFunc)(const char* method_name, uintptr_t plugin_method_call_id);
 
 // Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.
 #define PLUGINS_GET_INFO_FUNCTION "GetPluginsInfoFunction"
@@ -223,8 +271,10 @@ using PluginCallMethodFunc = void(*)(const char* method_name, uintptr_t plugin_m
 
 // Объявления вспомогательных функций для работы со втыкалами. Они экспортируются ядром Муфлона и импортируются динамическими бибилиотеками
 // самих втыкал.
-extern "C"
-{
+#ifdef __cplusplus
+    extern "C"
+    {
+#endif
     // Данная экспортируемая ядром функция возвращает условный идентификатор объекта класса втыкалы, к которому относится вызов с
     // идентом plugin_method_call_id.
     HELPERS_EXPORT_IMPORT uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id);
@@ -247,4 +297,6 @@ extern "C"
     // Функция печати (направления в выходной поток контекста, использованного при вызове метода) переменной типа source_type, расположенной во входном
     // буфере (source_field, source_length).
     HELPERS_EXPORT_IMPORT int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length);
-}
+#ifdef __cplusplus
+    }
+#endif

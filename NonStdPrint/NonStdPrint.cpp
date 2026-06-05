@@ -27,9 +27,9 @@ public:
         }
         else
         {
-            int command_end_pos = command_accumulator.find(' ');
+            int command_end_pos = static_cast<int>(command_accumulator.find(' '));
             if (command_end_pos == string::npos)
-                command_end_pos = command_accumulator.size();
+                command_end_pos = static_cast<int>(command_accumulator.size());
             string command_word = command_accumulator.substr(0, command_end_pos);
             string command_args;
             if (command_end_pos  < static_cast<int>(command_accumulator.size()) - 1)

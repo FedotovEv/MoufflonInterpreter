@@ -118,11 +118,11 @@ extern "C"
             return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
 
         ObjectHolder& retval_holder = plug_retvals[full_call_definer];
-        switch (static_cast<ObjectTypes>(result_type))
+        switch (static_cast<ObjectType>(result_type))
         {
-        case ObjectTypes::OBJECT_TYPE_NONE:
+        case ObjectType::OBJECT_TYPE_NONE:
             return 0;
-        case ObjectTypes::OBJECT_TYPE_LOGICAL:
+        case ObjectType::OBJECT_TYPE_LOGICAL:
             if (source_length >= sizeof(bool))
             {
                 retval_holder = ObjectHolder::Own(runtime::Bool(*reinterpret_cast<bool*>(source_field)));
@@ -132,7 +132,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_INTEGER:
+        case ObjectType::OBJECT_TYPE_INTEGER:
             if (source_length >= sizeof(int))
             {
                 retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<int*>(source_field)));
@@ -142,7 +142,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_DOUBLE:
+        case ObjectType::OBJECT_TYPE_DOUBLE:
             if (source_length >= sizeof(double))
             {
                 retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<double*>(source_field)));
@@ -152,10 +152,10 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_STRING:
+        case ObjectType::OBJECT_TYPE_STRING:
             retval_holder = ObjectHolder::Own(runtime::String(std::string(reinterpret_cast<char*>(source_field), source_length)));
             return source_length;
-        case ObjectTypes::OBJECT_TYPE_SYMBOL:
+        case ObjectType::OBJECT_TYPE_SYMBOL:
             if (source_length >= sizeof(char))
             {
                 retval_holder = ObjectHolder::Own(runtime::String(std::string(1, *reinterpret_cast<char*>(source_field))));
@@ -191,22 +191,22 @@ extern "C"
 
         ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
         if (!selected_param)
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_NONE);    // В контейнере хранится значение None.
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_NONE);    // В контейнере хранится значение None.
         else if (selected_param.TryAs<runtime::Bool>())
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_LOGICAL); // В контейнере находится логическое значение.
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_LOGICAL); // В контейнере находится логическое значение.
         else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
         { // Какое-то число, целое или с плавающей точкой.
             if (std::holds_alternative<int>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER);     // Это целое число.
+                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER);     // Это целое число.
             else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE);      // Число с плавающей точкой.
+                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_DOUBLE);      // Число с плавающей точкой.
             else
-                return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_OTHER);
+                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_OTHER);
         }
         else if (selected_param.TryAs<runtime::String>())
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING);  // Строка.
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING);  // Строка.
         else
-            return static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_OTHER);
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_OTHER);
     }
 
     MYTHLON_KERNEL_EXPORT int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number)
@@ -309,11 +309,11 @@ extern "C"
         if (!full_call_definer || plug_params.count(full_call_definer) == 0)
             return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
 
-        switch (static_cast<ObjectTypes>(source_type))
+        switch (static_cast<ObjectType>(source_type))
         {
-        case ObjectTypes::OBJECT_TYPE_NONE:
+        case ObjectType::OBJECT_TYPE_NONE:
             return 0;   // Тип None - ничего не считываем и ничего не отправляем в поток контекста.
-        case ObjectTypes::OBJECT_TYPE_LOGICAL:
+        case ObjectType::OBJECT_TYPE_LOGICAL:
             if (source_field && source_length >= sizeof(bool))
             {
                 full_call_definer->context->GetOutputStream() << *reinterpret_cast<bool*>(source_field);
@@ -323,7 +323,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_INTEGER:
+        case ObjectType::OBJECT_TYPE_INTEGER:
             if (source_field && source_length >= sizeof(int))
             {
                 full_call_definer->context->GetOutputStream() << *reinterpret_cast<int*>(source_field);
@@ -333,7 +333,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_DOUBLE:
+        case ObjectType::OBJECT_TYPE_DOUBLE:
             if (source_field && source_length >= sizeof(double))
             {
                 full_call_definer->context->GetOutputStream() << *reinterpret_cast<double*>(source_field);
@@ -343,7 +343,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectTypes::OBJECT_TYPE_STRING:
+        case ObjectType::OBJECT_TYPE_STRING:
             if (source_field)
             {
                 full_call_definer->context->GetOutputStream() << std::string(reinterpret_cast<char*>(source_field), source_length);
@@ -353,7 +353,7 @@ extern "C"
             {
                 return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
             }
-        case ObjectTypes::OBJECT_TYPE_SYMBOL:
+        case ObjectType::OBJECT_TYPE_SYMBOL:
             if (source_field && source_length >= sizeof(char))
             {
                 full_call_definer->context->GetOutputStream() << *reinterpret_cast<char*>(source_field);
@@ -467,17 +467,24 @@ namespace runtime
         // actual_args и требованиями к количеству фактическаих параметров, предъявляемых вызываемым методом втыкалы.
         if (method_def.check_mode & PARAM_CHECK_QUANTITY_MASK)
         { // Проверка на количественное соответствие формальных и фактических параметров нужна.
-            if (method_def.arg_count_min == method_def.arg_count_max)
-            { // При этих условиях проводим проверку на точное соответствие числа затребованных и действительных фактических параметров.
-                if (actual_args.size() != method_def.arg_count_min) // Наличное число фактических параметров неверное (не соответствует требованиям).
-                    return {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
-                            GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
+            bool is_argsize_correct = true;
+            if (method_def.check_mode & MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL)
+            { // Проверка на точное соответствие количества фактических аргументов указанному их диапазону.
+                if (actual_args.size() < method_def.arg_count_min || actual_args.size() > method_def.arg_count_max)
+                    is_argsize_correct = false;
             }
-            // При неравных величинах method_def.arg_count_min и method_def.arg_count_max применяем другие способы количественной проверки.
-            else if (actual_args.size() > method_def.arg_count_max)
-                return {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
-                        GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
-            else if (actual_args.size() < method_def.arg_count_min)
+            else if (method_def.check_mode & MethodParamCheckMode::PARAM_CHECK_QUANTITY_LESS_EQ)
+            { // Допускается количество аргументов не более (менее или равно) method_def.arg_count_max.
+                if (actual_args.size() > method_def.arg_count_max)
+                    is_argsize_correct = false;
+            }
+            else if (method_def.check_mode & MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ)
+            { // Допускается количество аргументов не менее (более или равно) method_def.arg_count_min.
+                if (actual_args.size() < method_def.arg_count_min)
+                    is_argsize_correct = false;
+            }
+
+            if (!is_argsize_correct)  // Число фактических аргументов неверное (недопустимо, так как нарушает требования указанного диапазона).
                 return {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
                         GenMethodParamsErrMess(method_def.name, actual_args.size(), method_def.arg_count_min, method_def.arg_count_max)};
         }

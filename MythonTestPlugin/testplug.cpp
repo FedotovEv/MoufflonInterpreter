@@ -126,7 +126,7 @@ extern "C"
     // Её вызывная функция, служащая для обращения к методам класса втыкалы.
     MYTHLON_MODULE_EXPORT void CallPluginMethod(const char* method_name, uintptr_t plugin_method_call_id)
     {
-        // Получение условного идента текущего экземпляра класса выткалы, к которому обращён вызов.
+        // Получение условного идента текущего экземпляра класса втыкалы, к которому обращён вызов.
         uintptr_t plugin_object_id = PluginGetInstanceId(plugin_method_call_id);
         // Поиск этого экземпляра в хэш-таблице - хранилище объектов-втыкал.
         std::unordered_map<uintptr_t, PluginInstance>::iterator object_table_it = object_table.find(plugin_object_id);
@@ -221,7 +221,16 @@ void PluginInstance::MethodInit(uintptr_t plugin_method_call_id)
 // Застроковщик. Возвращает в виде строки текущее состояние объекта. Параметров не принимает.
 void PluginInstance::MethodStringize(uintptr_t plugin_method_call_id)
 {
+    static constexpr const char TEST_PLUG_STRINGIZE_TEXT[] = "TestPlugin";
 
+    if (PluginParamsCount(plugin_method_call_id) != 0)
+        // Есть какие-то аргументы. Для нас это будет выступать как ошибка.
+        PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
+                              "Строкофикатор не должен иметь параметров");
+    else
+        // Возвращаем строку, условно маркирующую сущность данного класса.
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING),
+                             (void*)(TEST_PLUG_STRINGIZE_TEXT), static_cast<int32_t>(std::size(TEST_PLUG_STRINGIZE_TEXT) - 1));
 }
 
 // Возвращает число (целое либо дробное), равное сумме всех аргументов функции. Суммируются числа или строки, содержащие числа,
@@ -239,10 +248,10 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
     int32_t args_count = PluginParamsCount(plugin_method_call_id);
     for (int32_t arg_index = 0; arg_index < args_count; ++arg_index)
     {
-        ObjectTypes arg_type = static_cast<ObjectTypes>(PluginParamType(plugin_method_call_id, arg_index));
+        ObjectType arg_type = static_cast<ObjectType>(PluginParamType(plugin_method_call_id, arg_index));
         switch (arg_type)
         {
-            case ObjectTypes::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
+            case ObjectType::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
             {
                 bool arg_bool;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_bool, sizeof(bool)) < static_cast<int32_t>(sizeof(bool)))
@@ -257,7 +266,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
                     int_result += static_cast<int32_t>(arg_bool);
                 break;
             }
-            case ObjectTypes::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
+            case ObjectType::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
             {
                 int32_t arg_intval;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_intval, sizeof(int32_t)) < static_cast<int32_t>(sizeof(int32_t)))
@@ -272,7 +281,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
                     int_result += arg_intval;
                 break;
             }
-            case ObjectTypes::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
+            case ObjectType::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
             {
                 double arg_doubleval;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_doubleval, sizeof(double)) < static_cast<int32_t>(sizeof(double)))
@@ -289,7 +298,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
                 double_result += arg_doubleval;
                 break;
             }
-            case ObjectTypes::OBJECT_TYPE_STRING:   // Символьная строка std::string.
+            case ObjectType::OBJECT_TYPE_STRING:   // Символьная строка std::string.
             {
                 int32_t arg_string_size = PluginParamStringSize(plugin_method_call_id, arg_index);
                 if (arg_string_size >= STR_BUFFER_SIZE)
@@ -352,10 +361,10 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
     }
         
     if (is_double_summ)
-        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE),
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_DOUBLE),
                              &double_result, static_cast<int32_t>(sizeof(double)));
     else
-        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
                              &int_result, static_cast<int32_t>(sizeof(int32_t)));
 }
 
@@ -369,10 +378,10 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
     int32_t args_count = PluginParamsCount(plugin_method_call_id);
     for (int32_t arg_index = 0; arg_index < args_count; ++arg_index)
     {
-        ObjectTypes arg_type = static_cast<ObjectTypes>(PluginParamType(plugin_method_call_id, arg_index));
+        ObjectType arg_type = static_cast<ObjectType>(PluginParamType(plugin_method_call_id, arg_index));
         switch (arg_type)
         {
-            case ObjectTypes::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
+            case ObjectType::OBJECT_TYPE_LOGICAL:  // Логическое значение bool.
             {
                 bool arg_bool;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_bool, sizeof(bool)) < static_cast<int32_t>(sizeof(bool)))
@@ -385,7 +394,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
                     is_zero_found = true;
                 break;
             }
-            case ObjectTypes::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
+            case ObjectType::OBJECT_TYPE_INTEGER:  // Целочисленный параметр int32_t.
             {
                 int32_t arg_intval;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_intval, sizeof(int32_t)) < static_cast<int32_t>(sizeof(int32_t)))
@@ -398,7 +407,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
                     is_zero_found = true;
                 break;
             }
-            case ObjectTypes::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
+            case ObjectType::OBJECT_TYPE_DOUBLE:   // Число с плавающей точкой double.
             {
                 double arg_doubleval;
                 if (PluginParamGetValue(plugin_method_call_id, arg_index, &arg_doubleval, sizeof(double)) < static_cast<int32_t>(sizeof(double)))
@@ -428,7 +437,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
 
         if (is_zero_found)
         {
-            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
                                  &arg_index, static_cast<int32_t>(sizeof(int32_t)));
             return;
         }
@@ -436,7 +445,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
 
     // Нулевого члена в последовательности аргументов не найдено. Возвращаем -1.
     int32_t arg_index = -1;
-    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
                          &arg_index, static_cast<int32_t>(sizeof(int32_t)));
 }
 
@@ -452,8 +461,8 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
         return;
     }
 
-    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING) ||
-        PluginParamType(plugin_method_call_id, 1) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING))
+    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectType::OBJECT_TYPE_STRING) ||
+        PluginParamType(plugin_method_call_id, 1) != static_cast<int32_t>(ObjectType::OBJECT_TYPE_STRING))
     {
         PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
                               "Метод принимает только строковые параметры");
@@ -486,7 +495,7 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
     // -1 - значение, возвращаемое при неуспешном поиске.
     int32_t int_char_position = char_position != std::string::npos ? static_cast<int32_t>(char_position) : -1;
 
-    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
                          &int_char_position, static_cast<int32_t>(sizeof(int32_t)));
 }
 
@@ -501,7 +510,7 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
         return;
     }
 
-    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectTypes::OBJECT_TYPE_STRING))
+    if (PluginParamType(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectType::OBJECT_TYPE_STRING))
     {
         PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
                               "Метод принимает только строковый параметр");
@@ -546,13 +555,13 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
         else
         {
             int32_t int_result = static_cast<int32_t>(long_result);
-            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_INTEGER),
+            PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
                                  &int_result, static_cast<int32_t>(sizeof(int32_t)));
         }
     }
     else if (double_result_len == arg_0_ptr->size())
     {
-        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_DOUBLE),
+        PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_DOUBLE),
                              &double_result, static_cast<int32_t>(sizeof(double)));
     }
     else
@@ -574,7 +583,7 @@ void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
     }
 
     std::string hello_string = "Hello"s;
-    if (PluginPrintToContext(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING),
+    if (PluginPrintToContext(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING),
                              hello_string.data(), static_cast<int32_t>(hello_string.size())) != static_cast<int32_t>(hello_string.size()))
     {
         PluginSetRuntimeError(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_CONTEXT_OUT_FAIL),
@@ -582,7 +591,7 @@ void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
         return;
     }
 
-    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectTypes::OBJECT_TYPE_STRING),
+    PluginSetResultValue(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING),
                          hello_string.data(), static_cast<int32_t>(hello_string.size()));
 }
 

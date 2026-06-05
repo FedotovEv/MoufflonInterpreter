@@ -90,6 +90,9 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,9 +129,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\error_classes.cpp" />
     <ClCompile Include="..\lexer.cpp" />
     <ClCompile Include="..\math_object.cpp" />
     <ClCompile Include="..\parse.cpp" />
+    <ClCompile Include="..\plugin_caller.cpp" />
     <ClCompile Include="..\runtime.cpp" />
     <ClCompile Include="..\special_objects.cpp" />
     <ClCompile Include="..\statement.cpp" />
