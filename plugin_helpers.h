@@ -14,14 +14,6 @@
     #define MYTHLON_PLUGIN_IMPORT
 #endif
 
-#ifdef MYTHLON_PLUGIN
-    // Заголовок включается в состав Муфлон-втыкалы.
-    #define HELPERS_EXPORT_IMPORT MYTHLON_PLUGIN_IMPORT
-#else
-    // Заголовок включается в состав ядра интерпретатора Муфлона.
-    #define HELPERS_EXPORT_IMPORT MYTHLON_KERNEL_EXPORT
-#endif
-
 // Перечисление типов значений, которые могут быть переданы методам втыкал, а также приняты от них как результаты их работы.
 #ifdef __cplusplus
     enum ObjectType : uint32_t
@@ -74,6 +66,7 @@
     PLUG_REQUEST_CALL_FUNCTION_ADDR = 3,    // Получение адреса функции, выполняющей вызов методов данной втыкалы (поддерживается для втыкалы, сформированных в памяти).
     PLUG_REQUEST_METHOD_LIST = 4,           // Список имён методов класса втыкалы, доступных для вызова.
     PLUG_REQUEST_METHOD_PARAMS = 5,         // Характеристики параметров некоторого метода, предоставляемого втыкалой для обращения.
+    PLUG_REQUEST_HELPER_FUNCTIONS = 6,      // Передача втыкале указателей на вспомогательные функции ядра для организации обмена информацией с ним.
     PLUG_REQUEST_USER_VALUE = 0x80000000    // С этого индекса начинается область нестандартных, пользовательских запросов.
 };
 
@@ -130,6 +123,7 @@
 #endif
 {
     THRM_UNKNOWN = 0,
+    THRM_MEMORY_ALLOCATION_ERROR,
     THRM_NOT_SUPPORT_FREE_FUNCTION,
     THRM_ARRAY_MUST_HAVE_DIMS,
     THRM_MAP_CTOR_HAS_NO_PARAMS,
@@ -202,6 +196,36 @@
     THRM_MAX_VALUE = THRM_URGENT_TERMINATE
 };
 
+// Функциональный тип головной функции динамической библиотеки, содержащей одну или несколько втыкал. Наличие этого уровня абстракции
+// для динамических библиотек предусмотрено именно с целью возможности объединять в одну такую библиотеку сразу целый набор из
+// нескольких втыкал.
+typedef const char* (*FuncGetPluginInfoNames)(uint32_t load_level);
+// Функциональный тип, определяющий информирующую функцию втыкалы.
+typedef int32_t(*PluginGetInfoFunc)(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
+// Функциональный тип, определяющий "вызывную" функцию, выполняющую вызов методов класса некоторой втыкалы.
+typedef void(*PluginCallMethodFunc)(const char* method_name, uintptr_t plugin_method_call_id);
+
+// Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.
+#define PLUGINS_GET_INFO_FUNCTION "GetPluginsInfoFunction"
+// Ряд стандартных имён некоторых особых методов класса специального назначения.
+#define  PLUGIN_INIT_METHOD "__init__"
+#define  PLUGIN_DESTROY_METHOD "__destroy__"
+#define  PLUGIN_ADD_METHOD "__add__"
+#define  PLUGIN_EQUAL_CMP_METHOD "__eq__"
+#define  PLUGIN_LESS_CMP_METHOD "__lt__"
+#define  PLUGIN_STR_FUNCTION_METHOD "__str__"
+
+// Функциональные типы (тип указателей на функции), соответствующие вспомогательным функциям, экспортируемым ядром Муфлона для нужд подключаемых
+// к нему втыкал.
+typedef uintptr_t(*PluginGetInstanceIdFunc)(uintptr_t plugin_method_call_id);
+typedef int32_t(*PluginSetRuntimeErrorFunc)(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text);
+typedef int32_t(*PluginSetResultValueFunc)(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length);
+typedef int32_t(*PluginParamsCountFunc)(uintptr_t plugin_method_call_id);
+typedef int32_t(*PluginParamTypeFunc)(uintptr_t plugin_method_call_id, uint32_t arg_number);
+typedef int32_t(*PluginParamGetValueFunc)(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length);
+typedef int32_t(*PluginParamStringSizeFunc)(uintptr_t plugin_method_call_id, uint32_t arg_number);
+typedef int32_t(*PluginPrintToContextFunc)(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length);
+
 #pragma pack(push, 1)
 
 #ifdef __cplusplus
@@ -225,6 +249,18 @@
         // В сформированном ответе сразу вслед за этой фиксированной структурой следует тело списка контроля типов фактических параметров
         // метода втыкалы. Содержит ровно param_types_count значений типа uint32_t, эквивалентных членам перечисления MethodParamType.
     };
+
+    struct PluginHelperFunctions
+    {
+        PluginGetInstanceIdFunc get_instance_func = nullptr;
+        PluginSetRuntimeErrorFunc set_runtime_error_func = nullptr;
+        PluginSetResultValueFunc set_result_value_func = nullptr;
+        PluginParamsCountFunc params_count_func = nullptr;
+        PluginParamTypeFunc param_type_func = nullptr;
+        PluginParamGetValueFunc param_get_value_func = nullptr;
+        PluginParamStringSizeFunc param_string_size_func = nullptr;
+        PluginPrintToContextFunc print_to_context_func = nullptr;
+    };
 #else
     struct RequestMethodParams
     { // Структура входных данных запроса характеристик фактических параметров методов втыкалы.
@@ -246,57 +282,50 @@
         // В сформированном ответе сразу вслед за этой фиксированной структурой следует тело списка контроля типов фактических параметров
         // метода втыкалы. Содержит ровно param_types_count значений типа uint32_t, эквивалентных членам перечисления MethodParamType.
     };
+
+    struct PluginHelperFunctions
+    {
+        PluginGetInstanceIdFunc get_instance_func;
+        PluginSetRuntimeErrorFunc set_runtime_error_func;
+        PluginSetResultValueFunc set_result_value_func;
+        PluginParamsCountFunc params_count_func;
+        PluginParamTypeFunc param_type_func;
+        PluginParamGetValueFunc param_get_value_func;
+        PluginParamStringSizeFunc param_string_size_func;
+        PluginPrintToContextFunc print_to_context_func;
+    };
 #endif
 
 #pragma pack(pop)
 
-// Функциональный тип головной функции динамической библиотеки, содержащей одну или несколько втыкал. Наличие этого уровня абстракции
-// для динамических библиотек предусмотрено именно с целью возможности объединять в одну такую библиотеку сразу целый набор из
-// нескольких втыкал.
-typedef const char* (*FuncGetPluginInfoNames)(uint32_t load_level);
-// Функциональный тип, определяющий информирующую функцию втыкалы.
-typedef int32_t(*PluginGetInfoFunc)(uint32_t request_type, void* source_area, int32_t source_length, void* target_area, int32_t target_length);
-// Функциональный тип, определяющий "вызывную" функцию, выполняющую вызов методов класса некоторой втыкалы.
-typedef void(*PluginCallMethodFunc)(const char* method_name, uintptr_t plugin_method_call_id);
-
-// Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.
-#define PLUGINS_GET_INFO_FUNCTION "GetPluginsInfoFunction"
-// Ряд стандартных имён некоторых особых методов класса специального назначения.
-#define  PLUGIN_INIT_METHOD "__init__"
-#define  PLUGIN_DESTROY_METHOD "__destroy__"
-#define  PLUGIN_ADD_METHOD "__add__"
-#define  PLUGIN_EQUAL_CMP_METHOD "__eq__"
-#define  PLUGIN_LESS_CMP_METHOD "__lt__"
-#define  PLUGIN_STR_FUNCTION_METHOD "__str__"
-
 // Объявления вспомогательных функций для работы со втыкалами. Они экспортируются ядром Муфлона и импортируются динамическими бибилиотеками
 // самих втыкал.
-#ifdef __cplusplus
+#ifndef MYTHLON_PLUGIN
+    // Данные функцию объявляются и определяются только в ядре МУФЛОНА (не во втыкалах) и экспортируются им для нужд втыкал, если по какой-то причине
+    // они предпочтут использовать их явный импорт через системные механизмы ОС.
     extern "C"
     {
-#endif
-    // Данная экспортируемая ядром функция возвращает условный идентификатор объекта класса втыкалы, к которому относится вызов с
-    // идентом plugin_method_call_id.
-    HELPERS_EXPORT_IMPORT uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id);
-    // Функция экспортируется ядром, импортируется втыкалой и вызывается изнутри её методов для передачи исполнительской среде информации
-    // о том, что работа текущего метода завершилась событием, которое после его завершения должно привести к выбросу исключения msg_num
-    // с сообщением except_text.
-    HELPERS_EXPORT_IMPORT int32_t PluginSetRuntimeError(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text);
-    // Экспортируемая ядром функция, служащая для установки возвращаемого методом значения при его нормальном завершении.
-    HELPERS_EXPORT_IMPORT int32_t PluginSetResultValue(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length);
-    // Функция, возвращающая количество входных фактических параметров, переданных методу при его вызове.
-    HELPERS_EXPORT_IMPORT int32_t PluginParamsCount(uintptr_t plugin_method_call_id);
-    // Функция, служащая цели получения информации о типе фактического параметра с индексом (номером, базированным к нулю) arg_number, переданном методу
-    // при его вызове.
-    HELPERS_EXPORT_IMPORT int32_t PluginParamType(uintptr_t plugin_method_call_id, uint32_t arg_number);
-    // Функция, посредством которой производится получение значения фактического параметра с индексом arg_number. При работе функции значение этого параметра
-    // копируется в целевое поле (target_field, target_length).
-    HELPERS_EXPORT_IMPORT int32_t PluginParamGetValue(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length);
-    // Дополнительная функция для того случая, если фактический параметр arg_number метода является строкой. В таком случае функция возвращает её длину.
-    HELPERS_EXPORT_IMPORT int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number);
-    // Функция печати (направления в выходной поток контекста, использованного при вызове метода) переменной типа source_type, расположенной во входном
-    // буфере (source_field, source_length).
-    HELPERS_EXPORT_IMPORT int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length);
-#ifdef __cplusplus
+        // Данная экспортируемая ядром функция возвращает условный идентификатор объекта класса втыкалы, к которому относится вызов с
+        // идентом plugin_method_call_id.
+        MYTHLON_KERNEL_EXPORT uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id);
+        // Функция экспортируется ядром, импортируется втыкалой и вызывается изнутри её методов для передачи исполнительской среде информации
+        // о том, что работа текущего метода завершилась событием, которое после его завершения должно привести к выбросу исключения msg_num
+        // с сообщением except_text.
+        MYTHLON_KERNEL_EXPORT int32_t PluginSetRuntimeError(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text);
+        // Экспортируемая ядром функция, служащая для установки возвращаемого методом значения при его нормальном завершении.
+        MYTHLON_KERNEL_EXPORT int32_t PluginSetResultValue(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length);
+        // Функция, возвращающая количество входных фактических параметров, переданных методу при его вызове.
+        MYTHLON_KERNEL_EXPORT int32_t PluginParamsCount(uintptr_t plugin_method_call_id);
+        // Функция, служащая цели получения информации о типе фактического параметра с индексом (номером, базированным к нулю) arg_number, переданном методу
+        // при его вызове.
+        MYTHLON_KERNEL_EXPORT int32_t PluginParamType(uintptr_t plugin_method_call_id, uint32_t arg_number);
+        // Функция, посредством которой производится получение значения фактического параметра с индексом arg_number. При работе функции значение этого параметра
+        // копируется в целевое поле (target_field, target_length).
+        MYTHLON_KERNEL_EXPORT int32_t PluginParamGetValue(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length);
+        // Дополнительная функция для того случая, если фактический параметр arg_number метода является строкой. В таком случае функция возвращает её длину.
+        MYTHLON_KERNEL_EXPORT int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number);
+        // Функция печати (направления в выходной поток контекста, использованного при вызове метода) переменной типа source_type, расположенной во входном
+        // буфере (source_field, source_length).
+        MYTHLON_KERNEL_EXPORT int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length);
     }
 #endif

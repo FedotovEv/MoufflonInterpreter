@@ -34,8 +34,19 @@ public:
     };
     static std::pair<size_t, CopyCharmResult> CopyCharm(const std::string& req_method_name, void* target_area, size_t target_area_size);
 
+    static void SetHelperFunctions(const PluginHelperFunctions& helper_funcs)
+    {
+        helper_funcs_ = helper_funcs;
+    }
+
+    static PluginGetInstanceIdFunc GetInstanceId()
+    {
+        return helper_funcs_.get_instance_func;
+    }
+
 private:
     static const std::unordered_map<std::string_view, PluginCallMethod> plugin_method_table_;
+    static PluginHelperFunctions helper_funcs_;
 
     struct ParamsCharm
     {

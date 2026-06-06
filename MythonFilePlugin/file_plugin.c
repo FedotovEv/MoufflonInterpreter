@@ -4,8 +4,12 @@
 // После подключения обеспечивает простую работу с файловой системой средствами библиотеки ввода-вывода в стиле C.
 
 #include "file_plugin.h"
-#include "stdbool.h"
 #include "string.h"
+
+#ifndef true
+    // Начиная с C23 этот заголовок не нужен.
+    #include "stdbool.h"
+#endif
 
 #define ArraySize(x) (sizeof(x) / sizeof(x[0]))
 
@@ -34,6 +38,7 @@
 #endif
 
 // Блок текстовых C-строк с информацией об ошибках.
+static const char memory_allocation[] = "Ошибка при выделении памяти";
 static const char method_not_found[] = "Метод не найден";
 static const char type_not_supported[] = "Тип не поддерживается";
 static const char method_has_no_params[] = "Метод не имеет параметров";
@@ -60,6 +65,18 @@ static const char plugin_str_function_name[] = PLUGIN_STR_FUNCTION_METHOD;
 static const char plugin_add_method_name[] = PLUGIN_ADD_METHOD;
 
 struct FilePluginStatus* plugin_status_list = NULL; // Указатель на голову списка экземпляров объектов данной втыкалы.
+// Указатели на сервисные функции среды, в которую включена наша библиотека.
+struct PluginHelperFunctions helper_funcs = 
+{
+    .get_instance_func = NULL,
+    .set_runtime_error_func = NULL,
+    .set_result_value_func = NULL,
+    .params_count_func = NULL,
+    .param_type_func = NULL,
+    .param_get_value_func = NULL,
+    .param_string_size_func = NULL,
+    .print_to_context_func = NULL
+};
 
 // Структура, описывающая отдельный метод класса втыкалы, предоставляемый им для вызова извне, со стороны
 // МУФЛОН-программы (методы общего типа) или со стороны исполнительской среды (специальные методы).
@@ -107,6 +124,7 @@ static const char* PLUGIN_CLASS_METHODS_LIST[] =
     ""          // Обязательный пустой завершающий элемент списка.
 };
 
+// Таблица характеристик параметров методов класса данной втыкалы.
 const struct PluginMethodTable plugin_method_table[] =
 {
     // Специальные стандартные методы Муфлон-классов.
@@ -132,46 +150,61 @@ const struct PluginMethodTable plugin_method_table[] =
     {.method_name = "Read", .method_func = &MethodFileRead,     // Тот же вызов read, но с большой буквы.
      .params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 1},
      .method_params = {PARAM_TYPE_NUMERIC}},
-    {.method_name = "write", .method_func = &MethodFileRead,    // Один аргумент относительно произвольного типа.
+    {.method_name = "write", .method_func = &MethodFileWrite,    // Один аргумент относительно произвольного типа.
      .params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
-    {.method_name = "Write", .method_func = &MethodFileRead,    // То же самое.
+    {.method_name = "Write", .method_func = &MethodFileWrite,    // То же самое.
      .params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
-    {.method_name = "seek", .method_func = &MethodFileRead,     // Один либо два числовых аргумента - новая позиция и способ её отсчета.
+    {.method_name = "seek", .method_func = &MethodFileSeek,     // Один либо два числовых аргумента - новая позиция и способ её отсчета.
      .params_definer = {.arg_count_min = 1, .arg_count_max = 2, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
      .method_params = {PARAM_TYPE_NUMERIC, PARAM_TYPE_NUMERIC}},
-    {.method_name = "Seek", .method_func = &MethodFileRead,     // Аналог с большой буквы.
+    {.method_name = "Seek", .method_func = &MethodFileSeek,     // Аналог с большой буквы.
      .params_definer = {.arg_count_min = 1, .arg_count_max = 2, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
      .method_params = {PARAM_TYPE_NUMERIC, PARAM_TYPE_NUMERIC}},
+    {.method_name = "tell", .method_func = &MethodFileTell,     // Аргументов не имеет.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "Tell", .method_func = &MethodFileTell,     // Аналог.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "rewind", .method_func = &MethodFileRewind,     // Также аргументов не имеет.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "Rewind", .method_func = &MethodFileRewind,     // Эквивалент.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "is_open", .method_func = &MethodFileIsOpen,     // Аргументов не принимает.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "IsOpen", .method_func = &MethodFileIsOpen,     // Эквивалент.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "remove", .method_func = &MethodFileRemove,     // Строго один строковый аргумент.
+     .params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 1},
+     .method_params = {PARAM_TYPE_STRING}},
+    {.method_name = "Remove", .method_func = &MethodFileRemove,     // Так же.
+     .params_definer = {.arg_count_min = 1, .arg_count_max = 1, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 1},
+     .method_params = {PARAM_TYPE_STRING}},
+    {.method_name = "rename", .method_func = &MethodFileRename,     // Строго два строковых аргумента.
+     .params_definer = {.arg_count_min = 2, .arg_count_max = 2, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
+     .method_params = {PARAM_TYPE_STRING, PARAM_TYPE_STRING}},
+    {.method_name = "Rename", .method_func = &MethodFileRename,     // Аналогично.
+     .params_definer = {.arg_count_min = 2, .arg_count_max = 2, .check_mode = (uint32_t)PARAM_CHECK_TYPE_QUANTITY_EQUAL, .param_types_count = 2},
+     .method_params = {PARAM_TYPE_STRING, PARAM_TYPE_STRING}},
+    {.method_name = "status", .method_func = &MethodFileStatus,     // Аргументов не принимает.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "Status", .method_func = &MethodFileStatus,     // Эквивалент.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "eof", .method_func = &MethodFileEof,     // Аргументов не принимает.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "Eof", .method_func = &MethodFileEof,     // Эквивалент.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "error", .method_func = &MethodFileError,     // Аргументов не принимает.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}},
+    {.method_name = "Error", .method_func = &MethodFileError,     // Эквивалент.
+     .params_definer = {.arg_count_min = 0, .arg_count_max = 0, .check_mode = (uint32_t)PARAM_CHECK_QUANTITY_EQUAL, .param_types_count = 0}}
 };
-
-/*
-
-    { "tell"sv, &PluginInstance::MethodFileTell },
-    { "Tell"sv, &PluginInstance::MethodFileTell },
-    { "rewind"sv, &PluginInstance::MethodFileRewind },
-    { "Rewind"sv, &PluginInstance::MethodFileRewind },
-    { "is_open"sv, &PluginInstance::MethodFileIsOpen },
-    { "IsOpen"sv, &PluginInstance::MethodFileIsOpen },
-    { "remove"sv, &PluginInstance::MethodFileRemove },
-    { "Remove"sv, &PluginInstance::MethodFileRemove },
-    { "rename"sv, &PluginInstance::MethodFileRename },
-    { "Rename"sv, &PluginInstance::MethodFileRename },
-    { "status"sv, &PluginInstance::MethodFileStatus },
-    { "Status"sv, &PluginInstance::MethodFileStatus },
-    { "eof"sv, &PluginInstance::MethodFileEof },
-    { "Eof"sv, &PluginInstance::MethodFileEof },
-    { "error"sv, &PluginInstance::MethodFileError },
-    { "Error"sv, &PluginInstance::MethodFileError }
-};
-*/
 
 // Функция проверки того, принадлежит ли аргумент arg_number вызова plugin_method_call_id к численному типу.
 static bool IsArgumNumeric(uintptr_t plugin_method_call_id, uint32_t arg_number, const char* error_message)
 {
-    enum ObjectType param_type = (enum ObjectType)PluginParamType(plugin_method_call_id, arg_number);
+    enum ObjectType param_type = (enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, arg_number);
     if (param_type != OBJECT_TYPE_INTEGER && param_type != OBJECT_TYPE_DOUBLE)
     { // Параметр arg_number не принадлежит какому-либо численному типу.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, error_message);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, error_message);
         return false;
     }
     return true;
@@ -180,21 +213,20 @@ static bool IsArgumNumeric(uintptr_t plugin_method_call_id, uint32_t arg_number,
 // Функция извлечения целочисленного аргумента с номером arg_number для вызова с идентом plugin_method_call_id.
 static int GetUniIntNumber(uintptr_t plugin_method_call_id, uint32_t arg_number)
 {
-    int int_result;
-    double double_result;
+    int int_result = 0;
+    double double_result = 0.0;
 
-    enum ObjectType arg_type = (enum ObjectType)PluginParamType(plugin_method_call_id, arg_number);
+    enum ObjectType arg_type = (enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, arg_number);
     switch (arg_type)
     {
     case OBJECT_TYPE_INTEGER:
-        if (PluginParamGetValue(plugin_method_call_id, arg_number, &int_result, (int32_t)sizeof(int)) != sizeof(int))
+        if (helper_funcs.param_get_value_func(plugin_method_call_id, arg_number, &int_result, (int32_t)sizeof(int)) != sizeof(int))
             int_result = 0;   // Считать значение почему-то не удалось.
         break;
     case OBJECT_TYPE_DOUBLE:
-        if (PluginParamGetValue(plugin_method_call_id, arg_number, &double_result, (int32_t)sizeof(double)) == sizeof(double))
+        if (helper_funcs.param_get_value_func(plugin_method_call_id, arg_number, &double_result, (int32_t)sizeof(double))
+            == sizeof(double))
             int_result = (int)(double_result);
-        else
-            int_result = 0;  // Считать значение почему-то не удалось.
         break;
     default:
         int_result = 0;
@@ -206,21 +238,20 @@ static int GetUniIntNumber(uintptr_t plugin_method_call_id, uint32_t arg_number)
 
 static double GetUniDoubleNumber(uintptr_t plugin_method_call_id, uint32_t arg_number)
 {
-    int int_result;
-    double double_result;
+    int int_result = 0;
+    double double_result = 0.0;
 
-    enum ObjectType arg_type = (enum ObjectType)PluginParamType(plugin_method_call_id, arg_number);
+    enum ObjectType arg_type = (enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, arg_number);
     switch (arg_type)
     {
     case OBJECT_TYPE_DOUBLE:
-        if (PluginParamGetValue(plugin_method_call_id, arg_number, &double_result, (int32_t)sizeof(double)) != sizeof(double))
+        if (helper_funcs.param_get_value_func(plugin_method_call_id, arg_number, &double_result, (int32_t)sizeof(double))
+            != sizeof(double))
             double_result = 0.0;   // Считать значение почему-то не удалось.
         break;
     case OBJECT_TYPE_INTEGER:
-        if (PluginParamGetValue(plugin_method_call_id, arg_number, &int_result, (int32_t)sizeof(int)) == sizeof(int))
+        if (helper_funcs.param_get_value_func(plugin_method_call_id, arg_number, &int_result, (int32_t)sizeof(int)) == sizeof(int))
             double_result = (double)(int_result);
-        else
-            double_result = 0.0;  // Считать значение почему-то не удалось.
         break;
     default:
         double_result = 0.0;
@@ -277,11 +308,15 @@ static void DeletePluginStatus(uintptr_t plugin_method_call_id, struct FilePlugi
 // из процедуры обслуживания точки входа динамической библиотеки.
 void ClearPluginStatuses()
 {
-    for (struct FilePluginStatus* scan_plugin_instance = plugin_status_list; scan_plugin_instance;
-        scan_plugin_instance = scan_plugin_instance->next_plugin_rec)
+    struct FilePluginStatus* scan_plugin_instance = plugin_status_list;
+    while (scan_plugin_instance)
     {
         MethodDestroy(0, scan_plugin_instance);
-        free(scan_plugin_instance);
+
+        struct FilePluginStatus* old_scan_plugin_instance = scan_plugin_instance;
+        scan_plugin_instance = scan_plugin_instance->next_plugin_rec;
+
+        free(old_scan_plugin_instance);
     }
     plugin_status_list = NULL;
 }
@@ -373,6 +408,15 @@ MYTHLON_MODULE_EXPORT int32_t GetPluginInfo(uint32_t request_type, void* source_
         // Копирование данных на выход завершилось успешно. Как результат всей функции возвращаем длину скопированных данных.
         return (int32_t)target_data_size;
     }
+    case PLUG_REQUEST_HELPER_FUNCTIONS:     // Указатели на служебные функции внешней среды.
+    {
+        if (source_length < (int32_t)(sizeof(struct PluginHelperFunctions)))
+            return (int32_t)PLUGIN_ERR_BUFFER_TOO_SMALL;
+
+        // Копируем в надлежащее место адреса служебных функций ядра.
+        memcpy(&helper_funcs, source_area, sizeof(struct PluginHelperFunctions));
+        return 0; // Ответ на такой запрос не формируется.
+    }
     default:
         return (int32_t)PLUGIN_ERR_INVALID_REQUEST;
     }
@@ -382,12 +426,17 @@ MYTHLON_MODULE_EXPORT int32_t GetPluginInfo(uint32_t request_type, void* source_
 MYTHLON_MODULE_EXPORT void CallPluginMethod(const char* method_name, uintptr_t plugin_method_call_id)
 {
     // Получение условного идента текущего экземпляра класса втыкалы, к которому обращён вызов.
-    uintptr_t plugin_object_id = PluginGetInstanceId(plugin_method_call_id);
+    uintptr_t plugin_object_id = helper_funcs.get_instance_func(plugin_method_call_id);
     // Поиск этого экземпляра в связном списке - хранилище объектов-втыкал.
     struct FilePluginStatus* use_plugin_instance = FindPluginStatus(plugin_object_id);
     if (!use_plugin_instance)
     {  // Экземпляр объекта втыкалы, к методу которого обращён вызов, пока ещё не существует. Нужно его создать.
         use_plugin_instance = malloc(sizeof(struct FilePluginStatus));
+        if (!use_plugin_instance)
+        {
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_MEMORY_ALLOCATION_ERROR, memory_allocation);
+            return;
+        }
         // Инициализируем его поля в исходное состояние.
         use_plugin_instance->external_object_id = plugin_object_id;
         memset(use_plugin_instance->filename, 0, ArraySize(use_plugin_instance->filename));
@@ -412,13 +461,13 @@ MYTHLON_MODULE_EXPORT void CallPluginMethod(const char* method_name, uintptr_t p
     if (method_desc)
         method_desc->method_func(plugin_method_call_id, use_plugin_instance);
     else
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_METHOD_NOT_FOUND, method_not_found);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_METHOD_NOT_FOUND, method_not_found);
 }
 
 // Инициализирующий метод - конструктор.
 void MethodInit(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
         // Есть какие-то аргументы, то это попытка немедленно открыть указанный файл.
         MethodFileOpen(plugin_method_call_id, plugin_status);
 }
@@ -432,9 +481,9 @@ void MethodStringize(uintptr_t plugin_method_call_id, struct FilePluginStatus* p
     static char FILE_ERROR_STRING[] = " : Ошибка - ";
     static char WRAPPER_STRING[] = " : Оболочка - ";
 
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {  // Есть какие-то аргументы. Для нас это будет выступать как ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
@@ -470,7 +519,7 @@ void MethodStringize(uintptr_t plugin_method_call_id, struct FilePluginStatus* p
     ulltoa(plugin_status->external_object_id, current_buffer_ptr, 10);
     current_buffer_ptr += strlen(current_buffer_ptr);
 
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_STRING, str_buffer, (int32_t)(current_buffer_ptr - str_buffer));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_STRING, str_buffer, (int32_t)(current_buffer_ptr - str_buffer));
 }
 
 void MethodDestroy(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
@@ -484,53 +533,53 @@ void MethodDestroy(uintptr_t plugin_method_call_id, struct FilePluginStatus* plu
 // Открытие файла. Имеет один либо два строковых аргумента - имя файла и режим работы с ним.
 void MethodFileOpen(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    int arg_count = PluginParamsCount(plugin_method_call_id);
+    int arg_count = helper_funcs.params_count_func(plugin_method_call_id);
     if (arg_count != 1 && arg_count != 2)
     { // Параметров не один и не два - ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_or_two_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_or_two_param);
         return;
     }
-    if ((enum ObjectType)PluginParamType(plugin_method_call_id, 0) != OBJECT_TYPE_STRING)
+    if ((enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 0) != OBJECT_TYPE_STRING)
     { // Параметр 0 - имя открываемого файла - не принадлежит к строковому типу.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
         return;
     }
-    int32_t filename_length = PluginParamStringSize(plugin_method_call_id, 0);
+    int32_t filename_length = helper_funcs.param_string_size_func(plugin_method_call_id, 0);
     if (filename_length >= FILENAME_LENGTH)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
         return;
     }
 
     char filename[FILENAME_LENGTH];
     char filemode[FILEMODE_LENGTH];
     strcpy(filemode, "r");  // По умолчанию открываем файл только для чтения.
-    PluginParamGetValue(plugin_method_call_id, 0, filename, FILENAME_LENGTH);
+    helper_funcs.param_get_value_func(plugin_method_call_id, 0, filename, FILENAME_LENGTH);
     filename[filename_length] = 0;
 
     if (arg_count == 2)
     {
-        if ((enum ObjectType)PluginParamType(plugin_method_call_id, 1) != OBJECT_TYPE_STRING)
+        if ((enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 1) != OBJECT_TYPE_STRING)
         { // Параметр 1 - режим открытия файла - не принадлежит к строковому типу.
-            PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filemode_not_string);
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filemode_not_string);
             return;
         }
-        int32_t filemode_length = PluginParamStringSize(plugin_method_call_id, 1);
+        int32_t filemode_length = helper_funcs.param_string_size_func(plugin_method_call_id, 1);
         if (filemode_length >= FILEMODE_LENGTH)
         {
-            PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
             return;
         }
-        PluginParamGetValue(plugin_method_call_id, 0, filemode, FILEMODE_LENGTH);
+        helper_funcs.param_get_value_func(plugin_method_call_id, 1, filemode, FILEMODE_LENGTH);
         filemode[filemode_length] = 0;
     }
 
     if (!plugin_status->file_handle)
-        MethodFileClose(plugin_method_call_id, plugin_status);
+        MethodFileClose(0, plugin_status);
     errno = 0;
     plugin_status->file_handle = fopen(filename, filemode);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &plugin_status->file_error,
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &plugin_status->file_error,
                          (int32_t)sizeof(plugin_status->file_error));
 }
 
@@ -540,9 +589,9 @@ void MethodFileClose(uintptr_t plugin_method_call_id, struct FilePluginStatus* p
     if (plugin_method_call_id)
     { // Возможен также внеконтекстуальный вызов это функции (как правило, из деструктора MethodDestroy()).
       // В этом случае plugin_method_call_id == 0 и наличие переданных параметров проверяться не будет.
-        if (PluginParamsCount(plugin_method_call_id) != 0)
+        if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
         {   // Есть какие-то аргументы. Для нас это будет выступать как ошибка.
-            PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
             return;
         }
     }
@@ -560,9 +609,9 @@ void MethodFileClose(uintptr_t plugin_method_call_id, struct FilePluginStatus* p
 void MethodFileRead(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
     // Проверка корректности переданных параметров. Он должен быть единственным и численным.
-    if (PluginParamsCount(plugin_method_call_id) != 1)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 1)
     { // Параметр не один - ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
         return;
     }
     if (!IsArgumNumeric(plugin_method_call_id, 0, bytes_count_not_number))
@@ -570,7 +619,7 @@ void MethodFileRead(uintptr_t plugin_method_call_id, struct FilePluginStatus* pl
 
     if (!plugin_status->file_handle)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
         return;
     }
 
@@ -580,7 +629,7 @@ void MethodFileRead(uintptr_t plugin_method_call_id, struct FilePluginStatus* pl
     errno = 0;
     size_t fact_read_length = fread(read_buffer, 1, try_read_length, plugin_status->file_handle);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_STRING, read_buffer, (int32_t)fact_read_length);
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_STRING, read_buffer, (int32_t)fact_read_length);
 
     free(read_buffer);
 }
@@ -593,20 +642,20 @@ void MethodFileRead(uintptr_t plugin_method_call_id, struct FilePluginStatus* pl
 void MethodFileWrite(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
     // Проверим допустимость входных параметров. Он должен быть единственным и может быть при этом любого типа.
-    if (PluginParamsCount(plugin_method_call_id) != 1)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 1)
     { // Параметр не один - ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
         return;
     }
     
     if (!plugin_status->file_handle)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
         return;
     }
 
     int write_length = 0;
-    switch ((enum ObjectType)PluginParamType(plugin_method_call_id, 0))
+    switch ((enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 0))
     {
         case OBJECT_TYPE_NONE:           // Пустой параметр (и, соответственно, контейнер) None.
             break;
@@ -623,31 +672,36 @@ void MethodFileWrite(uintptr_t plugin_method_call_id, struct FilePluginStatus* p
             write_length = (int)sizeof(double);
             break;
         case OBJECT_TYPE_STRING:         // Символьная строка std::string.
-            write_length = PluginParamStringSize(plugin_method_call_id, 0);
+            write_length = helper_funcs.param_string_size_func(plugin_method_call_id, 0);
             break;
         default:
-            PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, type_not_supported);
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, type_not_supported);
             return;
     }
     // Сохраняем в файл write_length байт из входного буфера первого (с нулевым индексом) аргумента метода.
     void* medium_buffer = malloc(write_length);
-    PluginParamGetValue(plugin_method_call_id, 0, medium_buffer, write_length);
+    if (!medium_buffer)
+    {
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_MEMORY_ALLOCATION_ERROR, memory_allocation);
+        return;
+    }
+    helper_funcs.param_get_value_func(plugin_method_call_id, 0, medium_buffer, write_length);
 
     errno = 0;
     int result = (int)fwrite(medium_buffer, (size_t)1, (size_t)write_length, plugin_status->file_handle);
     plugin_status->file_error = errno;
     free(medium_buffer);
 
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
 }
 
 void MethodFileSeek(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
     // Проверка корректности переданных параметров. Их может быть один либо два и оба должны быть численными.
-    int arg_count = PluginParamsCount(plugin_method_call_id);
+    int arg_count = helper_funcs.params_count_func(plugin_method_call_id);
     if (arg_count != 1 && arg_count != 2)
     { // Параметров не один и не два - ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_or_two_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_or_two_param);
         return;
     }
     if (!IsArgumNumeric(plugin_method_call_id, 0, target_point_not_number))
@@ -663,174 +717,175 @@ void MethodFileSeek(uintptr_t plugin_method_call_id, struct FilePluginStatus* pl
         seek_mode = GetUniIntNumber(plugin_method_call_id, 1);
         if (seek_mode != SEEK_SET && seek_mode != SEEK_CUR && seek_mode != SEEK_END)
         {
-            PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, invalid_seekmode);
+            helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, invalid_seekmode);
             return;
         }
     }
 
     if (!plugin_status->file_handle)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
         return;
     }
 
     errno = 0;
     int result = fseek(plugin_status->file_handle, target_point, seek_mode);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
 }
 
 void MethodFileTell(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Есть они всё же есть, то это ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
     if (!plugin_status->file_handle)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
         return;
     }
 
     errno = 0;
     int result = ftell(plugin_status->file_handle);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
 }
 
 void MethodFileRewind(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Есть они всё же есть, то это ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
     if (!plugin_status->file_handle)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, file_not_opened);
         return;
     }
 
     errno = 0;
     rewind(plugin_status->file_handle);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &plugin_status->file_error, (int32_t)sizeof(int));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER,
+                                       &plugin_status->file_error, (int32_t)sizeof(int));
 }
 
 void MethodFileIsOpen(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Есть они всё же есть, то это ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
     bool if_file_open = plugin_status->file_handle;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &if_file_open, (int32_t)sizeof(if_file_open));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &if_file_open, (int32_t)sizeof(if_file_open));
 }
 
 void MethodFileRemove(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
     // Проверка допустимости переданных в метод аргументов.
-    if (PluginParamsCount(plugin_method_call_id) != 1)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 1)
     { // Проверка на количество переданных параметров. Он должен быть единственным.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_one_param);
         return;
     }
-    if ((enum ObjectType)PluginParamType(plugin_method_call_id, 0) != OBJECT_TYPE_STRING)
+    if ((enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 0) != OBJECT_TYPE_STRING)
     { // Единственный аргумент должен быть строковым.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
         return;
     }
-    int32_t filename_length = PluginParamStringSize(plugin_method_call_id, 0);
+    int32_t filename_length = helper_funcs.param_string_size_func(plugin_method_call_id, 0);
     if (filename_length >= FILENAME_LENGTH)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
         return;
     }
 
     char remove_filename[FILENAME_LENGTH];
-    PluginParamGetValue(plugin_method_call_id, 0, remove_filename, FILENAME_LENGTH);
+    helper_funcs.param_get_value_func(plugin_method_call_id, 0, remove_filename, FILENAME_LENGTH);
     remove_filename[filename_length] = 0;
 
     errno = 0;
     int result = remove(remove_filename);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
 }
 
 void MethodFileRename(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
     // Сначала выполним проверку на наличие и допустимость входных аргументов метода.
-    if (PluginParamsCount(plugin_method_call_id) != 2)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 2)
     {   // Данный метод принимает два аргумента - имя исходного файла и его желпемое имя. Есть это не так, это ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_two_param);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_two_param);
         return;
     }
-    if ((enum ObjectType)PluginParamType(plugin_method_call_id, 0) != OBJECT_TYPE_STRING ||
-        (enum ObjectType)PluginParamType(plugin_method_call_id, 1) != OBJECT_TYPE_STRING)
+    if ((enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 0) != OBJECT_TYPE_STRING ||
+        (enum ObjectType)helper_funcs.param_type_func(plugin_method_call_id, 1) != OBJECT_TYPE_STRING)
     { // Оба аргумента должны быть строковыми.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_TYPE, filename_not_string);
         return;
     }
-    int32_t src_filename_length = PluginParamStringSize(plugin_method_call_id, 0),
-            dest_filename_length = PluginParamStringSize(plugin_method_call_id, 1);
+    int32_t src_filename_length = helper_funcs.param_string_size_func(plugin_method_call_id, 0),
+            dest_filename_length = helper_funcs.param_string_size_func(plugin_method_call_id, 1);
     if (src_filename_length >= FILENAME_LENGTH || dest_filename_length >= FILENAME_LENGTH)
     {
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAM_LENGTH, string_too_long);
         return;
     }
 
     char src_renaming_filename[FILENAME_LENGTH];
     char dest_filename[FILENAME_LENGTH];
-    PluginParamGetValue(plugin_method_call_id, 0, src_renaming_filename, FILENAME_LENGTH);
-    PluginParamGetValue(plugin_method_call_id, 1, dest_filename, FILENAME_LENGTH);
+    helper_funcs.param_get_value_func(plugin_method_call_id, 0, src_renaming_filename, FILENAME_LENGTH);
+    helper_funcs.param_get_value_func(plugin_method_call_id, 1, dest_filename, FILENAME_LENGTH);
     src_renaming_filename[src_filename_length] = 0;
     dest_filename[dest_filename_length] = 0;
 
     errno = 0;
     int result = rename(src_renaming_filename, dest_filename);
     plugin_status->file_error = errno;
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &result, (int32_t)sizeof(result));
 }
 
 void MethodFileStatus(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Есть они всё же есть, то это ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &plugin_status->file_error, (int32_t)sizeof(int));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_INTEGER, &plugin_status->file_error, (int32_t)sizeof(int));
 }
 
 void MethodFileEof(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Если они всё же есть, то для нас это будет выступать как ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
     bool eof_result = true;
     if (plugin_status->file_handle)
         eof_result = feof(plugin_status->file_handle);
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &eof_result, (int32_t)sizeof(eof_result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &eof_result, (int32_t)sizeof(eof_result));
 }
 
 void MethodFileError(uintptr_t plugin_method_call_id, struct FilePluginStatus* plugin_status)
 {
-    if (PluginParamsCount(plugin_method_call_id) != 0)
+    if (helper_funcs.params_count_func(plugin_method_call_id) != 0)
     {   // Данный метод не принимает аргументов. Если они всё же есть, то для нас это будет выступать как ошибка.
-        PluginSetRuntimeError(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
+        helper_funcs.set_runtime_error_func(plugin_method_call_id, (uint32_t)THRM_INVALID_PARAMS_COUNT, method_has_no_params);
         return;
     }
 
     bool error_result = true;
     if (plugin_status->file_handle)
         error_result = ferror(plugin_status->file_handle);
-    PluginSetResultValue(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &error_result, (int32_t)sizeof(error_result));
+    helper_funcs.set_result_value_func(plugin_method_call_id, (uint32_t)OBJECT_TYPE_LOGICAL, &error_result, (int32_t)sizeof(error_result));
 }

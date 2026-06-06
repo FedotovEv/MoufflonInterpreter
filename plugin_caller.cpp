@@ -75,297 +75,296 @@ std::unordered_map<const FullPluginMethodCallDefiner*, std::vector<runtime::Obje
 std::unordered_map<const FullPluginMethodCallDefiner*, runtime::ObjectHolder> plug_retvals;
 std::unordered_map<const FullPluginMethodCallDefiner*, runtime::RuntimeError> plug_errors;
 
-extern "C"
+// Функция возвращает идент (фактически, указатель) на экземпляр(объект)-оболочку класса PluginInstance, оборачивающий тот экземпляр класса
+// втыкалы, к которому направлен вызов plugin_method_call_id.
+uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id)
 {
-    // Функция возвращает идент (фактически, указатель) на экземпляр(объект)-оболочку класса PluginInstance, оборачивающий тот экземпляр класса
-    // втыкалы, к которому направлен вызов plugin_method_call_id.
-    HELPERS_EXPORT_IMPORT uintptr_t PluginGetInstanceId(uintptr_t plugin_method_call_id)
+    decltype(plug_errors)* plug_errors_ptr = &plug_errors;
+
+    FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!call_definer || plug_errors.count(call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+
+    return reinterpret_cast<uintptr_t>(call_definer->plugin_instance);
+}
+
+// Функция экспортируется ядром, импортируется втыкалой и вызывается изнутри её методов для передачи исполнительской среде информации
+// о том, что работа текущего метода завершилась событием, которое после его завершения должно привести к выбросу исключения msg_num
+// с сообщением except_text.
+int32_t PluginSetRuntimeError(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text)
+{
+    FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!call_definer || plug_errors.count(call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+    if (msg_num > static_cast<uint32_t>(ThrowMessageNumber::THRM_MAX_VALUE))
+        return PluginErrorCode::PLUGIN_ERR_INCORRECT_RUNTIME_ERROR; // Недопустимый тип ошибки.
+
+    if (!except_text)
+        except_text = ERROR_WITHOUT_TEXT;
+    plug_errors[call_definer] =
+        CreateErrorObject(call_definer->context->GetLastCommandDesc(), static_cast<ThrowMessageNumber>(msg_num), except_text);
+    return PluginErrorCode::PLUGIN_ERR_NONE;   // Код нормального завершения.
+}
+
+int32_t PluginSetResultValue(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length)
+{ // Функция установки значения, возвращаемого вызванным методом втыкалы. Значение считывается из поля source_field длиной не более source_length.
+    // Возвращаемое значение указывает истинное количество считанных байт (при успешном выполнеии запроса) либо код ошибки (при её возникновении).
+    if (!source_field)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;    // Не указан буфер-источник возвращаемого значения.
+    if (source_length < 0)
+        return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+    FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!full_call_definer || plug_retvals.count(full_call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+
+    ObjectHolder& retval_holder = plug_retvals[full_call_definer];
+    switch (static_cast<ObjectType>(result_type))
     {
-        FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer || plug_errors.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-
-        return reinterpret_cast<uintptr_t>(call_definer->plugin_instance);
-    }
-
-    // Функция экспортируется ядром, импортируется втыкалой и вызывается изнутри её методов для передачи исполнительской среде информации
-    // о том, что работа текущего метода завершилась событием, которое после его завершения должно привести к выбросу исключения msg_num
-    // с сообщением except_text.
-    MYTHLON_KERNEL_EXPORT int32_t PluginSetRuntimeError(uintptr_t plugin_method_call_id, uint32_t msg_num, const char* except_text)
-    {
-        FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer || plug_errors.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-        if (msg_num > static_cast<uint32_t>(ThrowMessageNumber::THRM_MAX_VALUE))
-            return PluginErrorCode::PLUGIN_ERR_INCORRECT_RUNTIME_ERROR; // Недопустимый тип ошибки.
-
-        if (!except_text)
-            except_text = ERROR_WITHOUT_TEXT;
-        plug_errors[call_definer] =
-            CreateErrorObject(call_definer->context->GetLastCommandDesc(), static_cast<ThrowMessageNumber>(msg_num), except_text);
-        return PluginErrorCode::PLUGIN_ERR_NONE;   // Код нормального завершения.
-    }
-
-    MYTHLON_KERNEL_EXPORT int32_t PluginSetResultValue(uintptr_t plugin_method_call_id, uint32_t result_type, void* source_field, int32_t source_length)
-    { // Функция установки значения, возвращаемого вызванным методом втыкалы. Значение считывается из поля source_field длиной не более source_length.
-      // Возвращаемое значение указывает истинное количество считанных байт (при успешном выполнеии запроса) либо код ошибки (при её возникновении).
-        if (!source_field)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;    // Не указан буфер-источник возвращаемого значения.
-        if (source_length < 0)
-            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer || plug_retvals.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-
-        ObjectHolder& retval_holder = plug_retvals[full_call_definer];
-        switch (static_cast<ObjectType>(result_type))
+    case ObjectType::OBJECT_TYPE_NONE:
+        return 0;
+    case ObjectType::OBJECT_TYPE_LOGICAL:
+        if (source_length >= sizeof(bool))
         {
-        case ObjectType::OBJECT_TYPE_NONE:
-            return 0;
-        case ObjectType::OBJECT_TYPE_LOGICAL:
-            if (source_length >= sizeof(bool))
-            {
-                retval_holder = ObjectHolder::Own(runtime::Bool(*reinterpret_cast<bool*>(source_field)));
-                return sizeof(bool);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        case ObjectType::OBJECT_TYPE_INTEGER:
-            if (source_length >= sizeof(int))
-            {
-                retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<int*>(source_field)));
-                return sizeof(int);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        case ObjectType::OBJECT_TYPE_DOUBLE:
-            if (source_length >= sizeof(double))
-            {
-                retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<double*>(source_field)));
-                return sizeof(double);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        case ObjectType::OBJECT_TYPE_STRING:
-            retval_holder = ObjectHolder::Own(runtime::String(std::string(reinterpret_cast<char*>(source_field), source_length)));
-            return source_length;
-        case ObjectType::OBJECT_TYPE_SYMBOL:
-            if (source_length >= sizeof(char))
-            {
-                retval_holder = ObjectHolder::Own(runtime::String(std::string(1, *reinterpret_cast<char*>(source_field))));
-                return sizeof(char);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        default:
-            return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
+            retval_holder = ObjectHolder::Own(runtime::Bool(*reinterpret_cast<bool*>(source_field)));
+            return sizeof(bool);
         }
-    }
-
-    MYTHLON_KERNEL_EXPORT int32_t PluginParamsCount(uintptr_t plugin_method_call_id)
-    { // Экспортируемая функция возвращает вызвавшему её методу втыкалы количество параданных в неё параметров.
-        FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!call_definer || plug_params.count(call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-
-        return static_cast<int32_t>(plug_params[call_definer].size());
-    }
-
-    MYTHLON_KERNEL_EXPORT int32_t PluginParamType(uintptr_t plugin_method_call_id, uint32_t arg_number)
-    { // Данная экспортируемая ядром функция сообщает вызывающему коду тип входного аргумента с номером arg_number.
-        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-        uint32_t plug_params_count =
-            static_cast<uint32_t>(plug_params[full_call_definer].size());
-        if (arg_number >= plug_params_count)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
-
-        ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
-        if (!selected_param)
-            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_NONE);    // В контейнере хранится значение None.
-        else if (selected_param.TryAs<runtime::Bool>())
-            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_LOGICAL); // В контейнере находится логическое значение.
-        else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
-        { // Какое-то число, целое или с плавающей точкой.
-            if (std::holds_alternative<int>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER);     // Это целое число.
-            else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
-                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_DOUBLE);      // Число с плавающей точкой.
-            else
-                return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_OTHER);
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
         }
-        else if (selected_param.TryAs<runtime::String>())
-            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING);  // Строка.
+    case ObjectType::OBJECT_TYPE_INTEGER:
+        if (source_length >= sizeof(int))
+        {
+            retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<int*>(source_field)));
+            return sizeof(int);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    case ObjectType::OBJECT_TYPE_DOUBLE:
+        if (source_length >= sizeof(double))
+        {
+            retval_holder = ObjectHolder::Own(runtime::Number(*reinterpret_cast<double*>(source_field)));
+            return sizeof(double);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    case ObjectType::OBJECT_TYPE_STRING:
+        retval_holder = ObjectHolder::Own(runtime::String(std::string(reinterpret_cast<char*>(source_field), source_length)));
+        return source_length;
+    case ObjectType::OBJECT_TYPE_SYMBOL:
+        if (source_length >= sizeof(char))
+        {
+            retval_holder = ObjectHolder::Own(runtime::String(std::string(1, *reinterpret_cast<char*>(source_field))));
+            return sizeof(char);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    default:
+        return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
+    }
+}
+
+int32_t PluginParamsCount(uintptr_t plugin_method_call_id)
+{ // Экспортируемая функция возвращает вызвавшему её методу втыкалы количество параданных в неё параметров.
+    FullPluginMethodCallDefiner* call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!call_definer || plug_params.count(call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+
+    return static_cast<int32_t>(plug_params[call_definer].size());
+}
+
+int32_t PluginParamType(uintptr_t plugin_method_call_id, uint32_t arg_number)
+{ // Данная экспортируемая ядром функция сообщает вызывающему коду тип входного аргумента с номером arg_number.
+    FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+    uint32_t plug_params_count =
+        static_cast<uint32_t>(plug_params[full_call_definer].size());
+    if (arg_number >= plug_params_count)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+
+    ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
+    if (!selected_param)
+        return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_NONE);    // В контейнере хранится значение None.
+    else if (selected_param.TryAs<runtime::Bool>())
+        return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_LOGICAL); // В контейнере находится логическое значение.
+    else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
+    { // Какое-то число, целое или с плавающей точкой.
+        if (std::holds_alternative<int>(number_val_ptr->GetValue()))
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER);     // Это целое число.
+        else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
+            return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_DOUBLE);      // Число с плавающей точкой.
         else
             return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_OTHER);
     }
+    else if (selected_param.TryAs<runtime::String>())
+        return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_STRING);  // Строка.
+    else
+        return static_cast<uint32_t>(ObjectType::OBJECT_TYPE_OTHER);
+}
 
-    MYTHLON_KERNEL_EXPORT int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number)
-    { // Функция возвращает длину строки аргумента с номером arg_number, если данный аргумент является строковым.
-        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+int32_t PluginParamStringSize(uintptr_t plugin_method_call_id, uint32_t arg_number)
+{ // Функция возвращает длину строки аргумента с номером arg_number, если данный аргумент является строковым.
+    FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
 
-        uint32_t plug_params_count =
-            static_cast<uint32_t>(plug_params[full_call_definer].size());
-        if (arg_number >= plug_params_count)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+    uint32_t plug_params_count =
+        static_cast<uint32_t>(plug_params[full_call_definer].size());
+    if (arg_number >= plug_params_count)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
 
-        if (runtime::String* string_val_ptr = plug_params[full_call_definer][arg_number].TryAs<runtime::String>())
-            return static_cast<int32_t>(string_val_ptr->SizeOf());
-        else
-            return PluginErrorCode::PLUGIN_ERR_IT_IS_NOT_STRING;   // Это не строка.
+    if (runtime::String* string_val_ptr = plug_params[full_call_definer][arg_number].TryAs<runtime::String>())
+        return static_cast<int32_t>(string_val_ptr->SizeOf());
+    else
+        return PluginErrorCode::PLUGIN_ERR_IT_IS_NOT_STRING;   // Это не строка.
+}
+
+int32_t PluginParamGetValue(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length)
+{ // Функция копирует содержимое параметра arg_number в поле-приёмник, на которое указывает target_field. Предполагается, что
+    // места там не менее, чем target_length байт. Возвращаемое значение - количество скопированных байт.
+    if (!target_field)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_TARGET_FIELD;    // Не указан буфер-приемник получаемого значения.
+    if (target_length < 0)
+        return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+
+    FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+
+    if (arg_number >= static_cast<uint32_t>(plug_params[full_call_definer].size()))
+        return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
+    ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
+
+    if (!selected_param)
+    { // Значение None.
+        return 0;
     }
-
-    MYTHLON_KERNEL_EXPORT int32_t PluginParamGetValue(uintptr_t plugin_method_call_id, uint32_t arg_number, void* target_field, int32_t target_length)
-    { // Функция копирует содержимое параметра arg_number в поле-приёмник, на которое указывает target_field. Предполагается, что
-      // места там не менее, чем target_length байт. Возвращаемое значение - количество скопированных байт.
-        if (!target_field)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_TARGET_FIELD;    // Не указан буфер-приемник получаемого значения.
-        if (target_length < 0)
+    else if (runtime::Bool* bool_ptr = selected_param.TryAs<runtime::Bool>())
+    { // Однобайтовое логическое значение.
+        if (target_length >= sizeof(bool))
+        {
+            *reinterpret_cast<bool*>(target_field) = bool_ptr->GetValue();
+            return sizeof(bool);
+        }
+        else
+        {
             return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-
-        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-
-        if (arg_number >= static_cast<uint32_t>(plug_params[full_call_definer].size()))
-            return PluginErrorCode::PLUGIN_ERR_INVALID_ARGUMENT_INDEX;  // Индекс аргумента за пределами допустимого.
-        ObjectHolder& selected_param = plug_params[full_call_definer][arg_number];
-
-        if (!selected_param)
-        { // Значение None.
-            return 0;
-        }
-        else if (runtime::Bool* bool_ptr = selected_param.TryAs<runtime::Bool>())
-        { // Однобайтовое логическое значение.
-            if (target_length >= sizeof(bool))
-            {
-                *reinterpret_cast<bool*>(target_field) = bool_ptr->GetValue();
-                return sizeof(bool);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        }
-        else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
-        { // Некоторое число.
-            if (std::holds_alternative<int>(number_val_ptr->GetValue()))
-            { // Целое.
-                if (target_length >= sizeof(int))
-                {
-                    *reinterpret_cast<int*>(target_field) = std::get<int>(number_val_ptr->GetValue());
-                    return sizeof(int);
-                }
-                else
-                {
-                    return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-                }
-            }
-            else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
-            { // Дробное с плавающей точкой.
-                if (target_length >= sizeof(double))
-                {
-                    *reinterpret_cast<double*>(target_field) = std::get<double>(number_val_ptr->GetValue());
-                    return sizeof(double);
-                }
-                else
-                {
-                    return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-                }
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
-            }
-        }
-        else if (runtime::String* string_ptr = selected_param.TryAs<runtime::String>())
-        {
-            const std::string& param_str_value = string_ptr->GetValue();
-            size_t move_length = min(param_str_value.size(), static_cast<size_t>(target_length));
-            memmove(target_field, param_str_value.data(), move_length);
-            return static_cast<uint32_t>(move_length);
-        }
-        else
-        {
-            return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
         }
     }
-
-    HELPERS_EXPORT_IMPORT int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length)
-    { // Функция направления данных типа source_type из буфера (source_field, source_length) в выходной поток, связанный с контекстом, который, в свою очередь,
-      // ассоциирован с вызовом plugin_method_call_id.
-        FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
-        if (!full_call_definer || plug_params.count(full_call_definer) == 0)
-            return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
-
-        switch (static_cast<ObjectType>(source_type))
-        {
-        case ObjectType::OBJECT_TYPE_NONE:
-            return 0;   // Тип None - ничего не считываем и ничего не отправляем в поток контекста.
-        case ObjectType::OBJECT_TYPE_LOGICAL:
-            if (source_field && source_length >= sizeof(bool))
+    else if (runtime::Number* number_val_ptr = selected_param.TryAs<runtime::Number>())
+    { // Некоторое число.
+        if (std::holds_alternative<int>(number_val_ptr->GetValue()))
+        { // Целое.
+            if (target_length >= sizeof(int))
             {
-                full_call_definer->context->GetOutputStream() << *reinterpret_cast<bool*>(source_field);
-                return sizeof(bool);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        case ObjectType::OBJECT_TYPE_INTEGER:
-            if (source_field && source_length >= sizeof(int))
-            {
-                full_call_definer->context->GetOutputStream() << *reinterpret_cast<int*>(source_field);
+                *reinterpret_cast<int*>(target_field) = std::get<int>(number_val_ptr->GetValue());
                 return sizeof(int);
             }
             else
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectType::OBJECT_TYPE_DOUBLE:
-            if (source_field && source_length >= sizeof(double))
+        }
+        else if (std::holds_alternative<double>(number_val_ptr->GetValue()))
+        { // Дробное с плавающей точкой.
+            if (target_length >= sizeof(double))
             {
-                full_call_definer->context->GetOutputStream() << *reinterpret_cast<double*>(source_field);
+                *reinterpret_cast<double*>(target_field) = std::get<double>(number_val_ptr->GetValue());
                 return sizeof(double);
             }
             else
             {
                 return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
             }
-        case ObjectType::OBJECT_TYPE_STRING:
-            if (source_field)
-            {
-                full_call_definer->context->GetOutputStream() << std::string(reinterpret_cast<char*>(source_field), source_length);
-                return source_length;
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
-            }
-        case ObjectType::OBJECT_TYPE_SYMBOL:
-            if (source_field && source_length >= sizeof(char))
-            {
-                full_call_definer->context->GetOutputStream() << *reinterpret_cast<char*>(source_field);
-                return sizeof(char);
-            }
-            else
-            {
-                return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
-            }
-        default:
+        }
+        else
+        {
             return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
         }
+    }
+    else if (runtime::String* string_ptr = selected_param.TryAs<runtime::String>())
+    {
+        const std::string& param_str_value = string_ptr->GetValue();
+        size_t move_length = min(param_str_value.size(), static_cast<size_t>(target_length));
+        memmove(target_field, param_str_value.data(), move_length);
+        return static_cast<uint32_t>(move_length);
+    }
+    else
+    {
+        return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
+    }
+}
+
+ int32_t PluginPrintToContext(uintptr_t plugin_method_call_id, uint32_t source_type, void* source_field, int32_t source_length)
+{ // Функция направления данных типа source_type из буфера (source_field, source_length) в выходной поток, связанный с контекстом, который, в свою очередь,
+    // ассоциирован с вызовом plugin_method_call_id.
+    FullPluginMethodCallDefiner* full_call_definer = reinterpret_cast<FullPluginMethodCallDefiner*>(plugin_method_call_id);
+    if (!full_call_definer || plug_params.count(full_call_definer) == 0)
+        return PluginErrorCode::PLUGIN_ERR_INVALID_METHOD_CALL_ID;  // Неизвестный идентификатор вызова метода.
+
+    switch (static_cast<ObjectType>(source_type))
+    {
+    case ObjectType::OBJECT_TYPE_NONE:
+        return 0;   // Тип None - ничего не считываем и ничего не отправляем в поток контекста.
+    case ObjectType::OBJECT_TYPE_LOGICAL:
+        if (source_field && source_length >= sizeof(bool))
+        {
+            full_call_definer->context->GetOutputStream() << *reinterpret_cast<bool*>(source_field);
+            return sizeof(bool);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    case ObjectType::OBJECT_TYPE_INTEGER:
+        if (source_field && source_length >= sizeof(int))
+        {
+            full_call_definer->context->GetOutputStream() << *reinterpret_cast<int*>(source_field);
+            return sizeof(int);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    case ObjectType::OBJECT_TYPE_DOUBLE:
+        if (source_field && source_length >= sizeof(double))
+        {
+            full_call_definer->context->GetOutputStream() << *reinterpret_cast<double*>(source_field);
+            return sizeof(double);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    case ObjectType::OBJECT_TYPE_STRING:
+        if (source_field)
+        {
+            full_call_definer->context->GetOutputStream() << std::string(reinterpret_cast<char*>(source_field), source_length);
+            return source_length;
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_INVALID_SOURCE_FIELD;
+        }
+    case ObjectType::OBJECT_TYPE_SYMBOL:
+        if (source_field && source_length >= sizeof(char))
+        {
+            full_call_definer->context->GetOutputStream() << *reinterpret_cast<char*>(source_field);
+            return sizeof(char);
+        }
+        else
+        {
+            return PluginErrorCode::PLUGIN_ERR_BUFFER_TOO_SMALL;
+        }
+    default:
+        return PluginErrorCode::PLUGIN_ERR_UNSUPPORTED_TYPE;
     }
 }
 
@@ -427,6 +426,8 @@ namespace ast
 
 namespace runtime
 {
+    static const std::string USE_DESTROY_METHOD_NAME(PLUGIN_DESTROY_METHOD);
+
     std::string GenMethodNotFoundErrMess(const std::string& method_name)
     {
         return method_name + " - " + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
@@ -591,8 +592,8 @@ namespace runtime
     {
         // Если втыкала опеределяет специальный метод PLUGIN_DESTROY_METHOD, то он будет использоваться как внутренний её деструктор (будет вызываться
         // при разрушении объекта).
-        if (!class_name_.empty() && HasMethod(PLUGIN_DESTROY_METHOD, 0))
-            Call(PLUGIN_DESTROY_METHOD, {}, context_);
+        if (!class_name_.empty() && HasMethod(USE_DESTROY_METHOD_NAME, 0))
+            Call(USE_DESTROY_METHOD_NAME, {}, context_);
     }
 
     void PluginInstance::Print(std::ostream& os, Context& context)
@@ -619,6 +620,9 @@ namespace runtime
             plug_params[&(*definer_it)] = actual_args;
             plug_retvals[&(*definer_it)] = runtime::ObjectHolder();
             plug_errors[&(*definer_it)] = runtime::RuntimeError();
+
+            decltype(plug_errors)* plug_errors_ptr = &plug_errors;
+
             struct DeleteDefiner
             { // Небольшой сторожок (типа ScopeGuard), который удалит все реквизиты, связанные с определителем совершаемого
               // вызова (*definer_it), когда они уже будут нам не нужны.

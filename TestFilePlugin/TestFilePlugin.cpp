@@ -80,6 +80,8 @@ files_object.remove("testfile.txt")
 
 int main()
 {
+    // Переключим отображение текста в консоль в UTF-8 режим.
+    setlocale(LC_CTYPE, "ru_RU.UTF-8");
     try
     {
         TestCreateFile();
@@ -87,8 +89,8 @@ int main()
     catch (const exception& e)
     {
         cerr << e.what() << endl;
-		return 1;
+		return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

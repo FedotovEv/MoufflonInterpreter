@@ -56,7 +56,7 @@ namespace
         else if (holds_alternative<int>(link_val))
             return get<int>(link_val);
         else if (holds_alternative<double>(link_val))
-            return get<double>(link_val);
+            return static_cast<int>(get<double>(link_val));
         else
             return 0;
     }

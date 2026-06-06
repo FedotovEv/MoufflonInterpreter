@@ -889,6 +889,11 @@ namespace
         // содержимое массива param_types, количество членов в котором определяется полем param_types_count структуры PluginMethodDefiner. Каждый из
         // них яляется переменной типа uint32_t (эквивалентной какому-либо члену перечисления MethodParamType) и указывает требуемый тип очередного
         // фактического параметра метода.
+        //
+        //    PLUG_REQUEST_HELPER_FUNCTIONS - передача втыкале указателей на сервисные функции ядра исполнительской системы. При запросе буфер
+        // source_area будет содержать структуру PluginHelperFunctions с адресами всех предоставляемых ядром служебных функций. Ответа со стороны
+        // втыкалы не ожидается, поэтому целевая область при данном запросе не указывается (target_area = nullptr и target_length = 0) и обращение
+        // к ней со стороны кода втыкалы не допускается.
 
         // Сначала создадим подпрограмму, содержащую общую часть функциональности, необходимой для загрузки втыкал как из разделяемых библиотек,
         // так и из памяти. К моменту вызова этой функции модуль втыкалы должен быть загружен в память, а также должны быть выяснены адреса его
@@ -953,6 +958,20 @@ namespace
                 }
                 plugin_method_definers.emplace(method_name, std::move(new_method));
             }
+            // Последний акт пьесы. Передаём втыкале сведения о сервисных функциях ядра, которые она будет использовать для передачи и получения
+            // информации от/к него/нему.
+            PluginHelperFunctions helper_funcs_info;
+            // Готовим запись с информацией о данных функциях.
+            helper_funcs_info.get_instance_func = &PluginGetInstanceId;
+            helper_funcs_info.set_runtime_error_func = &PluginSetRuntimeError;
+            helper_funcs_info.set_result_value_func = &PluginSetResultValue;
+            helper_funcs_info.params_count_func = &PluginParamsCount;
+            helper_funcs_info.param_type_func = &PluginParamType;
+            helper_funcs_info.param_get_value_func = &PluginParamGetValue;
+            helper_funcs_info.param_string_size_func = &PluginParamStringSize;
+            helper_funcs_info.print_to_context_func = &PluginPrintToContext;
+            // Всё готово, выполняем информирующий запрос.
+            plugin_info_func(PluginInfoRequest::PLUG_REQUEST_HELPER_FUNCTIONS, &helper_funcs_info, sizeof(PluginHelperFunctions), nullptr, 0);
             // Итак, подытожим результаты проделанной работы. Вся необходимая информация о втыкале получена. Осталось только сохранить
             // её в очередной элемент накопителя plugines_.
             ast::PluginDescData new_plugin_desc;

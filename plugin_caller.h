@@ -2,15 +2,14 @@
 
 // Заголовок модуль (единицы трансляции), в котором реализованы оберточные классы над C-интерфейсом втыкалы, обеспечивающие ее работу как
 // стандартного внутреннего объекта исполнительской среды МУФЛОНа.
+#undef MYTHLON_PLUGIN
+#include "plugin_helpers.h"
 
 #include "declares.h"
 #include "throw_messages.h"
 #include "runtime.h"
 #include "statement.h"
 #include "parse.h"
-
-#undef MYTHLON_PLUGIN
-#include "plugin_helpers.h"
 
 // Вспомогательная функция проверки удовлетворения C-строкой правила предельной длины.
 bool CheckStringMaxLength(const char* test_string, size_t max_length);

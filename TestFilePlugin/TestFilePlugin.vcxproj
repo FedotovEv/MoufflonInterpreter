@@ -116,7 +116,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -143,9 +143,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\error_classes.cpp" />
     <ClCompile Include="..\lexer.cpp" />
     <ClCompile Include="..\math_object.cpp" />
     <ClCompile Include="..\parse.cpp" />
+    <ClCompile Include="..\plugin_caller.cpp" />
     <ClCompile Include="..\runtime.cpp" />
     <ClCompile Include="..\special_objects.cpp" />
     <ClCompile Include="..\statement.cpp" />
@@ -158,6 +160,8 @@
     <ClInclude Include="..\math_object.h" />
     <ClInclude Include="..\math_object_statement.h" />
     <ClInclude Include="..\parse.h" />
+    <ClInclude Include="..\plugin_caller.h" />
+    <ClInclude Include="..\plugin_helpers.h" />
     <ClInclude Include="..\runtime.h" />
     <ClInclude Include="..\special_objects.h" />
     <ClInclude Include="..\special_objects_statement.h" />
