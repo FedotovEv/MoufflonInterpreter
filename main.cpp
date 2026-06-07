@@ -237,24 +237,25 @@ namespace
 {
     void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        parse::TrivialParseContext parse_context(true);
-        runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
-
-        parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer, parse_context);
-        program->Execute(closure, context);
+        CplxParsedProgram cplx_program;
+        cplx_program.SetContext(runtime::SimpleContext(output, link_function))
+                    .SetParseContext(parse::TrivialParseContext(true))
+                    .SetLexer(parse::Lexer(input));
+        ParseProgram(cplx_program);
+        ExecuteProgram(cplx_program);
     }
 
     void RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
         parse::TrivialParseContext parse_context(true);
         runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
 
-        parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer, parse_context);
-        program->Execute(closure, context);
+        CplxParsedProgram cplx_program;
+        cplx_program.SetContext(runtime::SimpleContext(output, link_function))
+                    .SetParseContext(parse::TrivialParseContext(true))
+                    .SetLexer(parse::Lexer(input));
+        ParseProgram(cplx_program);
+        ExecuteProgram(cplx_program);
     }
 
     void TestSimplePrints()
@@ -350,15 +351,15 @@ xh = XHolder()
 x = X(xh)
 )--");
 
-        parse::Lexer lexer(input);
-        parse::TrivialParseContext parse_context;
-        auto program = ParseProgram(lexer, parse_context);
-        runtime::DummyContext context;
-        runtime::Closure closure;
-        program->Execute(closure, context);
-        const auto* xh = closure.at("xh"s).TryAs<runtime::ClassInstance>();
+        CplxParsedProgram cplx_program;
+        cplx_program.SetLexer(parse::Lexer(input));
+        cplx_program.SetContext(runtime::DummyContext());
+        ParseProgram(cplx_program);
+        ExecuteProgram(cplx_program);
+
+        const auto* xh = cplx_program.closure->at("xh"s).TryAs<runtime::ClassInstance>();
         ASSERT(xh != nullptr);
-        ASSERT_EQUAL(xh->Fields().at("x"s).Get(), closure.at("x"s).Get());
+        ASSERT_EQUAL(xh->Fields().at("x"s).Get(), cplx_program.closure->at("x"s).Get());
     }
     
     void TestExternalObject()
@@ -979,6 +980,52 @@ print "Всего", i
         }
     }
 
+    void TestAwaitables()
+    { // Проверка работоспособности механизма ждунов (ожидоспособных объектов), а также их функционирования в составе сопрограмм.
+        { // Наличие встроенного класса Awaitable, возможности его инстанцирования.
+            std::string simple_awaitable_example(R"--(
+dummy_awaitable = Awaitable()  # Ждун по умолчанию.
+
+dummy_suspend_result = dummy_awaitable.AwaitSuspend()
+dummy_resume_result = dummy_awaitable.AwaitResume()
+
+# В умолчательном варианте объекта-ждуна обе его функции возвращают None.
+print dummy_suspend_result
+print dummy_resume_result
+)--");
+
+            istringstream istr(simple_awaitable_example);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "None\nNone\n");
+        }
+
+        { // Возможность наследования от него и корректность порождённого производного класса.
+            std::string inherit_from_awaitable(R"--(
+class MyAwaitable(Awaitable):
+  def AwaitSuspend():
+    return 1  
+
+  def AwaitResume():
+    return 2
+
+my_awaitable = MyAwaitable()  # Производный (унаследованный) ждун.
+
+my_suspend_result = my_awaitable.AwaitSuspend()
+my_resume_result = my_awaitable.AwaitResume()
+
+# Наш ждун-наследник через свои стандартные методы возвращает 1 и 2.
+print my_suspend_result
+print my_resume_result
+)--");
+
+            istringstream istr(inherit_from_awaitable);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "1\n2\n");
+        }
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -1008,6 +1055,7 @@ print "Всего", i
         RUN_TEST(tr, TestShiftOps);
         RUN_TEST(tr, TestMethodsOverload);
         RUN_TEST(tr, TestTryExceptions);
+        RUN_TEST(tr, TestAwaitables);
     }
 }  // namespace
 

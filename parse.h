@@ -9,6 +9,10 @@
 namespace runtime
 {
     class Executable;
+    class ObjectHolder;
+    class Context;
+    // Closure - таблица символов, связывающая имя объекта с его значением.
+    using Closure = std::unordered_map<std::string, ObjectHolder>;
 }
 
 //   На данный момент поддерживаются два способа загрузки внешних двоичных расширений ("втыкал") -
@@ -116,5 +120,44 @@ struct ParseError : std::runtime_error
     ParseError(ThrowMessageNumber throw_message_number);
 };
 
-std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer);
-std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context);
+// Структура для компактного хранения всех активов, необходимых для разбора, анализа и последующего исполнения МУФЛОН-программы.
+// Структура принимает в единоличное владение все назначенные ей объекты.
+struct CplxParsedProgram
+{
+    CplxParsedProgram();
+    CplxParsedProgram(const CplxParsedProgram& other) = delete;
+    CplxParsedProgram(CplxParsedProgram&& other) = default;
+    ~CplxParsedProgram();
+
+    CplxParsedProgram& operator=(const CplxParsedProgram& other) = delete;
+    CplxParsedProgram& operator=(CplxParsedProgram&& other) = default;
+
+    std::unique_ptr<parse::Lexer> lexer;                    // Грамматический разборщик.
+    std::unique_ptr<runtime::Executable> program;           // Указатель на корневой узел АСТ программы после её разбора и анализа.
+    std::unique_ptr<parse::ParseContext> parse_context;     // Контекст синтаксического анализа.
+    std::unique_ptr<runtime::Closure> closure;              // Таблица символов для исполнения программы.
+    std::unique_ptr<runtime::Context> context;              // Контекст исполнения.
+
+    CplxParsedProgram& SetLexer(parse::Lexer&& p_lexer);
+    CplxParsedProgram& SetClosure(runtime::Closure&& p_closure);
+
+    // Классы parse::ParseContext и runtime::Context абстрактные и чисто виртуальные.
+    template<typename ParseContextT>
+    CplxParsedProgram& SetParseContext(ParseContextT&& p_parse_context)
+    {
+        parse_context = std::make_unique<ParseContextT>(std::forward<ParseContextT>(p_parse_context));
+        return *this;
+    }
+
+    template<typename ContextT>
+    CplxParsedProgram& SetContext(ContextT&& p_context)
+    {
+        context = std::make_unique<ContextT>(std::forward<ContextT>(p_context));
+        return *this;
+    }
+};
+
+// Функция синтаксического анализа программы, исходный код которой предоставляется через lexer.
+void ParseProgram(CplxParsedProgram& cplx_program);
+// Функция исполнения разобранной и проанализированной программы, для которой построено АСД.
+runtime::ObjectHolder ExecuteProgram(CplxParsedProgram& program);

@@ -122,12 +122,12 @@ namespace
 
     void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function)
     {
-        parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer);
-
-        runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
-        program->Execute(closure, context);
+        CplxParsedProgram cplx_program;
+        cplx_program.SetContext(runtime::SimpleContext(output, link_function))
+                    .SetParseContext(parse::TrivialParseContext(true))
+                    .SetLexer(parse::Lexer(input));
+        ParseProgram(cplx_program);
+        ExecuteProgram(cplx_program);
     }
 } // namespace
 

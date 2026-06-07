@@ -35,6 +35,7 @@ namespace runtime
     class Context
     {
     public:
+        virtual ~Context() = default;
         // Возвращает поток вывода для команд print.
         virtual std::ostream& GetOutputStream() = 0;
         virtual LinkageFunction& GetExternalLinkage() = 0;
@@ -51,9 +52,6 @@ namespace runtime
         {
             last_command_desc_ = last_command_desc;
         }
-
-    protected:
-        ~Context() = default;
 
     private:
         ProgramCommandDescriptor last_command_desc_;
@@ -390,7 +388,7 @@ namespace runtime
             return ObjectHolder::None();
         }
 
-        const std::string* info_data_ptr;
+        const std::string* info_data_ptr = nullptr;
     };
 
     // Класс
@@ -483,6 +481,9 @@ namespace runtime
         std::unordered_multimap<std::string, Method> virtual_method_table_;
     };
 
+    // Абстрактный чисто виртуальный класс, выражающий сущность экземпляра "обобщённого" класса, как программно определённого (структура
+    // ClassInstance, представляет собой экземпляр класса, определённого непосредственно в МУФЛОН-программе), так и специального (определённого
+    // прямо в исходном коде данного интерпретатора, классы типа ArrayInstance, MapInstance, MathInstance, и. т. д.).
     class CommonClassInstance : public Object
     {
     public:
@@ -772,6 +773,11 @@ namespace runtime
     public:
         explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
             : output_(output), external_link_(std::move(external_link))
+        {}
+        SimpleContext(const SimpleContext& other) = delete;
+        SimpleContext(SimpleContext&& other) noexcept :
+            output_(other.output_), external_link_(std::move(other.external_link_)),
+            is_terminate_{other.is_terminate_.exchange(true)}
         {}
 
         std::ostream& GetOutputStream() override

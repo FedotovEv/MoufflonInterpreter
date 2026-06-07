@@ -118,6 +118,8 @@ namespace
         explicit Parser(parse::Lexer& lexer, parse::ParseContext& parse_context) :
             lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
         {
+            // Регистрируем внутренние встроенные "завершённые" классы - с фиксированным набором методов, реализуемых непосредственно
+            // в коде данной исполняющей среды и без возможности наследования от них и их дальнейшей модификации.
             internal_classes_["array"s] = ast::CreateArray;
             internal_classes_["map"s] = ast::CreateMap;
             internal_classes_["math"s] = ast::CreateMath;
@@ -131,6 +133,13 @@ namespace
             internal_classes_["ModuleError"s] = ast::CreateModuleError;
             internal_classes_["LogicError"s] = ast::CreateLogicError;
             internal_classes_["ReferenceError"s] = ast::CreateReferenceError;
+            // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
+            // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
+            static const std::string AWAITABLE_CLASS_NAME = "Awaitable"s;
+            std::vector<runtime::Method> methods;
+            methods.push_back({.name = "AwaitSuspend"s, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
+            methods.push_back({.name = "AwaitResume"s, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
+            declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), nullptr));
         }
 
         // Program -> eps
@@ -140,6 +149,10 @@ namespace
             auto result = exec_factory_.Create(ast::Compound());
             // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
             result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
+            // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
+            // в словаре declared_classes_. Каждый такой класс будет доступен с самого начала исполнения программы для всего её последующего кода.
+            for (const auto& declared_classes_pair : declared_classes_)
+                result->AddStatement(std::make_unique<ast::ClassDefinition>(ast::ClassDefinition(declared_classes_pair.second)));
             while (!lexer_.CurrentToken().Is<ITokenType::Eof>())
                 result->AddStatement(ParseStatement());
 
@@ -514,7 +527,7 @@ namespace
                          std::move(args)));
                 }
 
-                // Далее анализируются конструкции, эквивалентные вызову именно свободных функций.
+                // Далее анализируются конструкции, эквивалентные вызову именно свободных функций (выглядящие как таковые).
                 try
                 {
                     if (auto int_class_it = internal_classes_.find(method_name); int_class_it != internal_classes_.end())
@@ -540,13 +553,14 @@ namespace
                 }
 
                 if (auto it = declared_classes_.find(method_name); it != declared_classes_.end())
-                {
+                { // Обработка случая, при котором имя функции совпадает с одним из ранее объявленных программно определённых классов, хранящихся
+                  // в declared_classes_. В этом случае выполняемая операция - это создание (инстанцирование) такого класса.
                     return exec_factory_.Create(ast::NewInstance
                         (static_cast<const runtime::Class&>(*it->second), std::move(args)));
                 }
             
                 if (method_name == "str"sv)
-                {
+                { // Наконец, случай вызова встроенной свободной функции str().
                     if (args.size() != 1)
                         exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM);
                 
@@ -972,8 +986,8 @@ namespace
             helper_funcs_info.print_to_context_func = &PluginPrintToContext;
             // Всё готово, выполняем информирующий запрос.
             plugin_info_func(PluginInfoRequest::PLUG_REQUEST_HELPER_FUNCTIONS, &helper_funcs_info, sizeof(PluginHelperFunctions), nullptr, 0);
-            // Итак, подытожим результаты проделанной работы. Вся необходимая информация о втыкале получена. Осталось только сохранить
-            // её в очередной элемент накопителя plugines_.
+            // Итак, подытожим результаты проделанной работы. Вся необходимая информация о втыкале получена, нужные её настройки также проделаны.
+            // Осталось только сохранить её в очередной элемент накопителя внутри parse_context_.
             ast::PluginDescData new_plugin_desc;
             new_plugin_desc.info_func = plugin_info_func;
             new_plugin_desc.call_func = plugins_call_func;
@@ -1338,7 +1352,7 @@ namespace
         parse::Lexer& lexer_;
         StatementFactory exec_factory_;
         runtime::Closure declared_classes_;
-        unordered_map<string, InternalObjectCreator> internal_classes_;
+        std::unordered_map<string, InternalObjectCreator> internal_classes_;
         parse::ParseContext& parse_context_;
     }; // class Parser
 }  // namespace
@@ -1386,13 +1400,58 @@ LoadLibraryDefine parse::TrivialParseContext::GetLoadLibraryDesc(const string& l
         return library_name + standart_lib_extension;
 }
 
-unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
+CplxParsedProgram::CplxParsedProgram() :
+    parse_context(std::make_unique<parse::TrivialParseContext>()), closure(std::make_unique<runtime::Closure>())
+{}
+
+CplxParsedProgram::~CplxParsedProgram()
 {
-    parse::TrivialParseContext parse_context;
-    return Parser(lexer, parse_context).ParseProgram();
+    // Порядок уничтожения активов (компонент) программы имеет значение. Поэтому данный деструктор освободит их
+    // в безопасном порядке.
+    // Сначала уничтожаем само дерево программы. На момент его уничтожения все контексты (разборочный и
+    // исполнительский) должны ещё существовать.
+    program.reset();
+    // Затем можно разрушить лексический разборщик.
+    lexer.reset();
+    // Затем - таблицу символов.
+    closure.reset();
+    // После - исполнительский контекст.
+    context.reset();
+    // И, наконец, разборочный контекст. Он уничтожается последним, так как содержит метаданные, который могут
+    // использовать все иные активы комплекса программы.
+    try
+    {
+        if (parse_context)
+            parse_context->DeallocateGlobalResources();
+    }
+    catch (...)
+    {}
+    parse_context.reset();
 }
 
-unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context)
+CplxParsedProgram& CplxParsedProgram::SetLexer(parse::Lexer&& p_lexer)
 {
-    return Parser(lexer, parse_context).ParseProgram();
+    lexer = std::make_unique<parse::Lexer>(std::move(p_lexer));
+    return *this;
+}
+
+CplxParsedProgram& CplxParsedProgram::SetClosure(runtime::Closure&& p_closure)
+{
+    closure = std::make_unique<runtime::Closure>(std::move(p_closure));
+    return *this;
+}
+
+// Определение функции синтаксического анализа исходного текста МУФЛОН-программы.
+void ParseProgram(CplxParsedProgram& cplx_program)
+{
+    cplx_program.program = Parser(*cplx_program.lexer, *cplx_program.parse_context).ParseProgram();
+}
+
+// Определения функции исполнения 
+runtime::ObjectHolder ExecuteProgram(CplxParsedProgram& cplx_program)
+{
+    // Аргумент program->parse_context ДОЛЖЕН совпадать с тем, который использовался при разборе исполняемой программы
+    // cplx_program.program какой-либо функцией ParseProgram().
+    return cplx_program.program->Execute(*cplx_program.closure, *cplx_program.context);
+
 }

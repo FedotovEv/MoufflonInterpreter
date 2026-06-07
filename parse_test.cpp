@@ -6,37 +6,38 @@
 
 using namespace std;
 
-namespace parse {
-
-unique_ptr<ast::Statement> ParseProgramFromString(const string& program)
+namespace parse
 {
-    istringstream is(program);
-    parse::Lexer lexer(is);
-    return ParseProgram(lexer);
-}
+    CplxParsedProgram ParseProgramFromString(const string& program)
+    {
+        istringstream is(program);
+        CplxParsedProgram cplx_program;
+        cplx_program.SetLexer(parse::Lexer(is));
+        ParseProgram(cplx_program);
 
-void TestSimpleProgram()
-{
-    const string program = R"(
+        return cplx_program;
+    }
+
+    void TestSimpleProgram()
+    {
+        const string program = R"(
 x = 4
 y = 5
 z = "hello, "
 n = "world"
 print x + y, z + n
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "9 hello, world\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "9 hello, world\n"s);
-}
-
-void TestProgramWithClasses()
-{
-    const string program = R"(
+    void TestProgramWithClasses()
+    {
+        const string program = R"(
 program_name = "Classes test"
 
 class Empty:
@@ -63,18 +64,17 @@ far_far_away = Point(10000, 50000)
 
 print program_name, origin, far_far_away, origin.SetX(1)
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "Classes test (0; 0) (10000; 50000) None\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "Classes test (0; 0) (10000; 50000) None\n"s);
-}
-
-void TestProgramWithIf() {
-    const string program = R"(
+    void TestProgramWithIf()
+    {
+        const string program = R"(
 x = 4
 y = 5
 if x > y:
@@ -89,18 +89,17 @@ if x > 0:
 else:
   print 'x <= 0'
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "x <= y\ny >= 0\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "x <= y\ny >= 0\n"s);
-}
-
-void TestReturnFromIf() {
-    const string program = R"(
+    void TestReturnFromIf()
+    {
+        const string program = R"(
 class Abs:
   def calc(n):
     if n > 0:
@@ -111,19 +110,17 @@ class Abs:
 x = Abs()
 print x.calc(2)
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
+        
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "2\n"s);
+    }
 
-    runtime::DummyContext context;
-
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "2\n"s);
-}
-
-void TestRecursion()
-{ // Рекурсивный вызов метода с накоплением результата в поле класса.
-    const string program = R"(
+    void TestRecursion()
+    { // Рекурсивный вызов метода с накоплением результата в поле класса.
+        const string program = R"(
 class ArithmeticProgression:
   def calc(n):
     self.result = 0
@@ -139,19 +136,17 @@ x = ArithmeticProgression()
 x.calc(10)
 print x.result
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "55\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "55\n"s);
-}
-
-void TestRecursion2()
-{ // Классическая рекурсия с возвращением результата через возвращаемое значение рекурсивного метода.
-    const string program = R"(
+    void TestRecursion2()
+    { // Классическая рекурсия с возвращением результата через возвращаемое значение рекурсивного метода.
+        const string program = R"(
 class GCD:
   def __init__():
     self.call_count = 0
@@ -169,38 +164,34 @@ print x.calc(510510, 18629977)
 print x.calc(22, 17)
 print x.call_count
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "17\n1\n115\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "17\n1\n115\n"s);
-}
-
-void TestComplexLogicalExpression()
-{ // Вычисление сложных логических выражений.
-    const string program = R"(
+    void TestComplexLogicalExpression()
+    { // Вычисление сложных логических выражений.
+        const string program = R"(
 a = 1
 b = 2
 c = 3
 ok = a + b > c and a + c > b and b + c > a
 print ok
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "False\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(), "False\n"s);
-}
-
-void TestClassicalPolymorphism()
-{
-    const string program = R"(
+    void TestClassicalPolymorphism()
+    {
+        const string program = R"(
 class Shape:
   def __str__():
     return "Shape"
@@ -241,21 +232,19 @@ t2 = Triangle(125, 1, 2)
 
 print r, c, t1, t2
 )"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
 
-    runtime::DummyContext context;
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(),
+                     "Rect(10x20) Circle(52) Triangle(3, 4, 5) Wrong triangle\n"s);
+    }
 
-    runtime::Closure closure;
-    auto tree = ParseProgramFromString(program);
-    tree->Execute(closure, context);
-
-    ASSERT_EQUAL(context.output.str(),
-                 "Rect(10x20) Circle(52) Triangle(3, 4, 5) Wrong triangle\n"s);
-}
-
-void TestAnchestorCalls()
-{
-    { // Проверка вызовов "скрытых" (переопределённых) методов унаследованных классов.
-        const string program = R"--(
+    void TestAnchestorCalls()
+    {
+        { // Проверка вызовов "скрытых" (переопределённых) методов унаследованных классов.
+            const string program = R"--(
 class Shape:
   def __init__(shape_name):
     self.shape_name = shape_name
@@ -293,16 +282,12 @@ square_instance_0 = Square()
 square_instance_1 = Square(50)
 square_instance_0 = Square("Super_Square", 100)
 )--"s;
+            CplxParsedProgram cplx_program = ParseProgramFromString(program);
+            cplx_program.SetContext(runtime::DummyContext());
+            ExecuteProgram(cplx_program);
 
-        runtime::DummyContext context;
-
-        runtime::Closure closure;
-        auto tree = ParseProgramFromString(program);
-        tree->Execute(closure, context);
-
+        }
     }
-}
-
 }  // namespace parse
 
 void TestParseProgram(TestRunner& tr)

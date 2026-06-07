@@ -420,7 +420,7 @@ namespace ast
     std::unique_ptr<Statement> CreateNewPluginInstance
         (const std::string& class_name, const PluginDescData& plugin_desc, std::vector<std::unique_ptr<Statement>> args)
     {
-        return make_unique<NewPluginInstance>(NewPluginInstance(class_name, move(args), plugin_desc));
+        return std::make_unique<NewPluginInstance>(NewPluginInstance(class_name, std::move(args), plugin_desc));
     }
 } // namespace ast
 

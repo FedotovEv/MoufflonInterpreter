@@ -44,14 +44,13 @@ private:
     string command_accumulator;
 };
 
-void RunMythonProgram(istream & input, ostream & output)
+void RunMythonProgram(istream& input, ostream& output)
 {
-    parse::Lexer lexer(input);
-    auto program = ParseProgram(lexer);
-
-    runtime::SimpleContext context(output);
-    runtime::Closure closure;
-    program->Execute(closure, context);
+    CplxParsedProgram cplx_program;
+    cplx_program.SetContext(runtime::SimpleContext(output))
+                .SetLexer(parse::Lexer(input));
+    ParseProgram(cplx_program);
+    ExecuteProgram(cplx_program);
 }
 
 int main()

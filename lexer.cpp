@@ -468,6 +468,21 @@ namespace parse
         NextToken();
     }
 
+    Lexer::Lexer(const Lexer& other) :
+        input_(other.input_), indent_amount_(other.indent_amount_), indent_sent_(other.indent_sent_), current_token_(other.current_token_),
+        current_command_desc_(other.current_command_desc_), is_input_need_delete_(other.is_input_need_delete_)
+    {
+        const_cast<Lexer&>(other).is_input_need_delete_ = false;
+    }
+    
+    Lexer::Lexer(Lexer&& other) noexcept :
+        input_(other.input_), indent_amount_(other.indent_amount_), indent_sent_(other.indent_sent_), current_token_(other.current_token_),
+        current_command_desc_(other.current_command_desc_), is_input_need_delete_(other.is_input_need_delete_)
+    {
+        other.current_command_desc_ = runtime::ProgramCommandDescriptor{};
+        other.is_input_need_delete_ = false;
+    }
+
     Lexer::~Lexer()
     {
         if (is_input_need_delete_)

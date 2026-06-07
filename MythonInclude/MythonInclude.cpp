@@ -1,4 +1,4 @@
-﻿
+
 #include "../lexer.h"
 #include "../parse.h"
 #include "../runtime.h"
@@ -230,21 +230,17 @@ private:
 void RunMythonProgramFromFile(const string& input_filename, ostream& output,
                               const runtime::LinkageFunction& link_function = {})
 {
-    parse::TrivialParseContext parse_context;
     LexerFileInputExImpl input_ex(input_filename);
-    parse::Lexer lexer(input_ex);
-    runtime::SimpleContext context(output, link_function);
-    runtime::Closure closure;
-
-    {
-        auto program = ParseProgram(lexer, parse_context);
-        program->Execute(closure, context);
-    }
-    parse_context.DeallocateGlobalResources();
+    CplxParsedProgram cplx_program;
+    cplx_program.SetContext(runtime::SimpleContext(output, link_function))
+                .SetLexer(parse::Lexer(input_ex));
+    ParseProgram(cplx_program);
+    ExecuteProgram(cplx_program);
 }
 
 int main(int argc, char* argv[])
 {
+    setlocale(LC_CTYPE, "ru_RU.UTF-8"); // Переключим отображение текста в консоль в UTF-8 режим.
     if (argc != 2)
     {
         cout << "Формат команды: MythonInclude program_filename" << endl;

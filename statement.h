@@ -218,7 +218,7 @@ namespace ast
     {
     public:
         explicit NewInstance(const runtime::Class& class_);
-        NewInstance(const runtime::Class& class_, std::vector<std::unique_ptr<Statement>> args);
+        explicit NewInstance(const runtime::Class& class_, std::vector<std::unique_ptr<Statement>> args);
         // Возвращает объект, содержащий значение типа ClassInstance
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 

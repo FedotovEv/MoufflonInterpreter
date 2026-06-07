@@ -204,6 +204,8 @@ namespace parse
 
         explicit Lexer(LexerInputEx& input);
         explicit Lexer(std::istream& input);
+        Lexer(const Lexer& other);
+        Lexer(Lexer&& other) noexcept;
         ~Lexer();
 
         // Возвращает ссылку на текущий жетон или token_type::Eof, если поток жетонов на входе закончился.
