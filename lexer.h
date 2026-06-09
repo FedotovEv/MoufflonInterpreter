@@ -42,6 +42,7 @@ namespace parse
         struct CoYield {};   // Лексема «co_yield»
         struct ReturnRef {}; // Лексема «return_ref»
         struct CoYieldRef {};// Лексема «co_yield_ref»
+        struct CoAwait {};   // Лексема «co_await»
         struct If {};        // Лексема «if»
         struct Else {};      // Лексема «else»
         struct While {};     // Лексема "while"
@@ -81,7 +82,7 @@ namespace parse
     using TokenBase
         = std::variant<token_type::NumberInt, token_type::NumberDouble, token_type::Id, token_type::Char,
                        token_type::String, token_type::Class,
-                       token_type::Return, token_type::CoYield, token_type::ReturnRef, token_type::CoYieldRef,
+                       token_type::Return, token_type::CoYield, token_type::ReturnRef, token_type::CoYieldRef, token_type::CoAwait,
                        token_type::If, token_type::Else,
                        token_type::While, token_type::Break, token_type::Continue, token_type::Pass,
                        token_type::Try, token_type::Except, token_type::Finally, token_type::As, token_type::Raise,

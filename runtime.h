@@ -608,7 +608,7 @@ namespace runtime
         bool is_pass_internal = false;
     };
 
-    // Хранитель информации о состоянии исполнения операторов приостановки сопрограмм co_yield и co_yield_ref.
+    // Хранитель информации о состоянии исполнения операторов приостановки сопрограмм co_await, co_yield и co_yield_ref.
     struct CoYieldWorkflowPosData
     {
         bool is_already_executed = false;

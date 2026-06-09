@@ -37,7 +37,10 @@ namespace ast
     // Вспомогательные элементы для обслуживания работы в составе сопрограмм.
     struct CoroCoords
     {
-        // Указатель на объект-дескриптор сопрограммы, в контексте которой мы выполняемся.
+        // Контейнер-копия, содержащий объект-дескриптор сопрограммы (точнее, ещё один разделяемый умный указатель на
+        // единственный экземпляр этого объекта), в контексте которой мы выполняемся.
+        runtime::ObjectHolder coro_status_holder;
+        // "Сырой" указатель на тот же объект-дескриптор нашей сопрограммы, извлечённый из контейнера.
         runtime::CoroutineInstance* coro_status_instance = nullptr;
         // Указатель на объект-хранитель состояния потока управления для данной исполняемой инструкции.
         runtime::WorkflowPosition* workflow_current = nullptr;
@@ -98,6 +101,7 @@ namespace ast
         Assignment(std::string var, std::unique_ptr<Statement> rv);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
     private:
         std::string var_;
         std::unique_ptr<Statement> rv_;
@@ -110,6 +114,7 @@ namespace ast
         FieldAssignment(VariableValue object, std::string field_name, std::unique_ptr<Statement> rv);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
     private:
         VariableValue object_;
         std::string field_name_;
@@ -143,8 +148,8 @@ namespace ast
         // Во время выполнения команды print вывод должен осуществляться в поток, возвращаемый из
         // context.GetOutputStream()
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-    private:
-    
+
+    private:    
         std::vector<std::unique_ptr<Statement>> args_;
         std::string name_;
     };
@@ -168,8 +173,8 @@ namespace ast
         {
             return {std::move(object_), std::move(method_), std::move(args_)};
         }
-    private:
 
+    private:
         std::unique_ptr<Statement> object_;
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
@@ -192,8 +197,8 @@ namespace ast
              std::unique_ptr<Statement> rv, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-    private:
 
+    private:
         std::unique_ptr<Statement> object_;
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
@@ -592,6 +597,41 @@ namespace ast
     
     private:
         std::unique_ptr<Statement> statement_;
+    };
+
+    // Исполнитель инструкции co_await над оператором присваивания statement.
+    class CoAwait : public Statement
+    {
+    public:
+        explicit CoAwait(std::unique_ptr<Statement> statement);    
+        // Оператор statement_ полагается оператором присваивания (Assignment, FieldAssignment, IndirectAssignment либо MethodCall -
+        // - один из тех исполняемых объектов, которые могут быть возвращены синтаксическим анализатором ParseAssignmentOrCall()).
+        // Инструкция анализирует правую часть такого оператора.
+        // 1. Если результат её исполнения приводится к какому-либо объекту-ждуну(наследнику Awaitbale), то запрашиваются его
+        // специальные методы, по результатам работы которых производится (либо, напротив, не производится) приостановка сопрограммы,
+        // а затем её возможное возобновление с присваиванием определённого значения левой части оператора.
+        // 2. Если правая часть оператора после исполнения даёт объект класса CoroutineInstance, то ждун запрашивается у этого
+        // объекта, а далее работа производится по первому варианту данного списка.
+        // 3. Во всех прочих случаях оператор присваивания выполняется обычным способом, а наличие у него префикса co_await не имеет
+        // значения и фактически игнорируется.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        enum class StatementType
+        { // Тип оператора statement_, который был нам передан как аргумент инструкции co_wait.
+            STATEMENT_NONE = 0,
+            STATEMENT_SIMPLE_ASSIGN,
+            STATEMENT_FIELD_ASSIGN,
+            STATEMENT_INDIRECT_ASSIGN,
+            STATEMENT_OTHER
+        };
+
+        std::unique_ptr<Statement> statement_;
+        // Характеристики оператора-параметра statement_.
+        StatementType statement_type_ = StatementType::STATEMENT_NONE;
+        ast::Assignment* assign_stat_ = nullptr;
+        ast::FieldAssignment* field_assign_stat_ = nullptr;
+        ast::IndirectAssignment* indirect_assign_stat_ = nullptr;
     };
 
     // Выполняет инструкцию return_ref dotted_ids, возвращая ссылку на переменную dotted_ids, которая должна быть полем

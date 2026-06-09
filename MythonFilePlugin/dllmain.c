@@ -22,5 +22,7 @@
         }
         return TRUE;
     }
+#elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+    // Вариант точки входа в динамическую библиотеку для чего-то линуксоподобного.
 
 #endif

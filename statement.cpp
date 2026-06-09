@@ -178,22 +178,25 @@ namespace ast
 
     CoroCoords GetCoYieldCoroCoords(runtime::Closure& closure, Statement* this_statement)
     { // Функция предназначена для подготовки (или создания, если требуется) объекта-хранителя состояния потока
-      // управления программы для приостанавливающих сопрограмму инструкций co_yield и co_yield_ref.
+      // управления программы для приостанавливающих сопрограмму инструкций co_await, co_yield и co_yield_ref.
         CoroCoords coro_coords;
 
         // Операторы co_yield и co_yield_ref должны принадлежать и исполняться только в составе сопрограммы.
         auto closure_it = closure.find(COROUTINE_STATUS_VAR);
         if (closure_it != closure.end())
-            coro_coords.coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>();
+        {
+            coro_coords.coro_status_holder = closure_it->second;
+            coro_coords.coro_status_instance = coro_coords.coro_status_holder.TryAs<runtime::CoroutineInstance>();
+        }
         if (!coro_coords.coro_status_instance)
         {
             assert(false);
-            throw runtime_error("co_yield или co_yield_ref исполняется вне сопрограммы!");
+            throw runtime_error("co_await, co_yield или co_yield_ref исполняется вне сопрограммы!");
         }
         coro_coords.workflow_current = coro_coords.coro_status_instance->Advance(1);
         if (coro_coords.workflow_current)
         { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-          // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+          // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
             assert(coro_coords.workflow_current->GetOwningStatement() == this_statement);
             coro_coords.coro_status_instance->PopBack();
             coro_coords.is_resume_execution_now = true;
@@ -586,10 +589,130 @@ namespace ast
 
         ObjectHolder holder_result = statement_->Execute(closure, context);
         if (coro_coords.coro_status_instance)
-            // Перед возвратом очередного результата работы сопрограммы установим в соответствующем объекте - дескрипторе признак её приостановки.
-            coro_coords.coro_status_instance->YieldCoroutine();
+            // Перед возвратом очередного результата работы сопрограммы установим в соответствующем объекте - дескрипторе
+            // признак её приостановки.
+            coro_coords.coro_status_instance->SuspendCoroutine(runtime::CoroutineSuspendType::SUSPEND_POINT_CO_YIELD);
 
         throw ReturnResult(move(holder_result));
+    }
+
+    CoAwait::CoAwait(std::unique_ptr<Statement> statement) :
+        statement_(move(statement)), statement_type_(StatementType::STATEMENT_NONE)
+    {
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);        
+        if (statement_)
+        { // Выясним тип аргументного оператора, который был передане нам в качестве параметра.
+            if (assign_stat_ = dynamic_cast<ast::Assignment*>(statement_.get()))
+                statement_type_ = StatementType::STATEMENT_SIMPLE_ASSIGN;   // Аргументом co_await является обычное присваивание свободной переменной.
+            else if (field_assign_stat_ = dynamic_cast<ast::FieldAssignment*>(statement_.get()))
+                statement_type_ = StatementType::STATEMENT_FIELD_ASSIGN;    // Аргументом co_await оказалось прямое присваивание полю объекта.
+            else if (indirect_assign_stat_ = dynamic_cast<ast::IndirectAssignment*>(statement_.get()))
+                statement_type_ = StatementType::STATEMENT_INDIRECT_ASSIGN; // Здесь аргумент co_await - это косвенное присваивание полю объекта.
+            else // При иных вариантах считаем, что подозреваемый ждун есть нечто другое (STATEMENT_OTHER).
+                statement_type_ = StatementType::STATEMENT_OTHER;
+        }
+    }
+
+    runtime::ObjectHolder CoAwait::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        // Оператор co_await должен принадлежать и исполняться только в составе сопрограммы.        
+        CoroCoords coro_coords = GetCoYieldCoroCoords(closure, this);
+        runtime::ObjectHolder return_result;                    // Хранилище результата работы вложенного оператора.
+        runtime::ClassInstance* awaitable_instance = nullptr;   // Указатель на ждун, назначенный данному оператору co_await.
+        runtime::ObjectHolder await_suspend_result;             // Хранилище результатов работы стопорящего метода ждуна.
+
+        if (!coro_coords.is_resume_execution_now)
+        { // В этой ветви мы исполняем оператор co_wait впервые, в ходе нормальной работы программы. Здесь следует проверить
+          // необходимость приостановки сопрограммы путём вызова "стопорящего" метода ждуна - AwaitSuspend(). Если он возвращает
+          // результат, приводимый к логической "ИСТИНЕ", то сопрограмма приостанавливается, если же нет (результат оценивается как "ЛОЖЬ"),
+          // то сопрограмма тут же возобновляется, без формирования точки приостановки.
+            // -----------------
+            // Сначала производим поиск ждуна, который должен быть результатом вычисления правой части оператора присваивания.
+
+            switch (statement_type_)
+            {
+            case StatementType::STATEMENT_SIMPLE_ASSIGN:
+
+                break;
+            case StatementType::STATEMENT_FIELD_ASSIGN:
+
+                break;
+            case StatementType::STATEMENT_INDIRECT_ASSIGN:
+
+                break;
+            case StatementType::STATEMENT_OTHER:
+                // При иных вариантах считаем, что подозреваемый ждун есть прямой результат выполнения вложенного оператора.
+                return_result = statement_->Execute(closure, context);
+                break;
+            default:
+                break;
+            }
+            // Ждун может быть предоставлен нам двумя способами - прямо или через объект сопрограммы.
+            // Первый вариант - return_result должен являться runtime::CoroutineInstance. В этом случае ждун извлекается из него с помощью
+            // метода GetAwaitable().
+            if (runtime::CoroutineInstance* coro_await_instance = return_result.TryAs<runtime::CoroutineInstance>())
+                awaitable_instance = coro_await_instance->Call("GetAwaitable"s, {}, context).TryAs<runtime::ClassInstance>();
+            else  // Второй вариант - ждун как объект runtime::ClassInstance возвращается прямо, как результат выполнения вложенного оператора.
+                awaitable_instance = return_result.TryAs<runtime::ClassInstance>();
+            // Проверим корректность полученного ждуна: он должен быть наследником ждуна-прототипа, то есть AWAITABLE_CLASS_NAME.
+            if (awaitable_instance && !awaitable_instance->IsSuccessorOf(AWAITABLE_CLASS_NAME))
+                awaitable_instance = nullptr; // Требование наследования не выполнено - этот объект не ждун.
+
+            coro_coords.coro_status_instance->SetLastAwaitable(awaitable_instance);
+            if (awaitable_instance)
+            {  // Ждуна удалось успешно получить. Запросим его "стопорящий" метод о необходимости приостановки сопрограммы.
+                await_suspend_result = awaitable_instance->Call(AWAITBALE_SUSPEND_METHOD, {coro_coords.coro_status_holder}, context);
+                coro_coords.coro_status_instance->SetLastAwaitSuspendValue(await_suspend_result);
+                if (runtime::IsTrue(await_suspend_result))
+                { // Если возвращённый "стопором" результат приводится к истине, приостанавливаем выполнение сопрограммы.
+                    coro_coords.coro_status_instance->SuspendCoroutine(runtime::CoroutineSuspendType::SUSPEND_POINT_CO_AWAIT);
+                    throw ReturnResult(move(await_suspend_result));
+                }
+            }
+            else
+            {
+                coro_coords.coro_status_instance->SetLastAwaitSuspendValue(move(return_result));
+            }
+            // Если управление угодило сюда, то ждун либо не задан, либо в приостановке работы нам отказано. Так что тут же переходим к
+            // возобновлению операции.
+        }
+
+        // А сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем сеансе ее работы (или если
+        // стопорение сопрограммы запрещено методом AwaitSuspend() ждуна-аргумента). Для этого сначала вызываем "возобновляющий метод"
+        // ждуна - AwaitResume(), затем присваиваем результат его работы левой части оператора присваивания statement_, после чего следует
+        // просто продолжить работу сопрограммы до следующей точки приостановки или завершения.
+        awaitable_instance = coro_coords.coro_status_instance->GetLastAwaitable();
+        await_suspend_result = coro_coords.coro_status_instance->GetLastAwaitSuspendValue();
+        if (awaitable_instance)
+        { // Ждун существует. Его возобновляющий метод выработает значение, которое будет присвоено левой части вложенного оператора-аргумента
+          // (если он представляет собой ту или иную форму присваивания), а также возвращено как итоговое значение работы всего оператора co_await.
+            return_result = awaitable_instance->Call(AWAITBALE_RESUME_METHOD, {coro_coords.coro_status_holder, await_suspend_result}, context);
+        }
+        else
+        {
+            return_result = coro_coords.coro_status_instance->GetLastAwaitSuspendValue();
+        }
+
+        switch (statement_type_)
+        {
+        case StatementType::STATEMENT_SIMPLE_ASSIGN:
+
+            break;
+        case StatementType::STATEMENT_FIELD_ASSIGN:
+
+            break;
+        case StatementType::STATEMENT_INDIRECT_ASSIGN:
+
+            break;
+        case StatementType::STATEMENT_OTHER:
+            // При всех иных вариантах исполнение вложенного оператора уже полностью завершено ранее, при первом исполнении данного co_await.
+            break;
+        default:
+            break;
+        }
+
+        return return_result;
     }
 
     ObjectHolder ReturnRef::ExecuteForVariable(Closure& closure, [[maybe_unused]] Context& context)
@@ -649,7 +772,7 @@ namespace ast
         if (is_co_yield_ref_ && coro_coords.coro_status_instance)
             // Это инструкция co_yield_ref. Перед возвратом её результата (очередного результата работы сопрограммы)
             // установим в соответствующем объекте - дескрипторе признак её приостановки.
-            coro_coords.coro_status_instance->YieldCoroutine();
+            coro_coords.coro_status_instance->SuspendCoroutine(runtime::CoroutineSuspendType::SUSPEND_POINT_CO_YIELD_REF);
 
         return return_result;
     }

@@ -135,10 +135,9 @@ namespace
             internal_classes_["ReferenceError"s] = ast::CreateReferenceError;
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
             // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
-            static const std::string AWAITABLE_CLASS_NAME = "Awaitable"s;
             std::vector<runtime::Method> methods;
-            methods.push_back({.name = "AwaitSuspend"s, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
-            methods.push_back({.name = "AwaitResume"s, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
+            methods.push_back({.name = AWAITBALE_SUSPEND_METHOD, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
+            methods.push_back({.name = AWAITBALE_RESUME_METHOD, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
             declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), nullptr));
         }
 
@@ -1182,6 +1181,19 @@ namespace
             LoadImportLibrary(get<std::string>(lib_desc), library_alias);
         }
 
+        // Функция делает текущий метод сопрограммой, выполняя при этом проверку допустимости этой операции.
+        void MakeCurrentMethodCoroutine()
+        {
+            if (runtime::Method* current_method = exec_factory_.CurrentMethod())
+            { 
+                if (current_method->name.substr(0, 2) == "__")
+                    // Специальные методы (точки настройки типа __init__, __add__, __eq__, и.т.д.), имена которых
+                    // начинаются с "__", не могут быть сопрограммами.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE);
+                current_method->is_coroutine = true;
+            }
+        }
+
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
         // обрабатываются директивы времени трансляции (например, import).
         // StatementBody -> return Expression
@@ -1230,17 +1242,18 @@ namespace
 
             if (tok.Is<ITokenType::CoYield>())
             {
-                if (runtime::Method* current_method = exec_factory_.CurrentMethod())
-                {  // Наличие оператора co_yield делает метод сопрограммой.
-                    if (current_method->name.substr(0, 2) == "__")
-                        // Специальные методы (точки настройки типа __init__, __add__, __eq__, и.т.д.), имена которых
-                        // начинаются с "__", не могут быть сопрограммами.
-                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE);
-                    current_method->is_coroutine = true;
-                }
-
+                MakeCurrentMethodCoroutine();   // Наличие оператора co_yield делает метод сопрограммой.
                 lexer_.NextToken();
                 return exec_factory_.Create(ast::CoYield(ParseTest()));
+            }
+
+            if (tok.Is<ITokenType::CoAwait>())
+            {
+                MakeCurrentMethodCoroutine();   // Наличие оператора co_await делает метод сопрограммой.
+                // Аргументом инструкции co_await должен быть обыкновенный оператор присваивания (возможно и нечто иное, но оно должно
+                // быть результатом анализа, выполненного функцией ParseAssignmentOrCall()).
+                lexer_.NextToken();
+                return exec_factory_.Create(ast::CoAwait(ParseAssignmentOrCall()));
             }
 
             if (tok.Is<ITokenType::Raise>())
@@ -1252,8 +1265,8 @@ namespace
             if (tok.Is<ITokenType::ReturnRef>() || tok.Is<ITokenType::CoYieldRef>())
             {
                 bool is_co_yield_ref = tok.Is<ITokenType::CoYieldRef>();
-                if (is_co_yield_ref && exec_factory_.CurrentMethod())  // Наличие оператора co_yield_ref также делает метод сопрограммой.
-                    exec_factory_.CurrentMethod()->is_coroutine = true;
+                if (is_co_yield_ref)
+                    MakeCurrentMethodCoroutine();   // Наличие оператора co_yield_ref делает метод сопрограммой.
 
                 lexer_.NextToken();
                 auto test_result = ParseTest();

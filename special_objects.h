@@ -227,9 +227,10 @@ public:
         return "coroutine";
     }
 
-    void YieldCoroutine()
+    void SuspendCoroutine(runtime::CoroutineSuspendType suspend_type)
     {
         is_awaiting_ = true;
+        suspend_type_ = suspend_type;
     }
 
     // Переадресующие вызовы для методов поля workflow_.
@@ -263,26 +264,60 @@ public:
         return workflow_.Back();
     }
 
+    // Установщики/извлекатели некоторых других полей состояния сопрограммы.
+    runtime::ClassInstance* GetLastAwaitable()
+    {
+        return last_awaitable_instance_;
+    }
+
+    void SetLastAwaitable(runtime::ClassInstance* last_awaitable_instance)
+    {
+        last_awaitable_instance_ = last_awaitable_instance;
+    }
+
+    ObjectHolder GetLastAwaitSuspendValue()
+    {
+        return last_await_suspend_value_;
+    }
+
+    void SetLastAwaitSuspendValue(ObjectHolder last_await_suspend_value)
+    {
+        last_await_suspend_value_ = std::move(last_await_suspend_value);
+    }
+
 private:
     static const std::unordered_map<std::string_view, CoroutineCallMethod> coroutine_method_table_;
     static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> coroutine_method_argument_count_;
 
     // Указатель на экземпляр класса, которому принадлежит (ему или его предкам) метод-сопрограмма.
     ClassInstance* class_instance_ = nullptr;
-    const Method* method_ = nullptr;       // Указатель на сам метод-сопрограмму (его дескриптор).
+    const Method* method_ = nullptr;    // Указатель на сам метод-сопрограмму (его дескриптор).
+    
     // Поля состояния сопрограммы, отражающие ее статус в состоянии приостановки или после окончательного завершения.
     Closure      coro_closure_;         // Здесь будет сохраняться символьная таблица сопрограммы при её приостановке.
     bool         is_started_ = false;   // Признак сопрограммы, которая уже работала хотя бы единожды.
     bool         is_awaiting_ = false;  // Признак, что работа сопрограммы именно приостановлена, а не полностью завершена.
+    // Тип точки приостановки сопрограммы (вид оператора, породившего эту точку).
+    runtime::CoroutineSuspendType suspend_type_ = runtime::CoroutineSuspendType::SUSPEND_POINT_UNKNOWN;
     ObjectHolder ret_value_;            // Значение, возвращённое сопрограммой при крайнем сеансе её работы.
+    // Поля, хранящие информацию, специфическую для работы инструкции co_await.
+    // Указатель на объект-ждун, который использовался при последней приостановке сопрограммы оператором co_await.
+    runtime::ClassInstance* last_awaitable_instance_ = nullptr;
+    // Значение, возвращённое "стопором" (AwaitSuspend()) ждуна перед последней приостановкой сопрограммы оператором co_await.
+    ObjectHolder last_await_suspend_value_;
+    
     // Поля со сведениями о положении точки в потоке управления сопрограммы.
     WorkflowStackSaver last_workflow_;  // Состояние потока управления (положение исполняемой точки) в момент завершения
-                                        // сопрограммы (исполнения операторов co_yield или co_yield_ref)
+                                        // сопрограммы (исполнения операторов co_await, co_yield или co_yield_ref).
     WorkflowStackSaver workflow_;       // Текущее положение потока управления.
+    ObjectHolder coro_awaitable_;       // Объект-ждун, назначенный данной сопрограмме.
     
     // Обработчики методов класса сопрограммы.
     ObjectHolder MethodResume(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodIsStarted(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodIsAwaiting(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodGetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodSetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
 };

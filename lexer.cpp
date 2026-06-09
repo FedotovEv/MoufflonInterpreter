@@ -12,23 +12,26 @@ namespace parse
 
     static const unordered_map<std::string, Token> keyword_tokens
         {{"class"s, token_type::Class{}},
+        // Лексемы операторов завершения или приостановки методов.
          {"return"s, token_type::Return{}},
          {"co_yield"s, token_type::CoYield{}},
          {"return_ref"s, token_type::ReturnRef{}},
          {"co_yield_ref"s, token_type::CoYieldRef{}},
+         {"co_await"s, token_type::CoAwait{}},
+        //
          {"if"s, token_type::If{}},
          {"else"s, token_type::Else{}},
          {"while"s, token_type::While{}},
          {"break"s, token_type::Break{}},
          {"continue"s, token_type::Continue{}},
          {"pass"s, token_type::Pass{}},
-         // Специальные лексемы обработки исключений.
+        // Специальные лексемы обработки исключений.
          {"try"s, token_type::Try{}},
          {"except"s, token_type::Except{}},
          {"finally"s, token_type::Finally{}},
          {"as"s, token_type::As{}},
          {"raise"s, token_type::Raise{}},
-         //
+        //
          {"def"s, token_type::Def{}},
          {"print"s, token_type::Print{}},
          {"import"s, token_type::Import{}},

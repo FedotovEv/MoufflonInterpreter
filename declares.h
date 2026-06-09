@@ -26,6 +26,10 @@ const std::string LESS_CMP_METHOD = "__lt__";
 const std::string STR_FUNCTION_METHOD = "__str__";
 const std::string COROUTINE_STATUS_VAR = "__coro__";
 const std::string SELF_FIELD_NAME = "self";
+// Константы имени прототипа класса-ждуна и его стандартных специальных методов.
+const std::string AWAITABLE_CLASS_NAME = "Awaitable";
+const std::string AWAITBALE_SUSPEND_METHOD = "AwaitSuspend";
+const std::string AWAITBALE_RESUME_METHOD = "AwaitResume";
 
 namespace runtime
 {
@@ -58,5 +62,13 @@ namespace runtime
             return module_id != other.module_id ||
                    module_string_number != other.module_string_number;
         }
+    };
+
+    enum class CoroutineSuspendType
+    {
+        SUSPEND_POINT_UNKNOWN = 0,
+        SUSPEND_POINT_CO_YIELD,
+        SUSPEND_POINT_CO_YIELD_REF,
+        SUSPEND_POINT_CO_AWAIT
     };
 } // namespace runtime

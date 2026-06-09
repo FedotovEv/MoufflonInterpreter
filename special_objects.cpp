@@ -170,7 +170,13 @@ namespace runtime
         {"is_awaiting"sv, &CoroutineInstance::MethodIsAwaiting},
         {"IsAwaiting"sv, &CoroutineInstance::MethodIsAwaiting},
         {"value"sv, &CoroutineInstance::MethodValue},
-        {"Value"sv, &CoroutineInstance::MethodValue}
+        {"Value"sv, &CoroutineInstance::MethodValue},
+        {"get_awaitable"sv, &CoroutineInstance::MethodGetAwaitable},
+        {"GetAwaitable"sv, &CoroutineInstance::MethodGetAwaitable},
+        {"set_awaitable"sv, &CoroutineInstance::MethodSetAwaitable},
+        {"SetAwaitable"sv, &CoroutineInstance::MethodSetAwaitable},
+        {"suspend_type"sv, &CoroutineInstance::MethodSuspendType},
+        {"SuspendType"sv, &CoroutineInstance::MethodSuspendType}
     };
 
     const unordered_map<string_view, pair<size_t, size_t>> CoroutineInstance::coroutine_method_argument_count_
@@ -182,7 +188,13 @@ namespace runtime
         {"is_awaiting"sv, {0, 0}},
         {"IsAwaiting"sv, {0, 0}},
         {"value"sv, {0, 0}},
-        {"Value"sv, {0, 0}}
+        {"Value"sv, {0, 0}},
+        {"get_awaitable"sv, {0, 0}},
+        {"GetAwaitbale"sv, {0, 0}},
+        {"set_awaitable"sv, {1, 1}},
+        {"SetAwaitbale"sv, {1, 1}},
+        {"suspend_type"sv, {0, 0}},
+        {"SuspendType"sv, {0, 0}}
     };
 
     int MapInstance::last_iterator_pack_serial_ = 0;
@@ -803,5 +815,35 @@ namespace runtime
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return ret_value_;
+    }
+
+    ObjectHolder CoroutineInstance::MethodGetAwaitable
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return coro_awaitable_;
+    }
+    
+    ObjectHolder CoroutineInstance::MethodSetAwaitable
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    { // Метод назначения ждуна этой сопрограмме. Ждун обязательно должен быть наследником встроенного прототипа Awaitable.
+        CheckMethodParams(context, "SetAwaitable"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+            MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
+        ClassInstance* try_awaitable = actual_args[0].TryAs<ClassInstance>();
+        if (try_awaitable && try_awaitable->IsSuccessorOf(AWAITABLE_CLASS_NAME))
+        {
+            ObjectHolder old_coro_awaitable = coro_awaitable_;
+            coro_awaitable_ = actual_args[0];
+            return old_coro_awaitable;
+        }
+        else
+        {
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_OBJECT_NOT_AWAITABLE);
+        }
+    }
+
+    ObjectHolder CoroutineInstance::MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return ObjectHolder::Own(Number(static_cast<int>(suspend_type_)));
     }
 } //namespace runtime
