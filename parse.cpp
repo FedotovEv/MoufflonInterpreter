@@ -312,19 +312,24 @@ namespace
             lexer_.Expect<ITokenType::Char>(')');
             lexer_.NextToken();
 
+            unique_ptr<ast::Statement> method_call =
+                exec_factory_.Create(ast::MethodCall(exec_factory_.Create(ast::VariableValue(std::move(id_list))),
+                                     std::move(last_name), std::move(args), parent_class_name));
             // Далее разбираются два варианта - вызов метода либо косвенное присваивание
             // (присваивание указателю, содержащемуся в возвращенном методом результате).
             if (lexer_.CurrentToken() == '=')
             { // После вызова метода следует лексема '=' - это косвенное присваивание.
                 lexer_.NextToken();
+                /*
                 return exec_factory_.Create(ast::IndirectAssignment(exec_factory_.Create
                     (ast::VariableValue(std::move(id_list))),
                      std::move(last_name), std::move(args), ParseTest(), parent_class_name));
+                */
+                return exec_factory_.Create(ast::IndirectAssignment(std::move(method_call), ParseTest(), parent_class_name));
             }
             else
             { // Вызов метода последняя лексема строки - имеем дело с простым вызовом метода.
-                return exec_factory_.Create(ast::MethodCall(exec_factory_.Create(ast::VariableValue(std::move(id_list))),
-                    std::move(last_name), std::move(args), parent_class_name));
+                return method_call;
             }
         }
 

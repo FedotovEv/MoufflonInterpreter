@@ -21,5 +21,9 @@
     }
 #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
     // Вариант точки входа в динамическую библиотеку для чего-то линуксоподобного.
+    void __attribute__((constructor)) my_init(void)
+    {}
 
+    void __attribute__((destructor)) my_fini(void)
+    {}
 #endif

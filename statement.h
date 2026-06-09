@@ -94,9 +94,11 @@ namespace ast
         std::vector<std::string> dotted_ids_;
     };
 
-    // Присваивает переменной, имя которой задано в параметре var, значение выражения rv
+    // Присваивает переменной, имя которой задано в параметре var, значение выражения rv.
     class Assignment : public Statement
     {
+        friend class CoAwait;
+
     public:
         Assignment(std::string var, std::unique_ptr<Statement> rv);
 
@@ -105,11 +107,18 @@ namespace ast
     private:
         std::string var_;
         std::unique_ptr<Statement> rv_;
+
+        // Методы раздельного исполнения левой и правой части оператора присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
+        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
+        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
-    // Присваивает полю object.field_name значение выражения rv
+    // Присваивает полю object.field_name значение выражения rv.
     class FieldAssignment : public Statement
     {
+        friend class CoAwait;
+
     public:
         FieldAssignment(VariableValue object, std::string field_name, std::unique_ptr<Statement> rv);
 
@@ -119,6 +128,15 @@ namespace ast
         VariableValue object_;
         std::string field_name_;
         std::unique_ptr<Statement> rv_;
+
+        // Методы раздельного исполнения левой и правой части оператора присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
+        // Методы исполнения левой части оператора присваивания полю объекта (состоит из вычисления целевого объекта, и, собственно, самого присваивания).
+        // Метод расчёта целевого объекта.
+        runtime::ClassInstance* ExecuteLeftPrepare(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
+        // Само присваивание.
+        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
+        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
     // Значение None
@@ -174,11 +192,18 @@ namespace ast
             return {std::move(object_), std::move(method_), std::move(args_)};
         }
 
+        void SetDereferenceFlag(bool is_dereference_result)
+        {
+            is_dereference_result_ = is_dereference_result;
+        }
+
     private:
         std::unique_ptr<Statement> object_;
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
         std::string parent_name_;
+        //
+        bool is_dereference_result_ = true;
     };
 
     // Косвенное присваивание - присваивание значения некоторой переменной по вычисляемому указателю на неё.
@@ -191,19 +216,35 @@ namespace ast
     // выражения rv.
     class IndirectAssignment : public Statement
     {
+        friend class CoAwait;
+
     public:
+        /*
         IndirectAssignment
             (std::unique_ptr<Statement> object, std::string method,std::vector<std::unique_ptr<Statement>> args,
              std::unique_ptr<Statement> rv, std::string parent_name = {});
+        */
+        // 
+        IndirectAssignment
+            (std::unique_ptr<Statement> left_method_call, std::unique_ptr<Statement> rv, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
     private:
-        std::unique_ptr<Statement> object_;
-        std::string method_;
-        std::vector<std::unique_ptr<Statement>> args_;
+        std::unique_ptr<Statement> left_method_call_;
+        //std::unique_ptr<Statement> object_;
+        //std::string method_;
+        //std::vector<std::unique_ptr<Statement>> args_;
         std::unique_ptr<Statement> rv_;
         std::string parent_name_;
+
+        // Методы раздельного исполнения левой и правой части оператора косвенного присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
+        //
+        std::pair<runtime::ObjectHolder, runtime::PointerObject*> ExecuteLeftPrepare(runtime::Closure& closure, runtime::Context& context);
+        //
+        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
+        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
     /*
