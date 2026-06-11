@@ -33,6 +33,7 @@ namespace ast
     };
 
     using Statement = runtime::Executable;
+    using LeftRightStatement = runtime::LeftRightExecutable;
 
     // Вспомогательные элементы для обслуживания работы в составе сопрограмм.
     struct CoroCoords
@@ -95,7 +96,7 @@ namespace ast
     };
 
     // Присваивает переменной, имя которой задано в параметре var, значение выражения rv.
-    class Assignment : public Statement
+    class Assignment : public LeftRightStatement
     {
         friend class CoAwait;
 
@@ -103,19 +104,18 @@ namespace ast
         Assignment(std::string var, std::unique_ptr<Statement> rv);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        // Методы раздельного исполнения левой и правой части оператора присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context) override;
+        runtime::ObjectHolder ExecuteLeft
+            (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context) override;
 
     private:
         std::string var_;
         std::unique_ptr<Statement> rv_;
-
-        // Методы раздельного исполнения левой и правой части оператора присваивания.
-        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
-        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
-        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
     // Присваивает полю object.field_name значение выражения rv.
-    class FieldAssignment : public Statement
+    class FieldAssignment : public LeftRightStatement
     {
         friend class CoAwait;
 
@@ -123,20 +123,17 @@ namespace ast
         FieldAssignment(VariableValue object, std::string field_name, std::unique_ptr<Statement> rv);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        // Методы раздельного исполнения левой и правой части оператора присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context) override;
+        // Метод исполнения левой части оператора присваивания полю объекта (состоит из вычисления целевого объекта, и,
+        // собственно, самого присваивания).
+        runtime::ObjectHolder ExecuteLeft
+            (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context) override;
 
     private:
         VariableValue object_;
         std::string field_name_;
         std::unique_ptr<Statement> rv_;
-
-        // Методы раздельного исполнения левой и правой части оператора присваивания.
-        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
-        // Методы исполнения левой части оператора присваивания полю объекта (состоит из вычисления целевого объекта, и, собственно, самого присваивания).
-        // Метод расчёта целевого объекта.
-        runtime::ClassInstance* ExecuteLeftPrepare(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
-        // Само присваивание.
-        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
-        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
     // Значение None
@@ -155,16 +152,16 @@ namespace ast
     {
     public:
         Print() = default;
-        // Инициализирует команду print для вывода значения выражения argument
+        // Инициализирует команду print для вывода значения выражения argument.
         explicit Print(std::unique_ptr<Statement> argument);
-        // Инициализирует команду print для вывода списка значений args
+        // Инициализирует команду print для вывода списка значений args.
         explicit Print(std::vector<std::unique_ptr<Statement>> args);
 
         // Инициализирует команду print для вывода значения переменной name
         static std::unique_ptr<Print> Variable(const std::string& name);
 
         // Во время выполнения команды print вывод должен осуществляться в поток, возвращаемый из
-        // context.GetOutputStream()
+        // context.GetOutputStream().
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
     private:    
@@ -181,15 +178,26 @@ namespace ast
             std::unique_ptr<Statement> call_object;
             std::string call_method;
             std::vector<std::unique_ptr<Statement>> call_args;
+            std::string parent_name;
+            bool is_dereference_result = true;
         };
 
         MethodCall(std::unique_ptr<Statement> object, std::string method,
                    std::vector<std::unique_ptr<Statement>> args, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-        MethodCallDesc GetMethodCallDesc()
+
+        // Функция извлечения и переноса внутреннего содержимого объекта MethodCall в промежуточное хранилище
+        // типа MethodCallDesc. Сам объект MethodCall остаётся после этого в неопределённом состоянии.
+        MethodCallDesc MoveMethodCallToDesc()
         {
-            return {std::move(object_), std::move(method_), std::move(args_)};
+            return {.call_object = std::move(object_), .call_method = std::move(method_), .call_args = std::move(args_),
+                    .parent_name = std::move(parent_name_), .is_dereference_result = is_dereference_result_};
+        }
+
+        ast::VariableValue* GetCallObject()
+        {
+            return dynamic_cast<ast::VariableValue*>(object_.get());
         }
 
         void SetDereferenceFlag(bool is_dereference_result)
@@ -202,49 +210,38 @@ namespace ast
         std::string method_;
         std::vector<std::unique_ptr<Statement>> args_;
         std::string parent_name_;
-        //
+        // Признак автоматического разыменования указателя, если он является результатом исполнения данного метода.
         bool is_dereference_result_ = true;
     };
 
     // Косвенное присваивание - присваивание значения некоторой переменной по вычисляемому указателю на неё.
-    // Сначала вызывается метод object.method со списком параметров args.
+    // Сначала вызывается метод left_method_call_ (обязательно представляет собой объект класса ast::MethodCall).
     // Данный метод обязательно должен возвращать объект-"указатель" - runtime::PointerObject, в противном
     // случае возникнет ошибка периода исполнения - "ошибка косвенного присваивания".
     // Далее целевой переменной, на которую указывает этот объект, будет присвоено значение выражения rv.
     // Учитывая строение переменных Муфлона, можно сказать, что при этом её внутренний указатель (data_)
     // будет перенацелен на новое значение, на которое указывает результат вычисления (типа ObjectHolder)
     // выражения rv.
-    class IndirectAssignment : public Statement
+    class IndirectAssignment : public LeftRightStatement
     {
         friend class CoAwait;
 
     public:
-        /*
-        IndirectAssignment
-            (std::unique_ptr<Statement> object, std::string method,std::vector<std::unique_ptr<Statement>> args,
-             std::unique_ptr<Statement> rv, std::string parent_name = {});
-        */
-        // 
         IndirectAssignment
             (std::unique_ptr<Statement> left_method_call, std::unique_ptr<Statement> rv, std::string parent_name = {});
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        // Методы раздельного исполнения левой и правой части оператора косвенного присваивания.
+        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context) override;
+        // Функция-член исполнения "левой" части присваивания - вычисление ссылки на целевую переменную и присваивание ей
+        // значения right_result.
+        runtime::ObjectHolder ExecuteLeft
+            (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context) override;
 
     private:
         std::unique_ptr<Statement> left_method_call_;
-        //std::unique_ptr<Statement> object_;
-        //std::string method_;
-        //std::vector<std::unique_ptr<Statement>> args_;
         std::unique_ptr<Statement> rv_;
         std::string parent_name_;
-
-        // Методы раздельного исполнения левой и правой части оператора косвенного присваивания.
-        runtime::ObjectHolder ExecuteRight(runtime::Closure& closure, runtime::Context& context);
-        //
-        std::pair<runtime::ObjectHolder, runtime::PointerObject*> ExecuteLeftPrepare(runtime::Closure& closure, runtime::Context& context);
-        //
-        runtime::ObjectHolder ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context);
-        runtime::ObjectHolder ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context);
     };
 
     /*
@@ -287,7 +284,7 @@ namespace ast
         std::unique_ptr<Statement> argument_;
     };
 
-    // Операция str, возвращающая строковое значение своего аргумента
+    // Операция str, возвращающая строковое значение своего аргумента.
     class Stringify : public UnaryOperation
     {
     public:
@@ -295,7 +292,7 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // Родительский класс Бинарная операция с аргументами lhs и rhs
+    // Родительский класс Бинарная операция с аргументами lhs и rhs.
     class BinaryOperation : public Statement
     {
     public:
@@ -307,6 +304,15 @@ namespace ast
         std::unique_ptr<Statement> rhs_;
     };
 
+    // Операция is_same_target, возвращающая "ИСТИНУ", если оба её аргумента указывают на одно и то же место в памяти
+    // (на один и тот же объект).
+    class IsSameTarget : public BinaryOperation
+    {
+    public:
+        using BinaryOperation::BinaryOperation;
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
     // Возвращает результат операции + над аргументами lhs и rhs
     class Add : public BinaryOperation
     {
@@ -316,7 +322,7 @@ namespace ast
         // Поддерживается сложение:
         //  число + число
         //  строка + строка
-        //  объект1 + объект2, если у объект1 - пользовательский класс с методом _add__(rhs)
+        //  объект1 + объект2, если у объект1 - пользовательский класс с методом __add__(rhs)
         // В противном случае при вычислении выбрасывается runtime_error
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
@@ -670,9 +676,10 @@ namespace ast
         std::unique_ptr<Statement> statement_;
         // Характеристики оператора-параметра statement_.
         StatementType statement_type_ = StatementType::STATEMENT_NONE;
-        ast::Assignment* assign_stat_ = nullptr;
-        ast::FieldAssignment* field_assign_stat_ = nullptr;
-        ast::IndirectAssignment* indirect_assign_stat_ = nullptr;
+        ast::Assignment* assign_stat_ = nullptr;                    // Указатель на исполняемый объект типа "простое присваивание", если statement_ является именно им.
+        ast::FieldAssignment* field_assign_stat_ = nullptr;         // Указатель на исполняемый объект типа "присваивание полю объекта", если statement_ является им.
+        ast::IndirectAssignment* indirect_assign_stat_ = nullptr;   // Указатель на исполняемый объект типа "косвенное присваивание", если statement_ является именно им.
+        ast::LeftRightStatement* left_right_stat_ = nullptr;        // Указатель на двухтактный исполняемый объект, если statement_ относится к таковым.
     };
 
     // Выполняет инструкцию return_ref dotted_ids, возвращая ссылку на переменную dotted_ids, которая должна быть полем
@@ -692,27 +699,27 @@ namespace ast
 
         // Вариант конструктора, если аргументом return_ref является вызов метода (который,
         // в свою очередь, должен возвратить указатель PointerObject).
-        explicit ReturnRef(std::unique_ptr<Statement> object, std::string method,
-                           std::vector<std::unique_ptr<Statement>> args, bool is_co_yield_ref = false) :
-            object_(move(object)),
-            method_(move(method)),
-            args_(move(args)),
-            is_co_yield_ref_(is_co_yield_ref)
-        {}
+        explicit ReturnRef(std::unique_ptr<Statement> argument_statement, bool is_co_yield_ref = false) :
+            argument_statement_(move(argument_statement)), is_co_yield_ref_(is_co_yield_ref)
+        {
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD);
+            // Так как от метода здесь ожидается именно указатель (ссылка) на некоторое поле данного объекта, то
+            // автоматическое разыменование такой ссылки методом нужно отключить.
+            if (MethodCall* arg_method_ptr = dynamic_cast<MethodCall*>(argument_statement_.get()))
+                arg_method_ptr->SetDereferenceFlag(false);
+        }
 
         // Останавливает выполнение текущего метода. После выполнения инструкции return_ref метод,
         // внутри которого она была исполнена, возвращает результат в виде указателя PointerObject.
         // Он может либо указывать на поле dotted_ids_ объекта-аргумента, либо быть ретрансляцией
         // аналогичного указателя, возвращённого методом-аргументом method_.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
     private:
         std::vector<std::string> dotted_ids_; // Данное поле обслуживает вариант оператора return_ref
                                               // с аргументом-полем объекта (return_ref VariableValue).
-        // Остальные поля служат для обработки варианта оператора return_ref с аргументом-вызовом метода
-        // (return_ref MethodCall).
-        std::unique_ptr<Statement> object_;
-        std::string method_;
-        std::vector<std::unique_ptr<Statement>> args_;
+        std::unique_ptr<Statement> argument_statement_; // Поле служит для обслуживания варианта оператора с вызовом
+                                                        // метода в качестве аргумента (return_ref MethodCall).
         // Признак, указывающий на то, что объект является исполнителем инструкции co_yield_ref.
         bool is_co_yield_ref_ = false;
 
@@ -720,17 +727,17 @@ namespace ast
         runtime::ObjectHolder ExecuteForMethod(runtime::Closure& closure, runtime::Context& context);
     };
 
-    // Выполняет инструкцию break
+    // Выполняет инструкцию break.
     class Break : public Statement
     {
     public:
         explicit Break() = default;
 
-        // Немедленно прекращает работу цикла while
+        // Немедленно прекращает работу цикла while.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // Выполняет инструкцию continue
+    // Выполняет инструкцию continue.
     class Continue : public Statement
     {
     public:
@@ -740,7 +747,7 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // "Холостая" (нефункциональная) инструкция pass
+    // "Холостая" (нефункциональная) инструкция pass.
     class Pass : public Statement
     {
     public:
@@ -750,26 +757,34 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // Объявляет класс
+    // Объявляет класс. Явлется определителем класса, образующим особый исполнимый узел АСД, соответствующий точке его
+    // определения по ходу исполнения программы. После его исполнения данный класс заносится в таблицу символов и становится
+    // доступным для создания его экземпляров runtime::ClassInstance с помощью фабричного узла АСД ast::NewInstance.
     class ClassDefinition : public Statement
     {
+        friend class runtime::TypeTraitsInstance;
+
     public:
-        // Гарантируется, что ObjectHolder содержит объект типа runtime::Class
+        // Гарантируется, что ObjectHolder содержит объект типа runtime::Class.
         explicit ClassDefinition(runtime::ObjectHolder cls);
 
         // Создаёт внутри closure новый объект, совпадающий с именем класса и значением, переданным в
-        // конструктор
+        // конструктор.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
         std::string GetClassName() const;
         // Функция-член GetMethodsDesc() возвращает некоторую информацию о методах класса.
         // В результирующем массиве пар каждая пара соответствует определённому методу класса.
         // Первый член пары (.first) - имя метода, второй (.second) - количество его формальных параметров.
         std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
+    
     private:
         runtime::ObjectHolder cls_;
+
+        // Функция возвращает указатель на класс (runtime::Class), хранящийся в cls_.
+        runtime::Class* GetClass();
     };
 
-    // Инструкция if <condition> <if_body> else <else_body>
+    // Инструкция if <condition> <if_body> else <else_body>.
     class IfElse : public Statement
     {
     public:
@@ -784,7 +799,7 @@ namespace ast
         std::unique_ptr<Statement> else_body_;
     };
 
-    // Инструкция while <condition> <while_body>
+    // Инструкция while <condition> <while_body>.
     class While : public Statement
     {
     public:

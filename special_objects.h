@@ -218,7 +218,7 @@ public:
                      ее работу можно возобновить вызовом resume() повторно.
      value() - результат последнего вызова сопрограммы.     
      */
-    ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+    ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
@@ -320,4 +320,95 @@ private:
     ObjectHolder MethodGetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodSetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+};
+
+class TypeTraitsInstance : public CommonClassInstance
+{
+public:
+    using TypeTraitsCallMethod = ObjectHolder(TypeTraitsInstance::*)(const std::string&, const std::vector<ObjectHolder>&, Context&);
+    TypeTraitsInstance(ObjectHolder traits_value);
+    TypeTraitsInstance(const TypeTraitsInstance&) = delete;
+    TypeTraitsInstance(TypeTraitsInstance&&) = default;
+    TypeTraitsInstance& operator=(const TypeTraitsInstance&) = delete;
+    TypeTraitsInstance& operator=(TypeTraitsInstance&&) = default;
+
+    void Print(std::ostream& os, Context& context) override;
+    /*
+     * Вызывает у объекта-состояния сопрограммы метод method, передавая ему actual_args параметров.
+     * Параметр context задаёт контекст для выполнения метода. Если метод method не относится к тем,
+     * которые поддерживает массив, метод выбрасывает исключение runtime_error.
+     * 
+     * Набор методов, обеспечиваемых объектом типового отпечатка, следующий:
+        IsBool();                           // Возвращает "ИСТИНУ", если выражение имеет встроенный логический тип.
+        IsNumeric();                        // Возвращает "ИСТИНУ", если выражение имеет встроенный числовой тип.
+        IsString();                         // Возвращает "ИСТИНУ", если выражение имеет встроенный строковый тип.
+        IsNone();                           // Возвращает "ИСТИНУ", если выражение относится к типу None (пустое).
+        IsSameType(other);                  // Возвращает "ИСТИНУ", если выражение имеет тот же тип, что и аргумент метода.
+        IsSameTarget(other);                // Возвращает "ИСТИНУ", если выражение ссылается на ту же область памяти, что и аргумент.
+        IsClass(type_name);                 // Возвращает "ИСТИНУ", если имя типа выражения совпадает с аргументом метода.
+        IsSuсcessor(other);                 // Возвращает "ИСТИНУ", если тип выражения является наследником типа аргумента.
+        IsPredecessor(other);               // Возвращает "ИСТИНУ", если тип выражения является предшественником типа аргумента.        
+        IsSuсcessorName(type_name);         // Возвращает "ИСТИНУ", если тип выражения является наследником типа с именем, указываемым аргументом.        
+        IsPredecessorName(type_name);       // Возвращает "ИСТИНУ", если тип выражения является предшественником типа с именем, указываемым аргументом.
+        Id();                               // Возвращает уникальный целочисленный идент типа.
+        Name();                             // Возвращает символьное имя типа.
+        HasMethod(method_name, params_count);   // Возвращает "ИСТИНУ", если класс (к которому относится выражение) имеет метод, сигнатура
+                                                // которого задаётся аргументами метода (их два - имя метода и количество его формальных параметров).
+        HasField(field_name);               // Возвращает "ИСТИНУ", если класс (к которому относится выражение) имеет поле с именем, равным аргументу матода.
+     */
+    ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
+                      Context& context, const std::string& parent_name = {}) override;
+    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+
+    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    {
+        return "TypeTraits";
+    }
+
+    static void ClearInternalClassIds()
+    {
+        internal_classes_ids_.clear();
+    }
+    
+    static void AppendInternalClassId(const std::string& class_name, int class_id)
+    {
+        internal_classes_ids_.emplace(std::pair{class_name, class_id});
+    }
+
+    static void ClearDeclaredClassDefs()
+    {
+        declared_classes_def_.clear();
+    }
+    
+    static void AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def);
+
+private:
+    static const std::unordered_map<std::string_view, TypeTraitsCallMethod> type_traits_method_table_;
+    static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> type_traits_method_argument_count_;
+    // Словарь хранения идентов встроенных фиксированных классов инсполнительской среды.
+    static std::unordered_map<std::string, int> internal_classes_ids_;
+    // Словарь связи имени класса и его объекта-дескриптора типа ClassDefinition.
+    static std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;
+
+    ObjectHolder traits_value_;       // Характеризуемое значение.
+
+    static int ObjectIdInternal(const ObjectHolder& what_id);
+    static std::string ObjectNameInternal(const ObjectHolder& what_id);
+
+    // Обработчики методов характеристического класса.
+    ObjectHolder MethodIsBool(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsNumeric(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsString(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsNone(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsSameType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsSameTarget(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsClass(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsSuсcessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsPredecessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsSuсcessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsPredecessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodId(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodHasMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodHasField(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
 };

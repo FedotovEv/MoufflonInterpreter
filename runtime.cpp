@@ -326,7 +326,7 @@ namespace runtime
     {
         Class::GetMethodRet get_method = my_class_.GetMethod(method_name, static_cast<int>(actual_args.size()), parent_name);
         if (!get_method || get_method.method->formal_params.size() != actual_args.size())
-            ThrowRuntimeError(context, get_method.error);
+            ThrowRuntimeError(context, get_method.error, ThrowMessages::GetThrowText(get_method.error));
     
         Closure method_closure;
         method_closure[SELF_FIELD_NAME] = ObjectHolder::Share(*this);
@@ -360,7 +360,7 @@ namespace runtime
     }
 
     Class::Class(std::string name, std::vector<Method> methods, const Class* parent) :
-        my_name_(move(name)), parent_(*parent)
+        my_name_(move(name)), parent_(*parent), my_id_(parse::ParseContext::GetNewTypeId())
     {
         for (Method& method : methods)
         {
@@ -542,9 +542,15 @@ namespace runtime
     WorkflowPosition* WorkflowStackSaver::Current()
     {
         if (current_workflow_index_ >= 0 && current_workflow_index_ < static_cast<int>(workflow_data_.size()))
-            return &workflow_data_[current_workflow_index_];
+        {
+            decltype(workflow_data_)::iterator workflow_begin_it = workflow_data_.begin();
+            std::advance(workflow_begin_it, current_workflow_index_);
+            return &(*workflow_begin_it);
+        }
         else
+        {
             return nullptr;
+        }
     }
 
     WorkflowPosition* WorkflowStackSaver::SetIndex(int new_index)
@@ -555,7 +561,7 @@ namespace runtime
     }
 
     WorkflowPosition* WorkflowStackSaver::Advance(int dist)
-    {  // Сдвиг нндекса текущей позиции потока управления на dist элементов (вперед или назад).
+    {  // Сдвиг индекса текущей позиции потока управления на dist элементов (вперед или назад).
         current_workflow_index_ += dist;
         CorrectCurrentIndex();
         return Current();

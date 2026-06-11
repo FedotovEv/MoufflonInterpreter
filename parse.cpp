@@ -60,6 +60,12 @@ namespace
         {
             auto result = make_unique<T>(forward<T>(object));
             result->SetCommandDesc(lexer_.GetCurrentCommandDesc());
+            if constexpr (std::is_same_v<T, ast::ClassDefinition>)
+            { // Для узлов определителей классов нужно дополнительно добавить указатель на каждый такой определитель во вспомогательный словарь
+              // характеризатора runtime::TypeTraitsInstance.
+                runtime::TypeTraitsInstance::AppendDeclaredClassDef(result->GetClassName(), result.get());
+            }
+
             return result;
         }
 
@@ -118,26 +124,68 @@ namespace
         explicit Parser(parse::Lexer& lexer, parse::ParseContext& parse_context) :
             lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
         {
+            runtime::TypeTraitsInstance::ClearInternalClassIds();
+            runtime::TypeTraitsInstance::ClearDeclaredClassDefs();
             // Регистрируем внутренние встроенные "завершённые" классы - с фиксированным набором методов, реализуемых непосредственно
             // в коде данной исполняющей среды и без возможности наследования от них и их дальнейшей модификации.
-            internal_classes_["array"s] = ast::CreateArray;
-            internal_classes_["map"s] = ast::CreateMap;
-            internal_classes_["math"s] = ast::CreateMath;
+            internal_classes_[ARRAY_CLASS_NAME] = {.creator = ast::CreateArray};
+            runtime::TypeTraitsInstance::AppendInternalClassId(ARRAY_CLASS_NAME, internal_classes_[ARRAY_CLASS_NAME].my_id);
+
+            internal_classes_[MAP_CLASS_NAME] = {.creator = ast::CreateMap};
+            runtime::TypeTraitsInstance::AppendInternalClassId(MAP_CLASS_NAME, internal_classes_[MAP_CLASS_NAME].my_id);
+
+            internal_classes_[MATH_CLASS_NAME] = {.creator = ast::CreateMath};
+            runtime::TypeTraitsInstance::AppendInternalClassId(MATH_CLASS_NAME, internal_classes_[MATH_CLASS_NAME].my_id);
+
             // Набор записей с указаниями на производящие функции экземпляров классов ошибок.
-            internal_classes_["CommonError"s] = ast::CreateCommonError;
-            internal_classes_["ErrorDivisionByZero"s] = ast::CreateErrorDivisionByZero;
-            internal_classes_["OverflowError"s] = ast::CreateOverflowError;
-            internal_classes_["DomainError"s] = ast::CreateDomainError;
-            internal_classes_["ErrorParamsInconsistency"s] = ast::CreateErrorParamsInconsistency;
-            internal_classes_["SyntaxError"s] = ast::CreateSyntaxError;
-            internal_classes_["ModuleError"s] = ast::CreateModuleError;
-            internal_classes_["LogicError"s] = ast::CreateLogicError;
-            internal_classes_["ReferenceError"s] = ast::CreateReferenceError;
+            internal_classes_[COMMON_ERROR_CLASS_NAME] = {.creator = ast::CreateCommonError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(COMMON_ERROR_CLASS_NAME, internal_classes_[COMMON_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME] = {.creator = ast::CreateErrorDivisionByZero};
+            runtime::TypeTraitsInstance::AppendInternalClassId
+                (ERROR_DIVISION_BY_ZERO_CLASS_NAME, internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME].my_id);
+
+            internal_classes_[OVERFLOW_ERROR_CLASS_NAME] = {.creator = ast::CreateOverflowError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(OVERFLOW_ERROR_CLASS_NAME, internal_classes_[OVERFLOW_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[DOMAIN_ERROR_CLASS_NAME] = {.creator = ast::CreateDomainError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(DOMAIN_ERROR_CLASS_NAME, internal_classes_[DOMAIN_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME] = {.creator = ast::CreateErrorParamsInconsistency};
+            runtime::TypeTraitsInstance::AppendInternalClassId
+                (ERROR_PARAMS_INCONSISTENCY_CLASS_NAME, internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME].my_id);
+
+            internal_classes_[SYNTAX_ERROR_CLASS_NAME] = {.creator = ast::CreateSyntaxError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(SYNTAX_ERROR_CLASS_NAME, internal_classes_[SYNTAX_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[MODULE_ERROR_CLASS_NAME] = {.creator = ast::CreateModuleError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(MODULE_ERROR_CLASS_NAME, internal_classes_[MODULE_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[LOGIC_ERROR_CLASS_NAME] = {.creator = ast::CreateLogicError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(LOGIC_ERROR_CLASS_NAME, internal_classes_[LOGIC_ERROR_CLASS_NAME].my_id);
+
+            internal_classes_[REFERENCE_ERROR_CLASS_NAME] = {.creator = ast::CreateReferenceError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(REFERENCE_ERROR_CLASS_NAME, internal_classes_[REFERENCE_ERROR_CLASS_NAME].my_id);
+
+            // Регистрируем класс типовых характеристик - TypeTraits.
+            internal_classes_[TYPE_TRAITS_CLASS_NAME] = {.creator = ast::CreateTypeTraits};
+            runtime::TypeTraitsInstance::AppendInternalClassId(TYPE_TRAITS_CLASS_NAME, internal_classes_[TYPE_TRAITS_CLASS_NAME].my_id);
+
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
             // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
             std::vector<runtime::Method> methods;
-            methods.push_back({.name = AWAITBALE_SUSPEND_METHOD, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
-            methods.push_back({.name = AWAITBALE_RESUME_METHOD, .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})});
+            methods.push_back
+            (
+                {.name = AWAITABLE_SUSPEND_METHOD, .formal_params = {"coro_instance"s},
+                 .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})
+                }
+            );
+            methods.push_back
+            (
+                {.name = AWAITABLE_RESUME_METHOD, .formal_params = {"coro_instance"s, "suspend_value"s},
+                 .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})
+                }
+            );
             declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), nullptr));
         }
 
@@ -320,11 +368,6 @@ namespace
             if (lexer_.CurrentToken() == '=')
             { // После вызова метода следует лексема '=' - это косвенное присваивание.
                 lexer_.NextToken();
-                /*
-                return exec_factory_.Create(ast::IndirectAssignment(exec_factory_.Create
-                    (ast::VariableValue(std::move(id_list))),
-                     std::move(last_name), std::move(args), ParseTest(), parent_class_name));
-                */
                 return exec_factory_.Create(ast::IndirectAssignment(std::move(method_call), ParseTest(), parent_class_name));
             }
             else
@@ -537,7 +580,7 @@ namespace
                     if (auto int_class_it = internal_classes_.find(method_name); int_class_it != internal_classes_.end())
                     { // Проверка совпадения имени вызываемой свободной функции к одному из имён внутренних классов. В этом случае
                       // имеет место операция создания такого класса (вызов его производящей функции).
-                        unique_ptr<ast::Statement> internal_class_ptr = (int_class_it->second)(std::move(args));
+                        unique_ptr<ast::Statement> internal_class_ptr = (int_class_it->second.creator)(std::move(args));
                         exec_factory_.AddCommandDesc(internal_class_ptr.get());
                         return internal_class_ptr;
                     }
@@ -564,12 +607,24 @@ namespace
                 }
             
                 if (method_name == "str"sv)
-                { // Наконец, случай вызова встроенной свободной функции str().
+                { // Случай вызова встроенной свободной функции str().
                     if (args.size() != 1)
                         exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM);
                 
                     return exec_factory_.Create(ast::Stringify(std::move(args.front())));
                 }
+
+                if (method_name == "is_same_target"sv || method_name == "IsSameTarget"sv)
+                { // Наконец, случай вызова встроенной свободной функции is_same_target(). Эта функция позволяет выяснить, указывают ли два её аргумента
+                  // на один и тот же объект в памяти. Такое происходит, например, при присваивании какой-либо переменной значения другой переменной,
+                  // так как семантика присвоения в языке предполагает именно перенацеливание принимающей переменной в левой части оператора присваивания
+                  // на объект, вычисленный в правой части этого оператора.
+                    if (args.size() != 2)
+                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_IS_SAME_TARGET_HAS_TWO_PARAMS);
+
+                    return exec_factory_.Create(ast::IsSameTarget(std::move(args[0]), std::move(args[1])));
+                }
+
                 exec_factory_.ThrowParseError(ThrowMessages::GetThrowText
                     (ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL) + method_name + "()"s);
             }
@@ -1278,23 +1333,20 @@ namespace
                 ast::VariableValue* variable_value_ptr = dynamic_cast<ast::VariableValue*>(test_result.get());
                 ast::MethodCall* method_call_ptr = dynamic_cast<ast::MethodCall*>(test_result.get());
                 if (variable_value_ptr)
-                {
+                { // Вариант return_ref с именем поля данного объекта в качестве аргумента.
                     vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
                     if (dotted_ids.size() && dotted_ids[0] == "self"sv)
                         return exec_factory_.Create(ast::ReturnRef(move(dotted_ids), is_co_yield_ref));
                 }
                 else if (method_call_ptr)
-                {
-                    ast::MethodCall::MethodCallDesc method_call_desc = method_call_ptr->GetMethodCallDesc();
-                    ast::VariableValue* variable_value_ptr =
-                        dynamic_cast<ast::VariableValue*>(method_call_desc.call_object.get());
-                    if (variable_value_ptr)
+                { // Вариант return_ref с вызовом метода в качестве аргумента. Метод обязательно должен принадлежать тому
+                  // же объекту, внутри которого выполняется данный return_ref (то есть содержать префикс self).
+                    if (variable_value_ptr = method_call_ptr->GetCallObject())
                     {
                         vector<string> dotted_ids = variable_value_ptr->GetDottedIds();
                         if (dotted_ids.size() && dotted_ids[0] == "self"sv)
-                            return exec_factory_.Create(ast::ReturnRef
-                                (move(method_call_desc.call_object), move(method_call_desc.call_method),
-                                 move(method_call_desc.call_args), is_co_yield_ref));
+                            // Аргумент return_ref является вызовом именно некоторого метода данного класса.
+                            return exec_factory_.Create(ast::ReturnRef(move(test_result), is_co_yield_ref));
                     }
                 }
                 exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED);
@@ -1374,6 +1426,8 @@ namespace
         parse::ParseContext& parse_context_;
     }; // class Parser
 }  // namespace
+
+int parse::ParseContext::current_type_id = CLASS_AREA_IDENTS;
 
 ParseError::ParseError(ThrowMessageNumber throw_message_number) :
     runtime_error(ThrowMessages::GetThrowText(throw_message_number))
@@ -1470,6 +1524,7 @@ runtime::ObjectHolder ExecuteProgram(CplxParsedProgram& cplx_program)
 {
     // Аргумент program->parse_context ДОЛЖЕН совпадать с тем, который использовался при разборе исполняемой программы
     // cplx_program.program какой-либо функцией ParseProgram().
+    if (!cplx_program.IsParsed())
+        return runtime::ObjectHolder::None();
     return cplx_program.program->Execute(*cplx_program.closure, *cplx_program.context);
-
 }

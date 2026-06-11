@@ -18,6 +18,7 @@
 namespace ast
 {
     class CoYield;
+    class ClassDefinition;
 }
 
 namespace runtime
@@ -266,6 +267,17 @@ namespace runtime
         ProgramCommandDescriptor command_desc_;
     };
 
+    // Особый тип двухступенчатых исполняемых объектов, имеющих "левую" и "правую" части, которые могут исполняться
+    // раздельно (типа оператора присваивания).
+    class LeftRightExecutable : public Executable
+    {
+    public:
+        // Отдельный исполнитель "правой" части инструкции.
+        virtual ObjectHolder ExecuteRight(Closure& closure, Context& context) = 0;
+        // Отдельный исполнитель "левой" части инструкции. right_value - результат, возвращённый "правой" частью оператора.
+        virtual ObjectHolder ExecuteLeft(ObjectHolder&& right_value, Closure& closure, Context& context) = 0;
+    };
+
     // Строковое значение
     class String : public ValueObject<std::string>
     {
@@ -283,7 +295,7 @@ namespace runtime
         }
     };
 
-    // Далее описываются структуры, необходимые для работы с числовыми значениями
+    // Далее описываются структуры, необходимые для работы с числовыми значениями.
     class Number : public Object
     {
     public:
@@ -475,7 +487,13 @@ namespace runtime
             return 0;
         }
 
+        int GetId() const
+        {
+            return my_id_;
+        }
+
     private:
+        int my_id_;
         std::string my_name_;
         const Class& parent_;
         std::unordered_multimap<std::string, Method> virtual_method_table_;
@@ -516,10 +534,11 @@ namespace runtime
         }
     };
 
-    // Экземпляр класса
+    // Экземпляр класса.
     class ClassInstance : public CommonClassInstance
     {
         friend class CoroutineInstance;
+        friend class TypeTraitsInstance;
 
     public:
         explicit ClassInstance(const Class& cls);
@@ -699,7 +718,7 @@ namespace runtime
     private:
         void CorrectCurrentIndex();
 
-        std::vector<WorkflowPosition> workflow_data_;
+        std::list<WorkflowPosition> workflow_data_;
         int current_workflow_index_ = 0;
     };
 

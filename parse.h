@@ -25,12 +25,7 @@ namespace runtime
 //   Если же LoadLibraryDefine содержит тип PluginGetInfoFunc (указатель на информирующую функцию) - втыкала
 // подключается, используя данные, которые эта функция предоставляет по соответствующим запросам к ней.
 //   В случае, когда LoadLibraryDefine содержит monostate, втыкало не загружается.
-
-// Функциональный тип, определяющий фабричный метод встроенного класса, а также оболочка std::function для него.
-using FuncInternalObjectCreator = std::unique_ptr<runtime::Executable>(std::vector<std::unique_ptr<runtime::Executable>>);
-using InternalObjectCreator = std::function<FuncInternalObjectCreator>;
-// 
-using LoadLibraryDefine = std::variant<std::monostate, std::string, PluginGetInfoFunc>;
+using LoadLibraryDefine = std::variant<std::monostate, std::string, PluginGetInfoFunc>; // Тип определителя загруженной (подключённой) втыкалы.
 
 // Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.
 constexpr char GET_PLUGINS_INFO_FUNCTION[] = PLUGINS_GET_INFO_FUNCTION;
@@ -92,7 +87,14 @@ namespace parse
             return plugines_;
         }
 
+        static int GetNewTypeId()
+        {
+            return current_type_id++;
+        }
+
     private:
+        static int current_type_id;     // Поле для отслеживания текущего выделяемого идента для вновь создаваемого класса.
+
         bool is_auto_deallocate_ = false;
         #if defined (_WIN64) || defined(_WIN32)
             std::vector<HMODULE> dll_list_;
@@ -120,6 +122,14 @@ struct ParseError : std::runtime_error
     ParseError(ThrowMessageNumber throw_message_number);
 };
 
+// Функциональный тип, определяющий фабричный метод встроенного класса, а также оболочка std::function для него.
+using FuncInternalObjectCreator = std::unique_ptr<runtime::Executable>(std::vector<std::unique_ptr<runtime::Executable>>);
+struct InternalObjectCreator
+{
+    int my_id = parse::ParseContext::GetNewTypeId();
+    std::function<FuncInternalObjectCreator> creator;
+};
+
 // Структура для компактного хранения всех активов, необходимых для разбора, анализа и последующего исполнения МУФЛОН-программы.
 // Структура принимает в единоличное владение все назначенные ей объекты.
 struct CplxParsedProgram
@@ -140,6 +150,12 @@ struct CplxParsedProgram
 
     CplxParsedProgram& SetLexer(parse::Lexer&& p_lexer);
     CplxParsedProgram& SetClosure(runtime::Closure&& p_closure);
+
+    // Возвращает "ИСТИНУ", если объект содержит разобранную программу, готовую к исполнению.
+    bool IsParsed() const
+    {
+        return bool(program);
+    }
 
     // Классы parse::ParseContext и runtime::Context абстрактные и чисто виртуальные.
     template<typename ParseContextT>

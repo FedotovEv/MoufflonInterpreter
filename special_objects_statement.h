@@ -26,5 +26,18 @@ public:
     runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 };
 
+class NewTypeTraits : public Statement
+{
+public:
+    NewTypeTraits(std::vector<std::unique_ptr<Statement>> args);
+    // Возвращает объект, содержащий значение типа TypeTraits,
+    // представляющее собой характеристический тип для своего аргумента (выражения args[0]).
+    runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+private:
+    std::vector<std::unique_ptr<Statement>> args_;
+};
+
 std::unique_ptr<Statement> CreateArray(std::vector<std::unique_ptr<Statement>> args);
 std::unique_ptr<Statement> CreateMap(std::vector<std::unique_ptr<Statement>> args);
+std::unique_ptr<Statement> CreateTypeTraits(std::vector<std::unique_ptr<Statement>> args);

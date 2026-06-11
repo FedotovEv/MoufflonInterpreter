@@ -865,6 +865,30 @@ print x << y, x << y + 1, x >> y, x >> y - 1
         }
     }
 
+    void TestIsSameTarget()
+    {
+        { // Проверка верности работы функции is_same_target() (или, что то же IsSameTarget()).
+            istringstream istr(R"--(
+x = 254
+y = x
+print is_same_target(x, y)
+y = y + 1
+print is_same_target(x, y)
+z = "ABC"
+z2 = z
+print is_same_target(z, z2)
+z2 = x
+print IsSameTarget(z2, x)
+print is_same_target(x, z2)
+z2 = None
+print IsSameTarget(x, z2)
+)--");
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "True\nFalse\nTrue\nTrue\nTrue\nFalse\n");
+        }
+    }
+
     void TestMethodsOverload()
     {
         { // Проверка обработки перегруженных методов класса.
@@ -986,8 +1010,8 @@ print "Всего", i
             std::string simple_awaitable_example(R"--(
 dummy_awaitable = Awaitable()  # Ждун по умолчанию.
 
-dummy_suspend_result = dummy_awaitable.AwaitSuspend()
-dummy_resume_result = dummy_awaitable.AwaitResume()
+dummy_suspend_result = dummy_awaitable.AwaitSuspend(None)
+dummy_resume_result = dummy_awaitable.AwaitResume(None, 0)
 
 # В умолчательном варианте объекта-ждуна обе его функции возвращают None.
 print dummy_suspend_result
@@ -1003,16 +1027,16 @@ print dummy_resume_result
         { // Возможность наследования от него и корректность порождённого производного класса.
             std::string inherit_from_awaitable(R"--(
 class MyAwaitable(Awaitable):
-  def AwaitSuspend():
-    return 1  
+  def AwaitSuspend(coro_instance):
+    return 1
 
-  def AwaitResume():
+  def AwaitResume(coro_instance, suspend_value):
     return 2
 
 my_awaitable = MyAwaitable()  # Производный (унаследованный) ждун.
 
-my_suspend_result = my_awaitable.AwaitSuspend()
-my_resume_result = my_awaitable.AwaitResume()
+my_suspend_result = my_awaitable.AwaitSuspend(None)
+my_resume_result = my_awaitable.AwaitResume(None, 0)
 
 # Наш ждун-наследник через свои стандартные методы возвращает 1 и 2.
 print my_suspend_result
@@ -1024,11 +1048,67 @@ print my_resume_result
             RunMythonProgram(istr, ostr);
             ASSERT_EQUAL(ostr.str(), "1\n2\n");
         }
+
+        { // А теперь следует проверка основного сценария использования ждуна - его применения для условной приостановки
+          // сопрограммы в составе оператора co_await.
+            std::string coro_awaitable_suspend(R"--(
+class MyAwaitable(Awaitable):
+  def AwaitSuspend(coro_instance):
+    return 1
+
+  def AwaitResume(coro_instance, suspend_result):
+    return suspend_result + 2
+
+class TestClass:
+  def __init__(use_await_p):
+    self.use_awaitable = use_await_p
+
+  def coroutine_method(x):
+    z = x
+    while (True):
+      print z
+      co_await z = z + 1
+      print z
+      co_await self.await_result = self.use_awaitable
+      # print self.await_result
+      z = z + 2
+
+await_instance = MyAwaitable()
+test_instance = TestClass(await_instance)
+coro_instance = test_instance.coroutine_method(2)
+# Несколько раз возобновляем сопрограмму.
+# --------
+# Первое возобновление (эквивалентное запуску) - вывод "2\n3\n" в консоль - начального аргумента сопрограммы Zstr == 2 и его же,
+# увеличенного на 1.
+# Приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
+coro_instance.resume()
+# --------
+# Далее в консоль будет выведено "5\n6\n" - (Zstr + (1 + 2) == 5) и (Zstr + (1 + 2) + 1 == 6).
+# Опять приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
+coro_instance.resume()
+# --------
+# Вывод в консоль "8\n9\n" - (Zstr + (1 + 2 + 1 + 2) == 8) и (Zstr + (1 + 2 + 1 + 2) + 1 == 9).
+# Опять приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
+coro_instance.resume() #
+# --------
+# Наконец, последняя аналогичная операция.
+# Вывод в консоль "11\n12\n" - (Zstr + (1 + 2 + 1 + 2 + 1 + 2) == 11) и (Zstr + (1 + 2 + 1 + 2 + 1 + 2) + 1 == 12) и приостановка
+# на "co_await self.await_result = self.use_awaitable".
+coro_instance.resume() #
+)--");
+
+            istringstream istr(coro_awaitable_suspend);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            ASSERT_EQUAL(ostr.str(), "2\n3\n5\n6\n8\n9\n11\n12\n");
+        }
+
     }
 
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
+        cout << endl << "Тесты грамматического разбора и синтаксического анализа"s << endl;
         TestRunner tr;
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);
@@ -1036,6 +1116,7 @@ print my_resume_result
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
 
+        cout << endl << "Тесты исполнения примерных программ"s << endl;
         RUN_TEST(tr, TestSimpleCoroutine);
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);
@@ -1053,22 +1134,36 @@ print my_resume_result
         RUN_TEST(tr, TestIncludes);
         RUN_TEST(tr, TestBitwiseOps);
         RUN_TEST(tr, TestShiftOps);
+        RUN_TEST(tr, TestIsSameTarget);
         RUN_TEST(tr, TestMethodsOverload);
         RUN_TEST(tr, TestTryExceptions);
         RUN_TEST(tr, TestAwaitables);
     }
 }  // namespace
 
-int main()
+bool ScanArgvForString(int argc, char* argv[], const char* scan_row)
+{
+    for (int param_index = 1; param_index < argc; ++param_index)
+        if (strcmp(argv[param_index], scan_row) == 0)
+            return true;
+
+    return false;
+}
+
+int main(int argc, char* argv[])
 {
     // Переключим отображение текста в консоль в UTF-8 режим. Ну, по крайней мере, попытаемся...
     setlocale(LC_CTYPE, "ru_RU.UTF-8");
     try
     {
         TestAll();
-        RunMythonProgram(cin, cout);
-        string white_line; 
-        getline(cin, white_line);
+        if (ScanArgvForString(argc, argv, "--console"))
+        { // Если в командной строке есть параметр "--console", переходим к консольному режиму - исполнению программы,
+          // вводимой пользоавателем со стандартного входа cin.
+            RunMythonProgram(cin, cout);
+            string white_line;
+            getline(cin, white_line);
+        }
     }
     catch (const exception& e)
     {

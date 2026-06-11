@@ -230,48 +230,24 @@ namespace ast
     // Исполнение левой части оператора присваивания простой (свободной) переменной - собственно, сама операция присваивания
     // переменной-цели.
     runtime::ObjectHolder Assignment::ExecuteLeft
-        (const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context)
-    {
-        return closure[var_] = right_result;
-    }
-
-    // Вторая перегрузка исполнителя левой части, принимающая правозначную ссылку на присваиваемое значение.
-    runtime::ObjectHolder Assignment::ExecuteLeft
         (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
     {
         return closure[var_] = move(right_result);
     }
 
-    /*
-    IndirectAssignment::IndirectAssignment
-        (std::unique_ptr<Statement> object, std::string method, std::vector<std::unique_ptr<Statement>> args,
-         std::unique_ptr<Statement> rv, std::string parent_name) :
-         object_(move(object)), method_(move(method)), args_(move(args)), rv_(move(rv)), parent_name_(move(parent_name))
-    {}
-    */
-
     IndirectAssignment::IndirectAssignment
         (std::unique_ptr<Statement> left_method_call, std::unique_ptr<Statement> rv, std::string parent_name) :
         left_method_call_(move(left_method_call)), rv_(move(rv)), parent_name_(move(parent_name))
     {
-        // Для вызова метода в левой части оператора косвенного присваивания ожидается имеено ссылка на целевое поле,
+        // Для вызова метода в левой части оператора косвенного присваивания ожидается именно ссылка на целевое поле,
         // поэтому автоматическое разыменование таких ссылок тут нужно отключить.
-        dynamic_cast<MethodCall*>(left_method_call_.get())->SetDereferenceFlag(false);
+        if (MethodCall* left_method_ptr = dynamic_cast<MethodCall*>(left_method_call_.get()))
+            left_method_ptr->SetDereferenceFlag(false);
     }
 
     ObjectHolder IndirectAssignment::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
-        /*
-        ObjectHolder real_object = object_->Execute(closure, context);
-        vector<ObjectHolder> real_args;
-        for (auto& cur_arg_ptr : args_) // Вычисляем истинные значения аргументов метода
-            real_args.push_back(cur_arg_ptr->Execute(closure, context));
-
-        ObjectHolder target_field = real_object.TryAs<runtime::CommonClassInstance>()->
-                                    Call(method_, real_args, context, parent_name_);
-        */
-
         ObjectHolder target_field = left_method_call_->Execute(closure, context);
         runtime::PointerObject* target_ptr = target_field.TryAs<runtime::PointerObject>();
         if (target_ptr)
@@ -292,30 +268,15 @@ namespace ast
         PrepareExecute(this, closure, context);
         return rv_->Execute(closure, context);
     }
-    
-    std::pair<runtime::ObjectHolder, runtime::PointerObject*> IndirectAssignment::ExecuteLeftPrepare(runtime::Closure& closure, runtime::Context& context)
+       
+    runtime::ObjectHolder IndirectAssignment::ExecuteLeft
+        (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
     {
         runtime::ObjectHolder target_field = left_method_call_->Execute(closure, context);
         runtime::PointerObject* target_ptr = target_field.TryAs<runtime::PointerObject>();
         if (!target_ptr)
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR);
-        return {move(target_field), target_ptr};
-    }
 
-    runtime::ObjectHolder IndirectAssignment::ExecuteLeft
-        (const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context)
-    {
-        auto [target_field, target_ptr] = ExecuteLeftPrepare(closure, context);
-        if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
-            deref_ptr->ModifyData(right_result);
-
-        return target_field;
-    }
-    
-    runtime::ObjectHolder IndirectAssignment::ExecuteLeft
-        (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
-    {
-        auto [target_field, target_ptr] = ExecuteLeftPrepare(closure, context);
         if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
             deref_ptr->ModifyData(move(right_result));
 
@@ -421,9 +382,8 @@ namespace ast
         ObjectHolder real_object = object_->Execute(closure, context);
         vector<ObjectHolder> real_args;
         for (auto& cur_arg_ptr : args_)
-        { // Вычисляем истинные значения аргументов метода.
+            // Вычисляем истинные значения аргументов метода.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
-        }
 
         runtime::CommonClassInstance* common_class_ptr = real_object.TryAs<runtime::CommonClassInstance>();
         if (!common_class_ptr)
@@ -468,10 +428,20 @@ namespace ast
         return ObjectHolder::Own(runtime::String(ostr.str()));
     }
 
+    // Сравнение на равенство внутренних указателей, скрытых в правом и левом аргументах бинарной операции IsSameTarget.
+    runtime::ObjectHolder IsSameTarget::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
+        runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+
+        return ObjectHolder::Own(runtime::Bool(real_lhs.Get() == real_rhs.Get()));
+    }
+
     // Поддерживается сложение:
      //  число + число
      //  строка + строка
-     //  объект1 + объект2, если у объект1 - пользовательский класс с методом _add__(rhs)
+     //  объект1 + объект2, если у объект1 - пользовательский класс с методом __add__(rhs)
      // В противном случае при вычислении выбрасывается runtime_error
     ObjectHolder Add::Execute(Closure& closure, Context& context)
     {
@@ -684,6 +654,9 @@ namespace ast
                 statement_type_ = StatementType::STATEMENT_INDIRECT_ASSIGN; // Здесь аргумент co_await - это косвенное присваивание полю объекта.
             else // При иных вариантах считаем, что подозреваемый ждун есть нечто другое (STATEMENT_OTHER).
                 statement_type_ = StatementType::STATEMENT_OTHER;
+            // Уточним также, является ли вложенный оператор statement_ одним из LeftRightStatement (то есть допускает ли раздельное исполнение
+            // "правой" и "левой" части).
+            left_right_stat_ = dynamic_cast<ast::LeftRightStatement*>(statement_.get());
         }
     }
 
@@ -702,28 +675,16 @@ namespace ast
           // результат, приводимый к логической "ИСТИНЕ", то сопрограмма приостанавливается, если же нет (результат оценивается как "ЛОЖЬ"),
           // то сопрограмма тут же возобновляется, без формирования точки приостановки.
             // -----------------
-            // Сначала выполняем первый акт вложенного оператора statement_. Если это какой-то оператор присваивания, то данное действие
-            // заключается в вычислении значения его правой части. А затем производим поиск ждуна, который должен быть результатом таково
-            // расчёта.
-            switch (statement_type_)
-            {
-            case StatementType::STATEMENT_SIMPLE_ASSIGN:
-                return_result = assign_stat_->ExecuteRight(closure, context);
-                break;
-            case StatementType::STATEMENT_FIELD_ASSIGN:
-                return_result = field_assign_stat_->ExecuteRight(closure, context);
-                break;
-            case StatementType::STATEMENT_INDIRECT_ASSIGN:
-                return_result = indirect_assign_stat_->ExecuteRight(closure, context);
-                break;
-            case StatementType::STATEMENT_OTHER:
-                // При иных вариантах считаем, что первый акт - выполнение вложенного оператора целиком. А подозреваемый ждун есть
-                // прямой результат такого исполнения.
+            // Сначала выполняем первый акт вложенного оператора statement_.
+            if (left_right_stat_)
+                // Если это какой-то "двучастный" оператор(типа инструкции присваивания), то данное действие заключается в вычислении
+                // значения его правой части. А затем производим поиск ждуна, который должен быть результатом такого расчёта.
+                return_result = left_right_stat_->ExecuteRight(closure, context);
+            else
+                // Если же вложенный оператор "одночастный", то считаем, что первый акт - выполнение этого оператора целиком.
+                // А искомый ждун есть прямой результат такого исполнения.
                 return_result = statement_->Execute(closure, context);
-                break;
-            default:
-                break;
-            }
+
             // Ждун может быть предоставлен нам двумя способами - прямо или через объект сопрограммы.
             // Первый вариант - return_result должен являться runtime::CoroutineInstance. В этом случае ждун извлекается из него с помощью
             // метода GetAwaitable().
@@ -738,7 +699,7 @@ namespace ast
             coro_coords.coro_status_instance->SetLastAwaitable(awaitable_instance);
             if (awaitable_instance)
             {  // Ждуна удалось успешно получить. Запросим его "стопорящий" метод о необходимости приостановки сопрограммы.
-                await_suspend_result = awaitable_instance->Call(AWAITBALE_SUSPEND_METHOD, {coro_coords.coro_status_holder}, context);
+                await_suspend_result = awaitable_instance->Call(AWAITABLE_SUSPEND_METHOD, {coro_coords.coro_status_holder}, context);
                 coro_coords.coro_status_instance->SetLastAwaitSuspendValue(await_suspend_result);
                 if (runtime::IsTrue(await_suspend_result))
                 { // Если возвращённый "стопором" результат приводится к истине, приостанавливаем выполнение сопрограммы.
@@ -752,6 +713,8 @@ namespace ast
             }
             // Если управление угодило сюда, то ждун либо не задан, либо в приостановке работы нам отказано. Так что тут же переходим к
             // возобновлению операции.
+            coro_coords.coro_status_instance->Advance(-1);
+            coro_coords = GetCoYieldCoroCoords(closure, this);
         }
 
         // А сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем сеансе ее работы (или если
@@ -763,29 +726,15 @@ namespace ast
         if (awaitable_instance)
             // Ждун существует. Его возобновляющий метод выработает значение, которое будет присвоено левой части вложенного оператора-аргумента
             // (если он представляет собой ту или иную форму присваивания), а также возвращено как итоговое значение работы всего оператора co_await.
-            return_result = awaitable_instance->Call(AWAITBALE_RESUME_METHOD, {coro_coords.coro_status_holder, await_suspend_result}, context);
+            return_result = awaitable_instance->Call(AWAITABLE_RESUME_METHOD, {coro_coords.coro_status_holder, await_suspend_result}, context);
         else
             return_result = await_suspend_result;
 
         // Выполним второй акт действия вложенного оператора. Если этот оператор относится к семейству операторов присваивания, то здесь нужно
         // присвоить его цели (левой части) ранее вычисленное и хранящееся в return_result значение его правой части.
-        switch (statement_type_)
-        {
-        case StatementType::STATEMENT_SIMPLE_ASSIGN:
-            return_result = assign_stat_->ExecuteLeft(std::move(return_result), closure, context);
-            break;
-        case StatementType::STATEMENT_FIELD_ASSIGN:
-            return_result = field_assign_stat_->ExecuteLeft(std::move(return_result), closure, context);
-            break;
-        case StatementType::STATEMENT_INDIRECT_ASSIGN:
-            return_result = indirect_assign_stat_->ExecuteLeft(std::move(return_result), closure, context);
-            break;
-        case StatementType::STATEMENT_OTHER:
-            // При всех иных вариантах исполнение вложенного оператора уже полностью завершено ранее, при первом исполнении данного co_await.
-            break;
-        default:
-            break;
-        }
+        if (left_right_stat_)
+            return_result = left_right_stat_->ExecuteLeft(std::move(return_result), closure, context);
+        // При всех иных вариантах исполнение вложенного оператора уже полностью завершено ранее, при первом исполнении данного co_await.
 
         return return_result;
     }
@@ -816,13 +765,7 @@ namespace ast
 
     ObjectHolder ReturnRef::ExecuteForMethod(Closure& closure, Context& context)
     {
-        ObjectHolder real_object = object_->Execute(closure, context);
-        vector<ObjectHolder> real_args;
-        for (auto& cur_arg_ptr : args_) // Вычисляем истинные значения аргументов метода
-            real_args.push_back(cur_arg_ptr->Execute(closure, context));
-
-        ObjectHolder target_field = real_object.TryAs<runtime::CommonClassInstance>()->
-                                    Call(method_, real_args, context);
+        ObjectHolder target_field = argument_statement_->Execute(closure, context);
         if (target_field.TryAs<runtime::PointerObject>())
             throw ReturnResult(move(target_field));
         else
@@ -891,6 +834,11 @@ namespace ast
         return cls_.TryAs<runtime::Class>()->GetMethodsDesc();
     }
 
+    runtime::Class* ClassDefinition::GetClass()
+    {
+        return cls_.TryAs<runtime::Class>();
+    }
+
     FieldAssignment::FieldAssignment(VariableValue object, std::string field_name,
                                      std::unique_ptr<Statement> rv) :
                                      object_(move(object)), field_name_(move(field_name)),
@@ -901,8 +849,7 @@ namespace ast
     { // Присваивает полю object.field_name значение выражения rv.
         PrepareExecute(this, closure, context);
         runtime::ClassInstance* target_object_ptr = nullptr;
-        ObjectHolder target_object_holder(object_.Execute(closure, context));
-        if (target_object_holder)
+        if (ObjectHolder target_object_holder = object_.Execute(closure, context))
         {
             target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
             ObjectHolder value_holder = rv_->Execute(closure, context);
@@ -925,39 +872,23 @@ namespace ast
         PrepareExecute(this, closure, context);
         return rv_->Execute(closure, context);
     }
-    
-    runtime::ClassInstance* FieldAssignment::ExecuteLeftPrepare
-        (const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context)
-    {
-        runtime::ClassInstance* target_object_ptr = nullptr;
-        ObjectHolder target_object_holder(object_.Execute(closure, context));
-        if (target_object_holder)
-            target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
-        
-        if (target_object_ptr && target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
-            context.GetExternalLinkage() && field_name_.size() && right_result)
-            // Вызов звонковой функции при записи полей объекта "__external"
-            context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD, field_name_, {ConvertToLinkageValue(right_result)});
 
-        return target_object_ptr;
-    }
-
-    runtime::ObjectHolder FieldAssignment::ExecuteLeft(const runtime::ObjectHolder& right_result, runtime::Closure& closure, runtime::Context& context)
-    {
-        runtime::ClassInstance* target_object_ptr = ExecuteLeftPrepare(right_result, closure, context);
-        if (target_object_ptr)
-            return (target_object_ptr->Fields())[field_name_] = right_result;
-        else
-            return {};
-    }
-    
     runtime::ObjectHolder FieldAssignment::ExecuteLeft(runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
     {
-        runtime::ClassInstance* target_object_ptr = ExecuteLeftPrepare(right_result, closure, context);
+        runtime::ClassInstance* target_object_ptr = nullptr;
+        if (ObjectHolder target_object_holder = object_.Execute(closure, context))
+            target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
+
         if (target_object_ptr)
+        {
+            if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
+                context.GetExternalLinkage() && field_name_.size() && right_result)
+                // Вызов звонковой функции при записи полей объекта "__external"
+                context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD, field_name_, {ConvertToLinkageValue(right_result)});
+            
             return (target_object_ptr->Fields())[field_name_] = move(right_result);
-        else
-            return {};
+        }
+        return {};
     }
 
     IfElse::IfElse(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> if_body,
