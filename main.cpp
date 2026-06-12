@@ -1054,7 +1054,7 @@ print my_resume_result
             std::string coro_awaitable_suspend(R"--(
 class MyAwaitable(Awaitable):
   def AwaitSuspend(coro_instance):
-    return 1
+    return 1 # Возвращаемое значение, воспринимаемое как True. Поэтому с таким ждуном сопрограмма всегда приостанавливается.
 
   def AwaitResume(coro_instance, suspend_result):
     return suspend_result + 2
@@ -1067,9 +1067,9 @@ class TestClass:
     z = x
     while (True):
       print z
-      co_await z = z + 1
+      co_await z = z + 1 # Фиктивный co_await, ни в каком случае не производящий фактической приостановки.
       print z
-      co_await self.await_result = self.use_awaitable
+      co_await self.await_result = self.use_awaitable  # Остановка сопрограммы всегда происходит здесь.
       # print self.await_result
       z = z + 2
 
@@ -1077,30 +1077,228 @@ await_instance = MyAwaitable()
 test_instance = TestClass(await_instance)
 coro_instance = test_instance.coroutine_method(2)
 # Несколько раз возобновляем сопрограмму.
+# Приостановка всегда произойдёт на "co_await self.await_result = self.use_awaitable"
 # --------
 # Первое возобновление (эквивалентное запуску) - вывод "2\n3\n" в консоль - начального аргумента сопрограммы Zstr == 2 и его же,
 # увеличенного на 1.
-# Приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
 coro_instance.resume()
 # --------
 # Далее в консоль будет выведено "5\n6\n" - (Zstr + (1 + 2) == 5) и (Zstr + (1 + 2) + 1 == 6).
-# Опять приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
 coro_instance.resume()
 # --------
 # Вывод в консоль "8\n9\n" - (Zstr + (1 + 2 + 1 + 2) == 8) и (Zstr + (1 + 2 + 1 + 2) + 1 == 9).
-# Опять приостановка произойдёт на "co_await self.await_result = self.use_awaitable"
-coro_instance.resume() #
+coro_instance.resume()
 # --------
 # Наконец, последняя аналогичная операция.
 # Вывод в консоль "11\n12\n" - (Zstr + (1 + 2 + 1 + 2 + 1 + 2) == 11) и (Zstr + (1 + 2 + 1 + 2 + 1 + 2) + 1 == 12) и приостановка
 # на "co_await self.await_result = self.use_awaitable".
-coro_instance.resume() #
+coro_instance.resume()
 )--");
 
             istringstream istr(coro_awaitable_suspend);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
             ASSERT_EQUAL(ostr.str(), "2\n3\n5\n6\n8\n9\n11\n12\n");
+        }
+
+    }
+
+    void TestTypeTraits()
+    { // Получение и иссследование типовых отпечатков (характериситического класса) для различных выражений языка.
+        std::string classes_definitions(R"--(
+# Переменные классовых типов программно-определяемых классов.
+class OneClass:
+  def OneClassMethod_1():
+    self.x = 0
+    self.y = "y"
+
+  # Перегрузки метода OneClassMethod_2() с разным количеством формальных параметров.
+  def OneClassMethod_2(arg_1):
+    self.x = arg_1
+    self.z = "z"
+
+  def OneClassMethod_2(arg_1, arg_2):
+    self.x = arg_1
+    self.z = arg_2
+
+  def OneClassMethod_3(arg_1, arg_2):
+    self.x = arg_1
+    self.y = arg_1
+    self.z = arg_2
+
+class TwoClass(OneClass):
+  def TwoClassMethod_1():
+    self.x = 2
+    self.yy = "yy"
+
+  # Переопределение метода OneClassMethod_1(), ранее определённого в родительском классе OneClass.
+  def OneClassMethod_1():
+    self.x = 10
+    self.yyy = "yyy"
+
+  # Новая перегрузка метода OneClassMethod_1(), на этот раз с тремя параметрами.
+  def OneClassMethod_1(arg_1, arg_2, arg_3):
+    self.x = 10
+    self.yyyy = "yyyy"
+
+)--");
+
+        { // Простейшая типовая характеристика для переменной базового класса.
+            std::string simple_type_traits(R"--(
+# Переменные базовых классов.
+# Целое число
+x = 5
+traits_x = TypeTraits(x)
+print traits_x.IsBool(), traits_x.IsNumeric(), traits_x.IsString(), traits_x.Id(), traits_x.Name()
+
+# Строка
+y = "y"
+traits_y = TypeTraits(y)
+print traits_y.IsBool(), traits_y.IsNumeric(), traits_y.IsString(), traits_y.Id(), traits_y.Name()
+
+# Пустое значение None
+traits_none = TypeTraits(None)
+print traits_none.IsBool(), traits_none.IsNumeric(), traits_none.IsString(), traits_none.Id(), traits_none.Name()
+)--");
+            istringstream istr(simple_type_traits);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            // std::cout << ostr.str() << std::endl;
+            std::string etalon_string =
+                "False True False " + std::to_string(NUMERIC_IDENT) + " Number\n" +
+                "False False True " + std::to_string(STRING_IDENT) + " String\n" +
+                "False False False " + std::to_string(NONE_IDENT) + " None\n";
+            ASSERT_EQUAL(ostr.str(), etalon_string);
+        }
+
+        { // Более сложный случай взаимоотношей по родству общих программно-определяемых классов.
+            std::string complex_classes_type_traits(R"--(
+# Тривиальный случай соотношения наследственности между одним и тем же классом.
+var_one_class = OneClass()
+traits_one_class = TypeTraits(var_one_class)
+print traits_one_class.IsBool(), traits_one_class.IsNumeric(), traits_one_class.IsString(), traits_one_class.Name()
+print traits_one_class.IsSuccessorOf(var_one_class), traits_one_class.IsSuccessorOfName("OneClass"), traits_one_class.IsPredecessorOf(var_one_class), traits_one_class.IsPredecessorOfName("OneClass")
+
+var_two_class = TwoClass()
+traits_two_class = TypeTraits(var_two_class)
+print traits_two_class.IsBool(), traits_two_class.IsNumeric(), traits_two_class.IsString(), traits_two_class.Name()
+print traits_two_class.IsSuccessorOf(var_two_class), traits_two_class.IsSuccessorOfName("TwoClass"), traits_two_class.IsPredecessorOf(var_two_class), traits_two_class.IsPredecessorOfName("TwoClass")
+
+# Перекрёстные соотношения родства классов.
+print traits_one_class.IsSuccessorOf(var_two_class), traits_one_class.IsPredecessorOf(var_two_class), traits_one_class.IsSuccessorOfName("TwoClass"), traits_one_class.IsPredecessorOfName("TwoClass")
+print traits_two_class.IsSuccessorOf(var_one_class), traits_two_class.IsPredecessorOf(var_one_class), traits_two_class.IsSuccessorOfName("OneClass"), traits_two_class.IsPredecessorOfName("OneClass")
+)--");
+            istringstream istr(classes_definitions + complex_classes_type_traits);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            // std::cout << ostr.str() << std::endl;
+            std::string etalon_string = "False False False OneClass\nTrue True True True\nFalse False False TwoClass\nTrue True True True\nFalse True False True\nTrue False True False\n";
+            ASSERT_EQUAL(ostr.str(), etalon_string);
+        }
+
+        { // Проверка наличия методов в объекте класса.
+            std::string classes_check_metods(R"--(
+var_one_class = OneClass()
+traits_one_class = TypeTraits(var_one_class)
+var_two_class = TwoClass()
+traits_two_class = TypeTraits(var_two_class)
+
+# С помощью экземпляра отпечатка traits_one_class проверим наличие в классе OneClass некоторых методов.
+print traits_one_class.HasMethod("OneClassMethod_1", 0), traits_one_class.HasMethod("OneClassMethod_1", 1), traits_one_class.HasMethod("OneClassMethod_1", 2), traits_one_class.HasMethod("OneClassMethod_1", 3)
+print traits_one_class.HasMethod("OneClassMethod_2", 0), traits_one_class.HasMethod("OneClassMethod_2", 1), traits_one_class.HasMethod("OneClassMethod_2", 2), traits_one_class.HasMethod("OneClassMethod_2", 3)
+print traits_one_class.HasMethod("OneClassMethod_3", 0), traits_one_class.HasMethod("OneClassMethod_3", 1), traits_one_class.HasMethod("OneClassMethod_3", 2), traits_one_class.HasMethod("OneClassMethod_3", 3)
+print traits_one_class.HasMethod("TwoClassMethod_1", 0), traits_one_class.HasMethod("TwoClassMethod_1", 1), traits_one_class.HasMethod("TwoClassMethod_1", 2), traits_one_class.HasMethod("TwoClassMethod_1", 3)
+
+# А теперь посредством экземпляра отпечатка traits_two_class проверим наличие некоторых методов уже в классе TwoClass.
+print traits_two_class.HasMethod("OneClassMethod_1", 0), traits_two_class.HasMethod("OneClassMethod_1", 1), traits_two_class.HasMethod("OneClassMethod_1", 2), traits_two_class.HasMethod("OneClassMethod_1", 3)
+print traits_two_class.HasMethod("OneClassMethod_2", 0), traits_two_class.HasMethod("OneClassMethod_2", 1), traits_two_class.HasMethod("OneClassMethod_2", 2), traits_two_class.HasMethod("OneClassMethod_2", 3)
+print traits_two_class.HasMethod("OneClassMethod_3", 0), traits_two_class.HasMethod("OneClassMethod_3", 1), traits_two_class.HasMethod("OneClassMethod_3", 2), traits_two_class.HasMethod("OneClassMethod_3", 3)
+print traits_two_class.HasMethod("TwoClassMethod_1", 0), traits_two_class.HasMethod("TwoClassMethod_1", 1), traits_two_class.HasMethod("TwoClassMethod_1", 2), traits_two_class.HasMethod("TwoClassMethod_1", 3)
+)--");
+            istringstream istr(classes_definitions + classes_check_metods);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            // std::cout << ostr.str() << std::endl;
+            std::string etalon_string =
+                // Методы класса OneClass
+                "True False False False\n"s +   // Есть метод OneClassMethod_1(), но нет методов OneClassMethod_1(a), OneClassMethod_1(a, a) и OneClassMethod_1(a, a, a).
+                "False True True False\n"s +    // Есть методы OneClassMethod_2(a) и OneClassMethod_2(a, a), но нет методов OneClassMethod_2() и OneClassMethod_2(a, a, a).
+                "False False True False\n"s +   // Есть метод OneClassMethod_3(a, a), но нет методов OneClassMethod_3(), OneClassMethod_3(a) и OneClassMethod_3(a, a, a).
+                "False False False False\n"s +  // Нет никаких методов TwoClassMethod_1(...), определенных в наследующем классе TwoClass.
+                // Методы класса TwoClass
+                "True False False True\n"s +    // Есть методы OneClassMethod_1() и OneClassMethod_1(a, a, a) (определенный именно в TwoClass), но по-прежнему нет
+                                                // методов OneClassMethod_1(a) и OneClassMethod_1(a, a).
+                "False True True False\n"s +    // Есть метод OneClassMethod_2(a) и OneClassMethod_2(a, a), но нет методов OneClassMethod_2() и OneClassMethod_2(a, a, a).
+                "False False True False\n"s +   // Есть метод OneClassMethod_3(a, a), но нет методов OneClassMethod_3(), OneClassMethod_3(a) и OneClassMethod_3(a, a, a).
+                "True False False False\n"s;    // Есть метод TwoClassMethod_1(), определённый в TwoClass, но нет методов TwoClassMethod_1(a), TwoClassMethod_1(a, a) и
+                                                // TwoClassMethod_1(a, a, a).
+            ASSERT_EQUAL(ostr.str(), etalon_string);
+        }
+
+        { // Проверка наличия полей в объекте класса.
+            std::string classes_check_fields(R"--(
+var_two_class = TwoClass()
+traits_two_class = TypeTraits(var_two_class)
+
+# С помощью экземпляра отпечатка traits_two_class выполняется анализ наличия различных полей в объекте var_two_class класса TwoClass.
+# Начальное состояние - никаких полей нет.
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+# При вызове методов класса в объекте постепенно появляются поля, задействованные в этих методах.
+var_two_class.OneClassMethod_1() # После вызова метода OneClassMethod_1() должны появиться поля x и yyy.
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+var_two_class.TwoClassMethod_1() # После вызова метода TwoClassMethod_1() к ним добавляется поле yy. 
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+# После вызова метода OneClassMethod_1(arg_1, arg_2, arg_3) (перегрузка с тремя аргументами) возникает поле yyyy.
+var_two_class.OneClassMethod_1(1, 2, 3)
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+var_two_class.OneClassMethod_2(1) # После вызова метода OneClassMethod_2(arg_1) добавляется видимое поле z.
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+var_two_class.OneClassMethod_2(1, 2) # После вызова метода OneClassMethod_2(arg_1, arg_2) наличие полей не изменяется.
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+
+var_two_class.OneClassMethod_3(1, 2) # После вызова метода OneClassMethod_3(arg_1, arg_2) проявляется последнее поле - y.
+print traits_two_class.HasField("x"), traits_two_class.HasField("y"), traits_two_class.HasField("z")
+print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_two_class.HasField("yyyy")
+)--");
+            istringstream istr(classes_definitions + classes_check_fields);
+            ostringstream ostr;
+            RunMythonProgram(istr, ostr);
+            // std::cout << ostr.str() << std::endl;
+            std::string etalon_string =
+                // Исходное состояние объекта - полей нет.
+                "False False False\n"s +
+                "False False False\n" +
+                // Вызов OneClassMethod_1(). Видимые поля x и yyy.
+                "True False False\n" +
+                "False True False\n" +
+                // Вызов TwoClassMethod_1(). Видимые поля x, yy, yyy.
+                "True False False\n" +
+                "True True False\n" +
+                // Вызов OneClassMethod_1(arg_1, arg_2, arg_3). Видимые поля x, yy, yyy, yyyy.
+                "True False False\n" +
+                "True True True\n" +
+                // Вызов OneClassMethod_2(arg_1). Видимые поля x, z, yy, yyy, yyyy.
+                "True False True\n" +
+                "True True True\n" +
+                // Вызов OneClassMethod_2(arg_1, arg_2). Видимые поля те же - x, z, yy, yyy, yyyy.
+                "True False True\n" +
+                "True True True\n" +
+                // Вызов OneClassMethod_3(arg_1, arg_2). Видимы все существующие поля - x, y, z, yy, yyy, yyyy.
+                "True True True\n" +
+                "True True True\n"s;
+
+            ASSERT_EQUAL(ostr.str(), etalon_string);
         }
 
     }
@@ -1138,6 +1336,7 @@ coro_instance.resume() #
         RUN_TEST(tr, TestMethodsOverload);
         RUN_TEST(tr, TestTryExceptions);
         RUN_TEST(tr, TestAwaitables);
+        RUN_TEST(tr, TestTypeTraits);
     }
 }  // namespace
 

@@ -98,8 +98,6 @@ namespace ast
     // Присваивает переменной, имя которой задано в параметре var, значение выражения rv.
     class Assignment : public LeftRightStatement
     {
-        friend class CoAwait;
-
     public:
         Assignment(std::string var, std::unique_ptr<Statement> rv);
 
@@ -117,8 +115,6 @@ namespace ast
     // Присваивает полю object.field_name значение выражения rv.
     class FieldAssignment : public LeftRightStatement
     {
-        friend class CoAwait;
-
     public:
         FieldAssignment(VariableValue object, std::string field_name, std::unique_ptr<Statement> rv);
 
@@ -134,6 +130,31 @@ namespace ast
         VariableValue object_;
         std::string field_name_;
         std::unique_ptr<Statement> rv_;
+    };
+
+    // Инструкция удаление простой переменной из таблицы символов.
+    class DeleteVariable : public Statement
+    {
+    public:
+        DeleteVariable(std::string var);
+        // Удаляет переменную var_ из таблицы символов closure.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        std::string var_;
+    };
+
+    // Инструкция удаление поля объекта из его таблицы символов.
+    class DeleteField : public Statement
+    {
+    public:
+        DeleteField(VariableValue object, std::string field_name);
+        // Удаляет поле field_name_ из таблицы символов объекта object_, находящейся внутри таблицы closure.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        VariableValue object_;
+        std::string field_name_;
     };
 
     // Значение None

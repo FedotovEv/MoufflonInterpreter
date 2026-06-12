@@ -32,7 +32,7 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
-    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    [[nodiscard]] std::string GetClassName(void) const override
     {
         return "math";
     }

@@ -46,25 +46,6 @@ const std::string AWAITABLE_SUSPEND_METHOD = "AwaitSuspend";
 const std::string AWAITABLE_RESUME_METHOD = "AwaitResume";
 // Имя класса типового отпечатка (типовых характеристик, TypeTraits) и его внутренних методов.
 const std::string TYPE_TRAITS_CLASS_NAME = "TypeTraits";
-const std::string TYPE_TRAITS_IS_BOOL_METHOD = "IsBool";                // Возвращает "ИСТИНУ", если выражение имеет встроенный логический тип.
-const std::string TYPE_TRAITS_IS_NUMERIC_METHOD = "IsNumeric";          // Возвращает "ИСТИНУ", если выражение имеет встроенный числовой тип.
-const std::string TYPE_TRAITS_IS_STRING_METHOD = "IsString";            // Возвращает "ИСТИНУ", если выражение имеет встроенный строковый тип.
-const std::string TYPE_TRAITS_IS_NONE_METHOD = "IsNone";                // Возвращает "ИСТИНУ", если выражение относится к типу None (пустое).
-const std::string TYPE_TRAITS_IS_SAME_TYPE_METHOD = "IsSameType";       // Возвращает "ИСТИНУ", если выражение имеет тот же тип, что и аргумент метода.
-const std::string TYPE_TRAITS_IS_SAME_TARGET_METHOD = "IsSameTarget";   // Возвращает "ИСТИНУ", если выражение ссылается на ту же область памяти, что и аргумент.
-const std::string TYPE_TRAITS_IS_CLASS_METHOD = "IsClass";              // Возвращает "ИСТИНУ", если имя типа выражения совпадает с аргументом метода.
-const std::string TYPE_TRAITS_IS_SUСCESSOR_OF_METHOD = "IsSuсcessorOf";     // Возвращает "ИСТИНУ", если тип выражения является наследником типа аргумента.
-const std::string TYPE_TRAITS_IS_PREDECESSOR_OF_METHOD = "IsPredecessorOf"; // Возвращает "ИСТИНУ", если тип выражения является предшественником типа аргумента.
-// Возвращает "ИСТИНУ", если тип выражения является наследником типа с именем, указываемым аргументом.
-const std::string TYPE_TRAITS_IS_SUСCESSOR_OF_NAME_METHOD = "IsSuсcessorOfName";
-// Возвращает "ИСТИНУ", если тип выражения является предшественником типа с именем, указываемым аргументом.
-const std::string TYPE_TRAITS_IS_PREDECESSOR_OF_NAME_METHOD = "IsPredecessorOfName";
-const std::string TYPE_TRAITS_ID_METHOD = "Id";                         // Возвращает уникальный целочисленный идент типа.
-const std::string TYPE_TRAITS_NAME_METHOD = "Name";                     // Возвращает символьное имя типа.
-const std::string TYPE_TRAITS_HAS_METHOD_METHOD = "HasMethod";          // Возвращает "ИСТИНУ", если класс (к которому относится выражение) имеет метод, сигнатура
-                                                                        // которого задаётся аргументами метода (их два - имя метода и количество его формальных параметров).
-const std::string TYPE_TRAITS_HAS_FIELD_METHOD = "HasField";            // Возвращает "ИСТИНУ", если класс (к которому относится выражение) имеет поле с именем,
-                                                                        // равным аргументу матода.
 // Иденты встроенных типов.
 constexpr int INVALID_IDENT = -1;
 constexpr int NONE_IDENT = 0;               // Идент типа пустого выражения None.
@@ -81,6 +62,7 @@ namespace runtime
         CALL_REASON_UNKNOWN = 0,
         CALL_REASON_READ_FIELD,
         CALL_REASON_WRITE_FIELD,
+        CALL_REASON_DELETE_FIELD,
         CALL_REASON_CALL_METHOD
     };
 

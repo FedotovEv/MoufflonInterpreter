@@ -47,7 +47,7 @@ namespace runtime
         bool HasMethod(const std::string& method_name, size_t argument_count) const override;
         ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        [[nodiscard]] std::string GetClassName() const override // Возвращает имя данного класса.
         {
             return COMMON_ERROR_CLASS_NAME;
         }
@@ -121,7 +121,7 @@ namespace runtime
     { // Класс ошибки деления на нуль.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        [[nodiscard]] std::string GetClassName() const override // Возвращает имя данного класса.
         {
             return "ErrorDivisionByZero";
         }
@@ -131,7 +131,7 @@ namespace runtime
     { // Ошибка переполнения.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        [[nodiscard]] std::string GetClassName() const override // Возвращает имя данного класса.
         {
             return "OverflowError";
         }
@@ -141,7 +141,7 @@ namespace runtime
     { // Аргумент функции вне области определения.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override // Возвращает имя данного класса.
+        [[nodiscard]] std::string GetClassName() const override // Возвращает имя данного класса.
         {
             return "DomainError";
         }
@@ -151,7 +151,7 @@ namespace runtime
     { // Несогласованность по типу и/или количеству параметров.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override
+        [[nodiscard]] std::string GetClassName() const override
         {
             return "ErrorParamsInconsistency";
         }
@@ -161,7 +161,7 @@ namespace runtime
     { // Общая синтаксическая ошибка.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override
+        [[nodiscard]] std::string GetClassName() const override
         {
             return "SyntaxError";
         }
@@ -171,7 +171,7 @@ namespace runtime
     { // Ошибка при работк с внешними модулями.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override
+        [[nodiscard]] std::string GetClassName() const override
         {
             return "ModuleError";
         }
@@ -181,7 +181,7 @@ namespace runtime
     { // Общая логическая ошибка.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override
+        [[nodiscard]] std::string GetClassName() const override
         {
             return "LogicError";
         }
@@ -191,7 +191,7 @@ namespace runtime
     { // Ошибка при работе со ссылками.
     public:
         using CommonError::CommonError;
-        std::string GetClassName() const override
+        [[nodiscard]] std::string GetClassName() const override
         {
             return "ReferenceError";
         }

@@ -8,6 +8,7 @@ namespace runtime
 {
     RuntimeError CreateErrorObject(const ProgramCommandDescriptor& command_desc, ThrowMessageNumber msg_num, const std::string& except_text)
     {
+        std::string use_except_text = !except_text.empty() ? except_text : ThrowMessages::GetThrowText(msg_num);
         switch (msg_num)
         {
             // Различные типы несогласованности параметров по типу или количеству.
@@ -48,7 +49,7 @@ namespace runtime
         case ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IN_METHOD:
-            return RuntimeError(ObjectHolder::Own(ErrorParamsInconsistency(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(ErrorParamsInconsistency(msg_num, command_desc, use_except_text)));
             // Синтаксические ошибки.
         case ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION:
             [[fallthrough]];
@@ -77,19 +78,19 @@ namespace runtime
         case ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE:
-            return RuntimeError(ObjectHolder::Own(SyntaxError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(SyntaxError(msg_num, command_desc, use_except_text)));
             // Неверная работа со ссылками.
         case ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR:
-            return RuntimeError(ObjectHolder::Own(ReferenceError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(ReferenceError(msg_num, command_desc, use_except_text)));
             // Деление на нуль.
         case ThrowMessageNumber::THRM_DIVISION_BY_ZERO:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MODULO_DIVISION_BY_ZERO:
-            return RuntimeError(ObjectHolder::Own(ErrorDivisionByZero(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(ErrorDivisionByZero(msg_num, command_desc, use_except_text)));
             // Неопределённые или недопустимые операции.
         case ThrowMessageNumber::THRM_IMPOSSIBLE_ADDITION:
             [[fallthrough]];
@@ -106,7 +107,7 @@ namespace runtime
         case ThrowMessageNumber::THRM_IMPOSSIBLE_MODULO_DIVISION:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INVALID_PARAM_VALUE:
-            return RuntimeError(ObjectHolder::Own(DomainError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(DomainError(msg_num, command_desc, use_except_text)));
             // Некорректная работа со встроенными классами.
         case ThrowMessageNumber::THRM_INVALID_ARRAY_INDEX:
             [[fallthrough]];
@@ -123,7 +124,7 @@ namespace runtime
         case ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_ERASE:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_ITERATOR_INVALID:
-            return RuntimeError(ObjectHolder::Own(LogicError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(LogicError(msg_num, command_desc, use_except_text)));
             // Неверная работа с подключением внешних модулей - в исходниках или двоичных("втыкал").
         case ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME:
             [[fallthrough]];
@@ -134,14 +135,14 @@ namespace runtime
         case ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS:
-            return RuntimeError(ObjectHolder::Own(ModuleError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(ModuleError(msg_num, command_desc, use_except_text)));
             // Прочие ошибки.
         case ThrowMessageNumber::THRM_RAISE_CALL:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_URGENT_TERMINATE:
             [[fallthrough]];
         default:
-            return RuntimeError(ObjectHolder::Own(CommonError(msg_num, command_desc, except_text)));
+            return RuntimeError(ObjectHolder::Own(CommonError(msg_num, command_desc, use_except_text)));
         }
     }
 

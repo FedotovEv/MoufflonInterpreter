@@ -54,7 +54,8 @@ namespace ast
             throw ParseError(ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM);
     }
 
-    // Возвращает объект, содержащий значение типа TypeTraits, представляющее собой характеристический тип для .
+    // Возвращает объект, содержащий значение типа TypeTraits, представляющее собой характеристический тип для значения первого
+    // аргумента args_[0], ранее переданного в конструктор данного класса.
     runtime::ObjectHolder NewTypeTraits::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -870,16 +871,87 @@ namespace runtime
     // Таблица внешних методов этого специального класса, доступного из МУФЛОН-программы.
     const std::unordered_map<std::string_view, TypeTraitsInstance::TypeTraitsCallMethod> TypeTraitsInstance::type_traits_method_table_
     {
-
+        {"is_bool"sv, &TypeTraitsInstance::MethodIsBool},
+        {"IsBool"sv, &TypeTraitsInstance::MethodIsBool},
+        {"is_numeric"sv, &TypeTraitsInstance::MethodIsNumeric},
+        {"IsNumeric"sv, &TypeTraitsInstance::MethodIsNumeric},
+        {"is_string"sv, &TypeTraitsInstance::MethodIsString},
+        {"IsString"sv, &TypeTraitsInstance::MethodIsString},
+        {"is_none"sv, &TypeTraitsInstance::MethodIsNone},
+        {"IsNone"sv, &TypeTraitsInstance::MethodIsNone},
+        {"is_same_type"sv, &TypeTraitsInstance::MethodIsSameType},
+        {"IsSameType"sv, &TypeTraitsInstance::MethodIsSameType},
+        {"is_same_target"sv, &TypeTraitsInstance::MethodIsSameTarget},
+        {"IsSameTarget"sv, &TypeTraitsInstance::MethodIsSameTarget},
+        {"is_class"sv, &TypeTraitsInstance::MethodIsClass},
+        {"IsClass"sv, &TypeTraitsInstance::MethodIsClass},
+        {"is_successor_of"sv, &TypeTraitsInstance::MethodIsSuсcessorOf},
+        {"IsSuccessorOf"sv, &TypeTraitsInstance::MethodIsSuсcessorOf},
+        {"is_predecessor_of"sv, &TypeTraitsInstance::MethodIsPredecessorOf},
+        {"IsPredecessorOf"sv, &TypeTraitsInstance::MethodIsPredecessorOf},
+        {"is_successor_of_name"sv, &TypeTraitsInstance::MethodIsSuсcessorOfName},
+        {"IsSuccessorOfName"sv, &TypeTraitsInstance::MethodIsSuсcessorOfName},
+        {"is_predecessor_of_name"sv, &TypeTraitsInstance::MethodIsPredecessorOfName},
+        {"IsPredecessorOfName"sv, &TypeTraitsInstance::MethodIsPredecessorOfName},
+        {"id"sv, &TypeTraitsInstance::MethodId},
+        {"Id"sv, &TypeTraitsInstance::MethodId},
+        {"name"sv, &TypeTraitsInstance::MethodName},
+        {"Name"sv, &TypeTraitsInstance::MethodName},
+        {"has_method"sv, &TypeTraitsInstance::MethodHasMethod},
+        {"HasMethod"sv, &TypeTraitsInstance::MethodHasMethod},
+        {"has_field"sv, &TypeTraitsInstance::MethodHasField},
+        {"HasField"sv, &TypeTraitsInstance::MethodHasField}
     };
+
     // Описание аргументов внешних методов этого класса.
     const std::unordered_map<std::string_view, std::pair<size_t, size_t>> TypeTraitsInstance::type_traits_method_argument_count_
     {
-
+        {"is_bool"sv, {0, 0}},
+        {"IsBool"sv, {0, 0}},
+        {"is_numeric"sv, {0, 0}},
+        {"IsNumeric"sv, {0, 0}},
+        {"is_string"sv, {0, 0}},
+        {"IsString"sv, {0, 0}},
+        {"is_none"sv, {0, 0}},
+        {"IsNone"sv, {0, 0}},
+        {"is_same_type"sv, {1, 1}},
+        {"IsSameType"sv, {1, 1}},
+        {"is_same_target"sv, {1, 1}},
+        {"IsSameTarget"sv, {1, 1}},
+        {"is_class"sv, {1, 1}},
+        {"IsClass"sv, {1, 1}},
+        {"is_successor_of"sv, {1, 1}},
+        {"IsSuccessorOf"sv, {1, 1}},
+        {"is_predecessor_of"sv, {1, 1}},
+        {"IsPredecessorOf"sv, {1, 1}},
+        {"is_successor_of_name"sv, {1, 1}},
+        {"IsSuccessorOfName"sv, {1, 1}},
+        {"is_predecessor_of_name"sv, {1, 1}},
+        {"IsPredecessorOfName"sv, {1, 1}},
+        {"id"sv, {0, 0}},
+        {"Id"sv, {0, 0}},
+        {"name"sv, {0, 0}},
+        {"Name"sv, {0, 0}},
+        {"has_method"sv, {2, 2}},
+        {"HasMethod"sv, {2, 2}},
+        {"has_field"sv, {1, 1}},
+        {"HasField"sv, {1, 1}}
     };
+
     // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
     std::unordered_map<std::string, int> TypeTraitsInstance::internal_classes_ids_;
     std::unordered_map<std::string, ast::ClassDefinition*> TypeTraitsInstance::declared_classes_def_;
+
+    // Определение методов класса TypeTraitsInstance.
+
+    TypeTraitsInstance::TypeTraitsInstance(ObjectHolder traits_value) : traits_value_(move(traits_value))
+    {}
+
+    void TypeTraitsInstance::Print(std::ostream& os, Context& context)
+    {
+        os << "Типовая характеристика TypeTraits : ID - " << ObjectIdInternal(traits_value_)
+           << " - Name - " << ObjectNameInternal(traits_value_);
+    }
 
     ObjectHolder TypeTraitsInstance::Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                                           Context& context, const std::string& parent_name)
@@ -905,7 +977,7 @@ namespace runtime
 
     void TypeTraitsInstance::AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def)
     {
-        declared_classes_def_.emplace(std::pair{ class_name, class_def });
+        declared_classes_def_.emplace(std::pair{class_name, class_def});
     }
 
     int TypeTraitsInstance::ObjectIdInternal(const ObjectHolder& what_id)
@@ -950,26 +1022,37 @@ namespace runtime
 
     ObjectHolder TypeTraitsInstance::MethodIsBool(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<runtime::Bool>()));
+        CheckMethodParams(context, "IsBool"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::Bool>()));
     }
     
     ObjectHolder TypeTraitsInstance::MethodIsNumeric(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<runtime::Number>()));
+        CheckMethodParams(context, "IsNumeric"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::Number>()));
     }
     
     ObjectHolder TypeTraitsInstance::MethodIsString(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<runtime::String>()));
+        CheckMethodParams(context, "IsString"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::String>()));
     }
     
     ObjectHolder TypeTraitsInstance::MethodIsNone(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return ObjectHolder::Own(Bool(!actual_args[0]));
+        CheckMethodParams(context, "IsNone"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(Bool(!traits_value_));
     }
     
     ObjectHolder TypeTraitsInstance::MethodIsSameType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "IsSameType"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
         int traits_value_id = ObjectIdInternal(traits_value_);
         int actual_arg_id = ObjectIdInternal(actual_args[0]);
         if (traits_value_id < 0 || actual_arg_id < 0)
@@ -980,6 +1063,9 @@ namespace runtime
     
     ObjectHolder TypeTraitsInstance::MethodIsSameTarget(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "IsSameTarget"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
         if (!traits_value_)
         { // Характеризуемый объект пуст.
             return ObjectHolder::Own(Bool(!actual_args[0]));
@@ -995,16 +1081,22 @@ namespace runtime
     // Проверка на совпадение истинного имени характеризуемого класса и строкового аргумента метода.
     ObjectHolder TypeTraitsInstance::MethodIsClass(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        String* traits_name = traits_value_.TryAs<String>();
+        CheckMethodParams(context, "IsClass"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+
+        std::string traits_name = ObjectNameInternal(traits_value_);
         String* test_class_name = actual_args[0].TryAs<String>();
 
-        if (!traits_name || !test_class_name || traits_name->GetValue().empty() || test_class_name->GetValue().empty())
+        if (!test_class_name || traits_name.empty() || test_class_name->GetValue().empty())
             return ObjectHolder::Own(Bool(false));
-        return ObjectHolder::Own(Bool(traits_name->GetValue() == test_class_name->GetValue()));
+        return ObjectHolder::Own(Bool(traits_name == test_class_name->GetValue()));
     }
     
     ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "IsSuсcessorOf"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
         runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
         runtime::CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<runtime::CommonClassInstance>();
         if (!traits_common_class_instance || !test_common_class_instance)
@@ -1023,6 +1115,9 @@ namespace runtime
     
     ObjectHolder TypeTraitsInstance::MethodIsPredecessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "IsPredecessorOf"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
         runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
         runtime::CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<runtime::CommonClassInstance>();
         if (!traits_common_class_instance || !test_common_class_instance)
@@ -1039,17 +1134,17 @@ namespace runtime
             return ObjectHolder::Own(Bool(test_common_class_instance->IsSuccessorOf(traits_class_instance->GetBaseClass())));
     }
     
-    // Проверка предположения, что мы являемся потомком (наследником) класса выражения, являющегося первым фактическим аргументом этого метода.
+    // Проверка предположения, что мы являемся потомком (наследником) класса, имя которого является первым фактическим аргументом этого метода.
     ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        // Фактический параметр должен быть строковым и единственным - имя класса, предположительно, нашего предка.
+        CheckMethodParams(context, "IsSuсcessorOfName"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+
+        String* test_our_predecessor_class_name = actual_args[0].TryAs<String>();
         runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
         if (!traits_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Наше значение не класс, оно не участвует в наследственных отношениях.
-
-        String* test_our_predecessor_class_name = actual_args[0].TryAs<String>();
-        if (!test_our_predecessor_class_name)
-            // Неверный тип фактического параметра метода (должна быть строка с именем класса - предположительно, нашего предка).
-            return ObjectHolder::Own(Bool(false));
 
         return ObjectHolder::Own(Bool(traits_common_class_instance->IsSuccessorOf(test_our_predecessor_class_name->GetValue())));
     }
@@ -1057,16 +1152,17 @@ namespace runtime
     // Проверка того, являемся ли мы предшественником класса (а он, соответственно, нашим потомком) с именем, заданным аргументом данного метода.
     ObjectHolder TypeTraitsInstance::MethodIsPredecessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        // Фактический параметр должен быть строковым и единственным - имя класса, предположительно, нашего потомка.
+        CheckMethodParams(context, "IsPredecessorOfName"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+
+        String* test_our_successor_class_ptr = actual_args[0].TryAs<String>();
+        std::string test_our_successor_class_name = test_our_successor_class_ptr->GetValue();
+
         runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
         if (!traits_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Наше значение не класс, оно не участвует в наследственных отношениях.        
         
-        String* test_our_successor_class_ptr = actual_args[0].TryAs<String>();
-        if (!test_our_successor_class_ptr)
-            // Неверный тип фактического параметра метода (должна быть строка с именем класса - предположительно, нашего потомка).
-            return ObjectHolder::Own(Bool(false));
-        std::string test_our_successor_class_name = test_our_successor_class_ptr->GetValue();
-
         auto test_internal_class_it = internal_classes_ids_.find(test_our_successor_class_name);
         if (test_internal_class_it != internal_classes_ids_.end())
             // Предположительный потомок является встроенным классом исполнительской среды. Отношения типа "предок-потомок" между такими классами
@@ -1094,37 +1190,45 @@ namespace runtime
     
     ObjectHolder TypeTraitsInstance::MethodId(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "Id"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
         return ObjectHolder::Own(Number(ObjectIdInternal(traits_value_)));
     }
     
     ObjectHolder TypeTraitsInstance::MethodName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "Name"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
         return ObjectHolder::Own(String(ObjectNameInternal(traits_value_)));
     }
     
     ObjectHolder TypeTraitsInstance::MethodHasMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        runtime::CommonClassInstance* common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
-        if (!common_class_instance)
-            return ObjectHolder::Own(Bool(false));  // Это не класс. Стандартные типы не имеют никаких методов.
-
+        CheckMethodParams(context, "HasMethod"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_NUMERIC_STRING, 2, actual_args);
         String* find_method_name = actual_args[0].TryAs<String>();
         Number* find_method_param_count = actual_args[1].TryAs<Number>();
         if (!find_method_name || !find_method_param_count)
-            return ObjectHolder::Own(Bool(false));  // Недопустимый тип фактических параметров данного метода.
+            // Недопустимый тип фактических параметров данного метода.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY,
+                              "Недопустимые параметры метода HasMethod() - должны быть (строка, число)");
+
+        runtime::CommonClassInstance* common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        if (!common_class_instance)
+            return ObjectHolder::Own(Bool(false));  // Это не класс. Стандартные типы не имеют никаких методов.
 
         return ObjectHolder::Own(Bool(common_class_instance->HasMethod(find_method_name->GetValue(), find_method_param_count->GetIntValue())));
     }
     
     ObjectHolder TypeTraitsInstance::MethodHasField(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
+        CheckMethodParams(context, "HasField"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+
+        String* find_field_name = actual_args[0].TryAs<String>();
         runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
         if (!class_instance)
             return ObjectHolder::Own(Bool(false));  // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
-
-        String* find_field_name = actual_args[0].TryAs<String>();
-        if (!find_field_name)
-            return ObjectHolder::Own(Bool(false));  // Недопустимый тип фактических параметров данного метода.
 
         return ObjectHolder::Own(Bool(class_instance->Fields().contains(find_field_name->GetValue())));
     }

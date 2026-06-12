@@ -405,8 +405,8 @@ namespace runtime
                         return &test_method; // Метод test_method имеет точно затребованное количество параметров.
                 }
             }
-            
-            current_class = &current_class->parent_;
+            // В данном звене цепи наследования затребованного метода не найдено. Попробуем отыскать нужный метод среди вышестоящих предков.
+            current_class = &current_class->parent_;    // Переходим к следующему предку иерархии наследования.
         }
         return ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
     }

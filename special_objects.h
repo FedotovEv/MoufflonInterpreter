@@ -69,7 +69,7 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
-    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    [[nodiscard]] std::string GetClassName(void) const override
     {
         return "array";
     }
@@ -131,7 +131,7 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
-    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    [[nodiscard]] std::string GetClassName(void) const override
     {
         return "map";
     }
@@ -222,7 +222,7 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
-    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    [[nodiscard]] std::string GetClassName(void) const override
     {
         return "coroutine";
     }
@@ -346,10 +346,10 @@ public:
         IsSameType(other);                  // Возвращает "ИСТИНУ", если выражение имеет тот же тип, что и аргумент метода.
         IsSameTarget(other);                // Возвращает "ИСТИНУ", если выражение ссылается на ту же область памяти, что и аргумент.
         IsClass(type_name);                 // Возвращает "ИСТИНУ", если имя типа выражения совпадает с аргументом метода.
-        IsSuсcessor(other);                 // Возвращает "ИСТИНУ", если тип выражения является наследником типа аргумента.
-        IsPredecessor(other);               // Возвращает "ИСТИНУ", если тип выражения является предшественником типа аргумента.        
-        IsSuсcessorName(type_name);         // Возвращает "ИСТИНУ", если тип выражения является наследником типа с именем, указываемым аргументом.        
-        IsPredecessorName(type_name);       // Возвращает "ИСТИНУ", если тип выражения является предшественником типа с именем, указываемым аргументом.
+        IsSuсcessorOf(other);               // Возвращает "ИСТИНУ", если тип выражения является наследником типа аргумента.
+        IsPredecessorOf(other);             // Возвращает "ИСТИНУ", если тип выражения является предшественником типа аргумента.        
+        IsSuсcessorOfName(type_name);       // Возвращает "ИСТИНУ", если тип выражения является наследником типа с именем, указываемым аргументом.        
+        IsPredecessorOfName(type_name);     // Возвращает "ИСТИНУ", если тип выражения является предшественником типа с именем, указываемым аргументом.
         Id();                               // Возвращает уникальный целочисленный идент типа.
         Name();                             // Возвращает символьное имя типа.
         HasMethod(method_name, params_count);   // Возвращает "ИСТИНУ", если класс (к которому относится выражение) имеет метод, сигнатура
@@ -360,7 +360,7 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count) const override;
 
-    [[nodiscard]] std::string runtime::CommonClassInstance::GetClassName(void) const override
+    [[nodiscard]] std::string GetClassName(void) const override
     {
         return "TypeTraits";
     }

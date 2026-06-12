@@ -211,6 +211,39 @@ namespace ast
         return coro_coords;
     }
 
+    // Конструктор инструкции - удалителя простой переменной.
+    DeleteVariable::DeleteVariable(std::string var) : var_(move(var))
+    {}
+    
+    // Удаляет переменную var_ из таблицы символов closure.
+    runtime::ObjectHolder DeleteVariable::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        return runtime::ObjectHolder::Own(runtime::Bool(closure.erase(var_)));
+    }
+
+    // Конструктор оператора-удалителя поля объекта класса, экземпляр которого существет внутри общей таблицы символов.
+    DeleteField::DeleteField(VariableValue object, std::string field_name) : object_(move(object)), field_name_(move(field_name))
+    {}
+    
+    // Удаляет поле field_name_ из таблицы символов объекта object_, находящейся внутри таблицы closure.
+    runtime::ObjectHolder DeleteField::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        runtime::ClassInstance* target_object_ptr = nullptr;
+        if (ObjectHolder target_object_holder = object_.Execute(closure, context))
+            target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
+
+        if (target_object_ptr)
+        {
+            if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
+                context.GetExternalLinkage() && field_name_.size())
+                // Вызов звонковой функции при удалении некоторого поля объекта "__external".
+                context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_DELETE_FIELD, field_name_, {});
+
+            return runtime::ObjectHolder::Own(runtime::Bool((target_object_ptr->Fields()).erase(field_name_)));
+        }
+        return {};
+    }
+
     Assignment::Assignment(std::string var, std::unique_ptr<Statement> rv) : var_(move(var)), rv_(move(rv))
     {}
 
