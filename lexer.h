@@ -49,6 +49,7 @@ namespace parse
         struct Break {};     // Лексема "break"
         struct Continue {};  // Лексема "continue"
         struct Pass {};      // Лексема "pass"
+        struct Delete {};    // Лексема "del"
         // Лексемы обслуживания системы обработки исключений.
         struct Try {};       // Лексема "try"
         struct Except {};    // Лексема "except"
@@ -84,7 +85,7 @@ namespace parse
                        token_type::String, token_type::Class,
                        token_type::Return, token_type::CoYield, token_type::ReturnRef, token_type::CoYieldRef, token_type::CoAwait,
                        token_type::If, token_type::Else,
-                       token_type::While, token_type::Break, token_type::Continue, token_type::Pass,
+                       token_type::While, token_type::Break, token_type::Continue, token_type::Pass, token_type::Delete,
                        token_type::Try, token_type::Except, token_type::Finally, token_type::As, token_type::Raise,
                        token_type::Def, token_type::Newline,
                        token_type::Print, token_type::Import, token_type::Include,

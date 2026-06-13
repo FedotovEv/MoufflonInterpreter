@@ -70,7 +70,8 @@ namespace runtime
     };
 
     class CommonClassInstance;
-    // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе
+    // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе.
+    // Все хранимые объекты полагаются потомками Object.
     class ObjectHolder
     {
     public:
@@ -79,28 +80,28 @@ namespace runtime
 
         // Возвращает ObjectHolder, владеющий объектом типа T
         // Тип T - конкретный класс-наследник Object.
-        // object копируется или перемещается в кучу
+        // object копируется или перемещается в кучу.
         template <typename T>
         [[nodiscard]] static ObjectHolder Own(T&& object)
         {
             return ObjectHolder(std::make_shared<T>(std::forward<T>(object)));
         }
 
-        // Создаёт ObjectHolder, не владеющий объектом (аналог слабой ссылки)
+        // Создаёт ObjectHolder, не владеющий объектом (аналог слабой ссылки).
         [[nodiscard]] static ObjectHolder Share(Object& object);
-        // Создаёт пустой ObjectHolder, соответствующий значению None
+        // Создаёт пустой ObjectHolder, соответствующий значению None.
         [[nodiscard]] static ObjectHolder None();
 
         // Возвращает ссылку на Object внутри ObjectHolder.
-        // ObjectHolder должен быть непустым
+        // ObjectHolder должен быть непустым.
         Object& operator*() const;
 
         Object* operator->() const;
 
-        [[nodiscard]] Object* Get() const;
+        [[nodiscard]] Object* Get() const noexcept;
 
         // Возвращает указатель на объект типа T либо nullptr, если внутри ObjectHolder не хранится
-        // объект данного типа
+        // объект данного типа.
         template <typename T>
         [[nodiscard]] T* TryAs() const
         {
@@ -108,22 +109,25 @@ namespace runtime
         }
 
         // Возвращает true, если ObjectHolder не пуст.
-        explicit operator bool() const;
+        explicit operator bool() const noexcept;
 
         // Возвращает "ИСТИНУ", если указатель владеющий.
-        bool IsOwning() const;
+        bool IsOwning() const noexcept;
         
         // Модифицирует содержимое объекта, перенацеливая указатель data_ на тот объект,
         // на который указывает data_ внутри аргумента object_holder.
         void ModifyData(const ObjectHolder& object_holder);
+
+        // Возврат количества ссылок на объект, указатель на который хранится в данном вместилище.
+        long UseCount() const noexcept;
         
     private:
         explicit ObjectHolder(std::shared_ptr<Object> data);
-        bool IsOwning(const std::shared_ptr<Object>& test_ptr) const;
+        bool IsOwning(const std::shared_ptr<Object>& test_ptr) const noexcept;
         void AssertIsValid() const;
 
         // Пустой удалитель, применяемый для невладеющих вместилищ, возвращаемых методом Share().
-        static void empty_deleter(Object*)
+        static void EmptyDeleter(Object*) noexcept
         {}  // Не делает ничего. Абсолютно ничего.
 
         std::shared_ptr<Object> data_;

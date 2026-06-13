@@ -1267,6 +1267,7 @@ namespace
         //               | break
         //               | continue
         //               | pass
+        //               | del DottedIds
         //               | AssignmentOrCall
         std::optional<unique_ptr<ast::Statement>> ParseSimpleStatement()
         {
@@ -1360,6 +1361,20 @@ namespace
                     args = ParseTestList();
 
                 return exec_factory_.Create(ast::Print(std::move(args)));
+            }
+
+            if (tok.Is<ITokenType::Delete>())
+            { // Разбор оператора del - удаление объекта из области видимости (таблицы символов).
+                lexer_.NextToken();
+                vector<string> id_list = ParseDottedIds();
+                string last_name = id_list.back();
+                id_list.pop_back();
+
+                if (id_list.empty()) // Это удаление свободной переменной (не поля объекта) по имени last_name.
+                    return exec_factory_.Create(ast::DeleteVariable(std::move(last_name)));
+
+                return exec_factory_.Create(ast::DeleteField    // Это удаление поля last_name объекта с (составным) именем id_list.
+                    (exec_factory_.CreateTemp(ast::VariableValue{std::move(id_list)}), std::move(last_name)));
             }
 
             if (tok.Is<ITokenType::Break>())

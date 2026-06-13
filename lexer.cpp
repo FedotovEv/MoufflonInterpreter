@@ -25,6 +25,7 @@ namespace parse
          {"break"s, token_type::Break{}},
          {"continue"s, token_type::Continue{}},
          {"pass"s, token_type::Pass{}},
+         {"del"s, token_type::Delete{}},
         // Специальные лексемы обработки исключений.
          {"try"s, token_type::Try{}},
          {"except"s, token_type::Except{}},

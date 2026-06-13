@@ -32,7 +32,7 @@ namespace runtime
     ObjectHolder ObjectHolder::Share(Object& object)
     {
         // Возвращаем невладеющий shared_ptr (его удалитель ничего не делает).
-        return ObjectHolder(std::shared_ptr<Object>(&object, empty_deleter));
+        return ObjectHolder(std::shared_ptr<Object>(&object, EmptyDeleter));
     }
 
     ObjectHolder ObjectHolder::None()
@@ -52,7 +52,7 @@ namespace runtime
         return Get();
     }
 
-    Object* ObjectHolder::Get() const
+    Object* ObjectHolder::Get() const noexcept
     {
         return data_.get();
     }
@@ -62,22 +62,27 @@ namespace runtime
         data_ = object_holder.data_;
     }
 
-    ObjectHolder::operator bool() const
+    long ObjectHolder::UseCount() const noexcept
+    {
+        return data_.use_count();
+    }
+
+    ObjectHolder::operator bool() const noexcept
     {
         return Get() != nullptr;
     }
 
-    bool ObjectHolder::IsOwning() const
+    bool ObjectHolder::IsOwning() const noexcept
     {
         return IsOwning(data_);
     }
 
-    bool ObjectHolder::IsOwning(const std::shared_ptr<Object>& test_ptr) const
+    bool ObjectHolder::IsOwning(const std::shared_ptr<Object>& test_ptr) const noexcept
     {
         if (!test_ptr)
             return false;
         if (auto data_del_p = std::get_deleter<void(*)(Object*)>(test_ptr))
-            return *data_del_p != empty_deleter;
+            return *data_del_p != EmptyDeleter;
         else
             return true;
     }

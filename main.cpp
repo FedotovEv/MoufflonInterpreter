@@ -867,7 +867,7 @@ print x << y, x << y + 1, x >> y, x >> y - 1
 
     void TestIsSameTarget()
     {
-        { // Проверка верности работы функции is_same_target() (или, что то же IsSameTarget()).
+        { // Проверка верности работы функции is_same_target() (или, что то же, IsSameTarget()).
             istringstream istr(R"--(
 x = 254
 y = x
@@ -1303,6 +1303,35 @@ print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_
 
     }
 
+    void TestClassDestructor()
+    {
+        { // Проверка вызова деструктора класса при уничтожении последней ссылки на него.
+            istringstream class_with_dtor(R"--(
+class OneClass:
+  def __init__(a):
+    self.var = a
+
+  def __destroy__():
+    print "Destructor :", self.var
+
+z1_1 = OneClass(1)
+z1_2 = z1_1
+z1_3 = z1_1
+# Удаляем ссылки на объект по одной.
+del z1_3
+print "z1_3"
+del z1_1
+print "z1_1"
+del z1_2    # Тут должен быть вызван деструктор класса.
+print "z1_2"
+)--");
+            ostringstream ostr;
+            RunMythonProgram(class_with_dtor, ostr);
+            // std::cout << ostr.str() << std::endl;
+            ASSERT_EQUAL(ostr.str(), "z1_3\nz1_1\nDestructor : 1\nz1_2\n");
+        }
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -1337,6 +1366,7 @@ print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_
         RUN_TEST(tr, TestTryExceptions);
         RUN_TEST(tr, TestAwaitables);
         RUN_TEST(tr, TestTypeTraits);
+        RUN_TEST(tr, TestClassDestructor);
     }
 }  // namespace
 

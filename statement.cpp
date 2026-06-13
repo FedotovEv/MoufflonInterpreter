@@ -16,6 +16,39 @@ using runtime::Context;
 using runtime::DebugContext;
 using runtime::ObjectHolder;
 
+/**
+*   \brief      Вызывает метод-деструктор объекта, на который ссылается deleting_holder, если это требуется.
+*   \details    Условия вызова деструктора: вместилище содержит экземпляр класса, а не элементарный тип, этот класс
+*               определяет метод-деструктор и удаляемое вместилище является последним (единственным), указывающим
+*               на этот объект.
+*/
+void CallDestroyIfNeed(ObjectHolder& deleting_holder, Context& context)
+{
+    if (deleting_holder && deleting_holder.UseCount() <= 1)
+    { // Это единственный оставшийся экземпляр объекта, на который указывает deleting_holder. Возможно, нужно вызвать
+      // его внутренний метод-деструктор.
+        if (runtime::CommonClassInstance* common_class = deleting_holder.TryAs<runtime::CommonClassInstance>())
+        { // Готовится к удалению именно объект, который может содержать метод-деструктор.
+            if (common_class->HasMethod(DESTROY_METHOD, 0))
+                // Все условия выполнены - вызываем внутренний деструктор класса.
+                common_class->Call(DESTROY_METHOD, {}, context);
+        }
+    }
+}
+
+/**
+*   \brief      Вызывает метод-деструктор объекта, содержащегося в таблице символов use_closure с ключом var_name,
+*               если это требуется.
+*   \details    Условия необходимости вызова внутреннего деструктора прежние, как и в предыдущей перегрузке данной функции.
+*/
+void CallDestroyIfNeed(Closure& use_closure, const std::string& var_name, Context& context)
+{
+    auto closure_it = use_closure.find(var_name);
+    if (closure_it == use_closure.end())
+        return;
+    CallDestroyIfNeed(closure_it->second, context);
+}
+
 void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context& context)
 {
     if (DebugContext* dbg_context = dynamic_cast<DebugContext*>(&context))
@@ -218,6 +251,8 @@ namespace ast
     // Удаляет переменную var_ из таблицы символов closure.
     runtime::ObjectHolder DeleteVariable::Execute(runtime::Closure& closure, runtime::Context& context)
     {
+        PrepareExecute(this, closure, context);
+        CallDestroyIfNeed(closure, var_, context);
         return runtime::ObjectHolder::Own(runtime::Bool(closure.erase(var_)));
     }
 
@@ -228,6 +263,8 @@ namespace ast
     // Удаляет поле field_name_ из таблицы символов объекта object_, находящейся внутри таблицы closure.
     runtime::ObjectHolder DeleteField::Execute(runtime::Closure& closure, runtime::Context& context)
     {
+        PrepareExecute(this, closure, context);
+
         runtime::ClassInstance* target_object_ptr = nullptr;
         if (ObjectHolder target_object_holder = object_.Execute(closure, context))
             target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
@@ -239,7 +276,9 @@ namespace ast
                 // Вызов звонковой функции при удалении некоторого поля объекта "__external".
                 context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_DELETE_FIELD, field_name_, {});
 
-            return runtime::ObjectHolder::Own(runtime::Bool((target_object_ptr->Fields()).erase(field_name_)));
+            runtime::Closure& local_closure = target_object_ptr->Fields();
+            CallDestroyIfNeed(local_closure, field_name_, context);
+            return runtime::ObjectHolder::Own(runtime::Bool(local_closure.erase(field_name_)));
         }
         return {};
     }
@@ -249,8 +288,7 @@ namespace ast
 
     ObjectHolder Assignment::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, closure, context);
-        return closure[var_] = rv_->Execute(closure, context);
+        return ExecuteLeft(ExecuteRight(closure, context), closure, context);
     }
 
     // Исполнение (вычисление) правой части оператора присваивания простой (свободной) переменной.
@@ -265,6 +303,7 @@ namespace ast
     runtime::ObjectHolder Assignment::ExecuteLeft
         (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
     {
+        CallDestroyIfNeed(closure, var_, context);
         return closure[var_] = move(right_result);
     }
 
@@ -272,28 +311,15 @@ namespace ast
         (std::unique_ptr<Statement> left_method_call, std::unique_ptr<Statement> rv, std::string parent_name) :
         left_method_call_(move(left_method_call)), rv_(move(rv)), parent_name_(move(parent_name))
     {
-        // Для вызова метода в левой части оператора косвенного присваивания ожидается именно ссылка на целевое поле,
-        // поэтому автоматическое разыменование таких ссылок тут нужно отключить.
+        // Для вызова метода в левой части оператора косвенного присваивания ожидается именно указатель на целевое поле,
+        // поэтому автоматическое разыменование таких указателей тут нужно отключить.
         if (MethodCall* left_method_ptr = dynamic_cast<MethodCall*>(left_method_call_.get()))
             left_method_ptr->SetDereferenceFlag(false);
     }
 
     ObjectHolder IndirectAssignment::Execute(Closure& closure, Context& context)
     {
-        PrepareExecute(this, closure, context);
-        ObjectHolder target_field = left_method_call_->Execute(closure, context);
-        runtime::PointerObject* target_ptr = target_field.TryAs<runtime::PointerObject>();
-        if (target_ptr)
-        {
-            if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
-                deref_ptr->ModifyData(rv_->Execute(closure, context));
-        }
-        else
-        {
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR);
-        }
-
-        return target_field;
+        return ExecuteLeft(ExecuteRight(closure, context), closure, context);
     }
 
     runtime::ObjectHolder IndirectAssignment::ExecuteRight(runtime::Closure& closure, runtime::Context& context)
@@ -311,7 +337,10 @@ namespace ast
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR);
 
         if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
+        {
+            CallDestroyIfNeed(*deref_ptr, context);
             deref_ptr->ModifyData(move(right_result));
+        }
 
         return target_field;
     }
@@ -880,24 +909,7 @@ namespace ast
 
     ObjectHolder FieldAssignment::Execute(Closure& closure, Context& context)
     { // Присваивает полю object.field_name значение выражения rv.
-        PrepareExecute(this, closure, context);
-        runtime::ClassInstance* target_object_ptr = nullptr;
-        if (ObjectHolder target_object_holder = object_.Execute(closure, context))
-        {
-            target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
-            ObjectHolder value_holder = rv_->Execute(closure, context);
-            if (target_object_ptr)
-            {
-                if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
-                    context.GetExternalLinkage() && field_name_.size() && value_holder)
-                { // Вызов звонковой функции при записи полей объекта "__external"
-                    context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD,
-                                                 field_name_, {ConvertToLinkageValue(value_holder)});
-                }
-                return (target_object_ptr->Fields())[field_name_] = move(value_holder);
-            }
-        }
-        return {};
+        return ExecuteLeft(ExecuteRight(closure, context), closure, context);
     }
 
     runtime::ObjectHolder FieldAssignment::ExecuteRight(runtime::Closure& closure, runtime::Context& context)
@@ -916,10 +928,12 @@ namespace ast
         {
             if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
                 context.GetExternalLinkage() && field_name_.size() && right_result)
-                // Вызов звонковой функции при записи полей объекта "__external"
+                // Вызов звонковой функции при записи полей объекта "__external".
                 context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_WRITE_FIELD, field_name_, {ConvertToLinkageValue(right_result)});
             
-            return (target_object_ptr->Fields())[field_name_] = move(right_result);
+            runtime::Closure& local_closure = target_object_ptr->Fields();
+            CallDestroyIfNeed(local_closure, field_name_, context);
+            return local_closure[field_name_] = move(right_result);
         }
         return {};
     }
