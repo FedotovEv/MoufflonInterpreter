@@ -64,6 +64,11 @@ namespace
     runtime::LinkageValue DemoLinkFunction(runtime::LinkCallReason what_reason, const string& field_name,
         const vector<runtime::LinkageValue>& argument_value)
     {
+        const std::string COMMAND_CODE_FIELD = "command_code"s;
+        const std::string COMMAND_ARGUMENT_FIELD = "command_argument"s;
+        const std::string COMMAND_RESULT_FIELD = "command_result"s;
+        const std::string EXTERNAL_METHOD_METHOD = "external_method"s;
+
         enum CommandCode
         {
             COMMAND_AS_IS = 1,
@@ -79,13 +84,13 @@ namespace
         switch (what_reason)
         {
         case runtime::LinkCallReason::CALL_REASON_WRITE_FIELD:
-            if (field_name == "command_code")
+            if (field_name == COMMAND_CODE_FIELD)
                 command_code = ConvertLinkageValueToInt(argument_value[0]);
-            else if (field_name == "command_argument")
+            else if (field_name == COMMAND_ARGUMENT_FIELD)
                 command_argument = ConvertLinkageValueToString(argument_value[0]);
             return {};
         case runtime::LinkCallReason::CALL_REASON_READ_FIELD:
-            if (field_name == "command_result")
+            if (field_name == COMMAND_RESULT_FIELD)
                 switch (command_code)
                 {
                 case COMMAND_AS_IS:
@@ -105,14 +110,22 @@ namespace
                 default:
                     return "bad command"s;
                 }
-            else if (field_name == "command_code")
+            else if (field_name == COMMAND_CODE_FIELD)
                 return command_code;
-            else if (field_name == "command_argument")
+            else if (field_name == COMMAND_ARGUMENT_FIELD)
                 return command_argument;
             else
                 return "bad field"s;
+        case runtime::LinkCallReason::CALL_REASON_DELETE_FIELD:
+            if (field_name == COMMAND_CODE_FIELD)
+                command_code = 0;
+            else if (field_name == COMMAND_ARGUMENT_FIELD)
+                command_argument.clear();
+            return {};
+        case runtime::LinkCallReason::CALL_REASON_FIELD_IS_VISIBLE:
+            return (field_name == COMMAND_CODE_FIELD || field_name == COMMAND_ARGUMENT_FIELD);
         case runtime::LinkCallReason::CALL_REASON_CALL_METHOD:
-            if (field_name == "external_method")
+            if (field_name == EXTERNAL_METHOD_METHOD)
                 return "external return"s;
             else
                 return "something"s;

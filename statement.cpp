@@ -280,9 +280,51 @@ namespace ast
             CallDestroyIfNeed(local_closure, field_name_, context);
             return runtime::ObjectHolder::Own(runtime::Bool(local_closure.erase(field_name_)));
         }
-        return {};
+        return runtime::ObjectHolder::Own(runtime::Bool(false));
     }
 
+    // Методы класса IsVisibleVariable.
+    IsVisibleVariable::IsVisibleVariable(std::string var) : var_(move(var))
+    {}
+    
+    // Возвращает "ИСТИНУ", если переменная var_ есть в таблице символов closure.
+    runtime::ObjectHolder IsVisibleVariable::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        return runtime::ObjectHolder::Own(runtime::Bool(closure.contains(var_)));
+    }
+
+    // Методы класса IsVisibleField.
+    IsVisibleField::IsVisibleField(VariableValue object, std::string field_name) : object_(move(object)), field_name_(move(field_name))
+    {}
+
+    // Возвращает "ИСТИНУ", если поле field_name_ находится в таблице символов объекта object_, находящейся, в свою очередь, внутри
+    // таблицы closure.
+    runtime::ObjectHolder IsVisibleField::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+
+        runtime::ClassInstance* target_object_ptr = nullptr;
+        if (ObjectHolder target_object_holder = object_.Execute(closure, context))
+            target_object_ptr = target_object_holder.TryAs<runtime::ClassInstance>();
+
+        if (target_object_ptr)
+        {
+            if (target_object_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
+                context.GetExternalLinkage() && field_name_.size())
+            { // Вызов звонковой функции при запросе видимости некоторого поля объекта "__external".
+                return ConvertToObject(context.GetExternalLinkage()(runtime::LinkCallReason::CALL_REASON_FIELD_IS_VISIBLE, field_name_, {}));
+            }
+            else
+            { // Проверка наличия поля внури объекта программно-определяемого класса.
+                runtime::Closure& local_closure = target_object_ptr->Fields();
+                return runtime::ObjectHolder::Own(runtime::Bool((target_object_ptr->Fields()).contains(field_name_)));
+            }
+        }
+        return runtime::ObjectHolder::Own(runtime::Bool(false));
+    }
+
+    // Методы класса Assignment.
     Assignment::Assignment(std::string var, std::unique_ptr<Statement> rv) : var_(move(var)), rv_(move(rv))
     {}
 
@@ -307,6 +349,7 @@ namespace ast
         return closure[var_] = move(right_result);
     }
 
+    // Методы класса IndirectAssignment.
     IndirectAssignment::IndirectAssignment
         (std::unique_ptr<Statement> left_method_call, std::unique_ptr<Statement> rv, std::string parent_name) :
         left_method_call_(move(left_method_call)), rv_(move(rv)), parent_name_(move(parent_name))
@@ -663,12 +706,22 @@ namespace ast
     }
 
     void Compound::AddStatement(std::unique_ptr<Statement> stmt)
-    { // Добавляет очередную инструкцию в конец составной инструкции
+    { // Добавляет очередную инструкцию в конец составной инструкции.
         if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(stmt.get()))
             last_body_command_desc_ =  compound_stmt_ptr->GetLastCommandDesc();           
         else
             last_body_command_desc_ =  stmt->GetCommandDesc();
         comp_body_.push_back(std::move(stmt));
+    }
+
+    runtime::ObjectHolder ProgramCompound::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        runtime::ObjectHolder ret_value = Compound::Execute(closure, context);
+        // После завершения программы корректно удаляем все объекты, сохранившиеся к данному моменту в таблице символов
+        // closure - если нужно, взываем для каждого из них внутренний деструктор.
+        for (auto& closure_pair : closure)
+            CallDestroyIfNeed(closure_pair.second, context);
+        return ret_value;
     }
 
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)

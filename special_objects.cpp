@@ -998,10 +998,10 @@ namespace runtime
             if (classes_ids_it != internal_classes_ids_.end())
                 return classes_ids_it->second;
             else
-                return INVALID_IDENT;
+                return INVALID_TYPE_IDENT;
         }
         else
-            return INVALID_IDENT;
+            return INVALID_TYPE_IDENT;
     }
 
     std::string TypeTraitsInstance::ObjectNameInternal(const ObjectHolder& what_id)

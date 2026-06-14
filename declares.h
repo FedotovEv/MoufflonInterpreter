@@ -44,26 +44,28 @@ const std::string REFERENCE_ERROR_CLASS_NAME = "ReferenceError";
 const std::string AWAITABLE_CLASS_NAME = "Awaitable";
 const std::string AWAITABLE_SUSPEND_METHOD = "AwaitSuspend";
 const std::string AWAITABLE_RESUME_METHOD = "AwaitResume";
-// Имя класса типового отпечатка (типовых характеристик, TypeTraits) и его внутренних методов.
+// Имя класса типового отпечатка (типовых характеристик, TypeTraits).
 const std::string TYPE_TRAITS_CLASS_NAME = "TypeTraits";
 // Иденты встроенных типов.
-constexpr int INVALID_IDENT = -1;
+constexpr int INVALID_TYPE_IDENT = -1;      // Несостоятельный идент, не соответствующий какому-либо реально существующему типу.
 constexpr int NONE_IDENT = 0;               // Идент типа пустого выражения None.
 constexpr int BOOL_IDENT = 1;               // Идент логического типа.
 constexpr int NUMERIC_IDENT = 2;            // Идент числового типа.
 constexpr int STRING_IDENT = 3;             // Идент строкового типа.
-constexpr int CLASS_AREA_IDENTS = 1000;     // Начало области классовых идентов (идентификатор первого класса, определённого в программе помимо базовых типов).
+constexpr int CLASS_AREA_IDENTS = 1000;     // Начало области классовых идентов (идентификатор первого класса, определённого в
+                                            // программе помимо базовых типов).
 
 namespace runtime
 {
     using NumberValue = std::variant<int, double>;
     enum class LinkCallReason
-    {
+    { // Коды типов обращений к элементам объектов класса внешней связи EXTERNAL_LINK_CLASS_NAME (т. е. "__external").
         CALL_REASON_UNKNOWN = 0,
-        CALL_REASON_READ_FIELD,
-        CALL_REASON_WRITE_FIELD,
-        CALL_REASON_DELETE_FIELD,
-        CALL_REASON_CALL_METHOD
+        CALL_REASON_READ_FIELD,         // Выполняется чтение поля объекта этого класса.
+        CALL_REASON_WRITE_FIELD,        // Выполняется запись поля такого объекта.
+        CALL_REASON_DELETE_FIELD,       // Удаляется какое-либо поле такого объекта (над ним исполняется оператор del).
+        CALL_REASON_FIELD_IS_VISIBLE,   // Запрос видимости какого-то поля объекта.
+        CALL_REASON_CALL_METHOD         // Производится вызов некоторого метода подобного объекта.
     };
 
     using LinkageValue = std::variant<std::monostate, bool, int, double, std::string>;

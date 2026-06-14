@@ -333,8 +333,12 @@ namespace runtime
         if (!get_method || get_method.method->formal_params.size() != actual_args.size())
             ThrowRuntimeError(context, get_method.error, ThrowMessages::GetThrowText(get_method.error));
     
-        Closure method_closure;
+        Closure method_closure; // Временная таблица символов, применяемая во время исполнения вызываемого метода.
+        // Добавляем в эту таблицу ссылку на наш собственный класс под именем SELF_FIELD_NAME("self"), что обеспечивает коду метода
+        // доступ к текущим полям объекта.
         method_closure[SELF_FIELD_NAME] = ObjectHolder::Share(*this);
+        // Кроме того, создаём в этой временной таблице переменные с именами формальных и значениями фактических параметров метода.
+        // Такая подстановка делает передаваемые аргументы доступными исполняемому коду метода.
         auto actual_args_it = actual_args.begin();
         for (const string& formal_param_name : get_method.method->formal_params)
             method_closure[formal_param_name] = *actual_args_it++;

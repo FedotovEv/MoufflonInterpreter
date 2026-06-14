@@ -193,7 +193,7 @@ namespace
         //          | Statement \n Program
         unique_ptr<ast::Statement> ParseProgram()
         {
-            auto result = exec_factory_.Create(ast::Compound());
+            auto result = exec_factory_.Create(ast::ProgramCompound());
             // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
             result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
             // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
@@ -305,6 +305,7 @@ namespace
             return exec_factory_.Create(ast::ClassDefinition(it->second));
         }
 
+        // Функция выделения "именного терма" - комбинации (последовательности) имён, разделённых точками.
         vector<string> ParseDottedIds()
         {
             vector<string> result(1, lexer_.Expect<ITokenType::Id>().value);
@@ -315,6 +316,7 @@ namespace
             return result;
         }
 
+        // Функция разбора конструкций присваивания различного типа (прямого и косвенного), а также вызовов методов.
         //  AssgnOrCall -> DottedIds = Expr
         //               | DottedIds '(' ExprList ')'
         //               | DottedIds '(' ExprList ')' = Expr
@@ -557,6 +559,29 @@ namespace
             if (lexer_.CurrentToken() == '(')
             {
                 // Различные вызовы методов или свободных функций.
+                auto method_name = names.back();
+                names.pop_back();
+
+                if (names.empty() && (method_name == "is_visible"sv || method_name == "IsVisible"sv))
+                { // Вызов встроенной свободной функции IsVisible() (или, в другом написании имени, is_visible()). Единственный аргумент такой
+                  // функции - не выражение, а имя простой переменной либо поля объекта. Поэтому она рассматривается особым порядком в первую очередь.
+                    lexer_.NextToken();
+                    vector<string> test_var_names = ParseDottedIds();   // Аргумент функции - имя проверяемой переменной или поля объекта.
+                    lexer_.Expect<ITokenType::Char>(')');
+                    lexer_.NextToken(); // Проверяем наличие закрывающей скобки списка аргументов (он у нас дрлжен быть только один), а затем пропускаем её.
+                    
+                    auto last_var_name = test_var_names.back();
+                    test_var_names.pop_back();
+                    
+                    if (test_var_names.empty())
+                        // Аргумент функции - имя простой (глобальной или локальной) переменной.
+                        return exec_factory_.Create(ast::IsVisibleVariable(std::move(last_var_name)));
+                    else
+                        // Аргумент функции - имя поля объекта класса.
+                        return exec_factory_.Create(ast::IsVisibleField    // Это проверка видимости поля last_var_name объекта с (составным) именем test_var_names.
+                            (exec_factory_.CreateTemp(ast::VariableValue{std::move(test_var_names)}), std::move(last_var_name)));
+                }
+
                 vector<unique_ptr<ast::Statement>> args;
                 if (lexer_.NextToken() != ')')
                     args = ParseTestList();
@@ -564,17 +589,16 @@ namespace
                 lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
-                auto method_name = names.back();
-                names.pop_back();
-
                 if (!names.empty())
-                {
+                { // Именной терм содержит несколько разделённых точками компонент. Следовательно, это вызов метода с именем, равным его
+                  // последней компоненте. А объект, метод которого вызывается, определяется всеми прочими компонентами терма, кроме последнего.
                     return exec_factory_.Create(ast::MethodCall
                         (exec_factory_.Create(ast::VariableValue(std::move(names))), std::move(method_name),
                          std::move(args)));
                 }
 
-                // Далее анализируются конструкции, эквивалентные вызову именно свободных функций (выглядящие как таковые).
+                // Далее анализируются конструкции, эквивалентные вызову именно свободных функций (выглядящие как таковые). Именной терм таких
+                // функций однокомпонентный (не содержит внутри точек).
                 try
                 {
                     if (auto int_class_it = internal_classes_.find(method_name); int_class_it != internal_classes_.end())
@@ -595,7 +619,8 @@ namespace
                     }
                 }
                 catch (ParseError& parse_error)
-                {
+                { // Данное исключение выбрасывается производящими функциями встроенных либо расширительных классов (классов втыкал), если в их
+                  // конструкторы переданы недопустимые аргументы (по количеству или типам).
                     exec_factory_.ThrowParseError(parse_error.what());
                 }
 

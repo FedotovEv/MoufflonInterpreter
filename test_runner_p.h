@@ -9,30 +9,34 @@
 #include <unordered_map>
 #include <vector>
 
-namespace TestRunnerPrivate {
-template <class Map>
-std::ostream& PrintMap(std::ostream& os, const Map& m) {
-    os << "{";
-    bool first = true;
-    for (const auto& kv : m) {
-        if (!first) {
-            os << ", ";
+namespace TestRunnerPrivate
+{
+    template <class Map>
+    std::ostream& PrintMap(std::ostream& os, const Map& m)
+    {
+        os << "{";
+        bool first = true;
+        for (const auto& kv : m) {
+            if (!first) {
+                os << ", ";
+            }
+            first = false;
+            os << kv.first << ": " << kv.second;
         }
-        first = false;
-        os << kv.first << ": " << kv.second;
+        return os << "}";
     }
-    return os << "}";
-}
 }  // namespace TestRunnerPrivate
 
 template <class T>
-std::ostream& operator<<(std::ostream& os, const std::vector<T>& s) {
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& s)
+{
     os << "{";
     bool first = true;
-    for (const auto& x : s) {
-        if (!first) {
+    for (const auto& x : s)
+    {
+        if (!first)
             os << ", ";
-        }
+
         first = false;
         os << x;
     }
@@ -40,13 +44,15 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& s) {
 }
 
 template <class T>
-std::ostream& operator<<(std::ostream& os, const std::set<T>& s) {
+std::ostream& operator<<(std::ostream& os, const std::set<T>& s)
+{
     os << "{";
     bool first = true;
-    for (const auto& x : s) {
-        if (!first) {
+    for (const auto& x : s)
+    {
+        if (!first)
             os << ", ";
-        }
+
         first = false;
         os << x;
     }
@@ -54,7 +60,8 @@ std::ostream& operator<<(std::ostream& os, const std::set<T>& s) {
 }
 
 template <class K, class V>
-std::ostream& operator<<(std::ostream& os, const std::map<K, V>& m) {
+std::ostream& operator<<(std::ostream& os, const std::map<K, V>& m)
+{
     return TestRunnerPrivate::PrintMap(os, m);
 }
 

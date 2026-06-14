@@ -157,7 +157,33 @@ namespace ast
         std::string field_name_;
     };
 
-    // Значение None
+    // Внутренняя (встроенная) функция выяснения видимости простой перменной - её нахождения в данный момент в главной таблице символов.
+    class IsVisibleVariable : public Statement
+    {
+    public:
+        IsVisibleVariable(std::string var);
+        // Возвращает "ИСТИНУ", если переменная var_ есть в таблице символов closure.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        std::string var_;
+    };
+
+    // Встроенная функция проверки видимости поля объекта в его таблице символов.
+    class IsVisibleField : public Statement
+    {
+    public:
+        IsVisibleField(VariableValue object, std::string field_name);
+        // Возвращает "ИСТИНУ", если поле field_name_ находится в таблице символов объекта object_, находящейся, в свою очередь, внутри
+        // таблицы closure.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        VariableValue object_;
+        std::string field_name_;
+    };
+
+    // Значение None.
     class None : public Statement
     {
     public:
@@ -168,7 +194,7 @@ namespace ast
         }
     };
 
-    // Команда print
+    // Команда print.
     class Print : public Statement
     {
     public:
@@ -178,7 +204,8 @@ namespace ast
         // Инициализирует команду print для вывода списка значений args.
         explicit Print(std::vector<std::unique_ptr<Statement>> args);
 
-        // Инициализирует команду print для вывода значения переменной name
+        // Инициализирует команду print для вывода значения переменной name. Служит преимущественно
+        // для целей написания модульных тестов.
         static std::unique_ptr<Print> Variable(const std::string& name);
 
         // Во время выполнения команды print вывод должен осуществляться в поток, возвращаемый из
@@ -190,7 +217,7 @@ namespace ast
         std::string name_;
     };
 
-    // Вызывает метод object.method со списком параметров args
+    // Вызывает метод object.method со списком параметров args.
     class MethodCall : public Statement
     {
     public:
@@ -541,16 +568,18 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // Составная инструкция (например: тело метода, содержимое ветки if, либо else)
+    // Составная инструкция (например: тело метода, содержимое ветки if, либо else). Преставляет собой
+    // последовательность каких-либо других исполняемых операторов.
     class Compound : public Statement
     {
     public:
-        // Конструирует Compound из нескольких инструкций типа unique_ptr<Statement>
+        // Конструирует Compound из нескольких инструкций типа unique_ptr<Statement>.
         template <typename... Args>
         explicit Compound(Args&&... args)
         {
-            if constexpr(sizeof...(args) != 0)
-                PacketAddStatement(args...);
+            if constexpr (sizeof...(args) != 0)
+                // Распакуем переданные нам пакеты параметров с помощью свёрточного выражения над двуместным оператором ",".
+                (... , comp_body_.push_back(std::move(std::forward<Args>(args))));
         }
 
         runtime::ProgramCommandDescriptor GetLastCommandDesc()
@@ -558,26 +587,18 @@ namespace ast
             return last_body_command_desc_;
         }
 
-        // Добавляет очередную инструкцию в конец составной инструкции
+        // Добавляет очередную инструкцию в конец составной инструкции.
         void AddStatement(std::unique_ptr<Statement> stmt);
 
-        // Последовательно выполняет добавленные инструкции. Возвращает None
+        // Последовательно выполняет добавленные инструкции. Возвращает None.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     
     protected:
-        template <typename FirstArg, typename... Args>
-        void PacketAddStatement(FirstArg&& first_arg, Args&& ... args)
-        {
-            comp_body_.push_back(std::move(std::forward<FirstArg>(first_arg)));
-            if constexpr(sizeof...(args) != 0)
-                PacketAddStatement(args...);
-        }
-
-        std::vector<std::unique_ptr<Statement>> comp_body_;
-        runtime::ProgramCommandDescriptor last_body_command_desc_; // дескриптор последней команды сплотки
+        std::vector<std::unique_ptr<Statement>> comp_body_;         // Массив последовательно исполняемых объектов, образующих данную
+                                                                    // сплотку. Исполняются в порядке хранения в этом векторе
+        runtime::ProgramCommandDescriptor last_body_command_desc_;  // Позиционный дескриптор последней команды сплотки.
     };
 
-    /*
     // "Головная" сплотка - составная инструкция, представляющая тело самой программы как таковое (находится
     // на самом верхнем уровне её блочной структуры). В каждой программе такая сплотка всегда есть и всегда только одна,
     // она создаётся в методе ParseProgram() синтаксического анализатора Parser. По сравнению с обычной составной
@@ -588,16 +609,8 @@ namespace ast
     public:
         explicit ProgramCompound() = default;
 
-        std::unordered_map<std::string, ast::PluginDescData>& GetPlugines()
-        {
-            return plugines_;
-        }
-
-    private:
-        // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
-        std::unordered_map<std::string, ast::PluginDescData> plugines_;
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
-    */
 
     // Тело метода. Как правило, содержит составную инструкцию
     class MethodBody : public Statement

@@ -250,7 +250,7 @@ class Shape:
     self.shape_name = shape_name
     self.width = 0
     self.height = 0
-    print "Shape_Init - Shape_Name = ", self.shape_name
+    print "Shape_Init - Shape_Name =", self.shape_name
 
 class Rect(Shape):
   def __init__(shape_name, width, height):
@@ -286,13 +286,42 @@ square_instance_0 = Square("Super_Square", 100)
             cplx_program.SetContext(runtime::DummyContext());
             ExecuteProgram(cplx_program);
 
+            runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+            std::string etalon_string =
+                // Исполняется shape_instance = Shape("Unknown_Shape") - происходит прямой вызов единственного конструктора
+                // Shape.__init__(shape_name) класса Shape.
+                "Shape_Init - Shape_Name = Unknown_Shape\n"s +      // Печать из Shape.__init__(shape_name).
+                // Исполняется rect_instance = Rect(10, 20) - сначала вызывается конструктор Rect.__init__(width, height),
+                // оттуда происходит вызов другого конструктора того же класса Rect.__init__(shape_name, width, height),
+                // который, в свою очередь, обращается к вложенному методу Shape.__init__(shape_name).
+                // Порядок вывода строк: Shape.__init__(shape_name), выводящий в контекст первую строку, затем печать второй
+                // строки из тела Rect.__init__(shape_name, width, height), и, наконец, третья строка, выводимая из Rect.__init__(width, height).
+                "Shape_Init - Shape_Name = Rect\n"s +               // Печать из Shape.__init__(shape_name).
+                "Rect_Init_3\n"s +                                  // Печать из Rect.__init__(shape_name, width, height).
+                "Rect_Init_2\n"s +                                  // Печать из Rect.__init__(width, height).
+                // Исполняется square_instance_0 = Square() - вызов конструктора Square.__init__(), при котором сначала производится вызов
+                // Shape.__init__(shape_name), а затем печать строки из тела самого Square.__init__().
+                "Shape_Init - Shape_Name = Square\n" +              // Печать из Shape.__init__(shape_name).
+                "Square_Init_0\n" +                                 // Печать из Square.__init__().
+                // Исполняется square_instance_1 = Square(50) - вызов конструктора Square.__init__(size), оттуда запрашивается Rect.__init__(shape_name, width, height),
+                // а из него затем уже метод Shape.__init__(shape_name).
+                "Shape_Init - Shape_Name = Square\n" +              // Печать из Shape.__init__(shape_name).
+                "Rect_Init_3\n" +                                   // Печать из Rect.__init__(shape_name, width, height).
+                "Square_Init_1\n" +                                 // Печать из Square.__init__(size).
+                // Исполняется square_instance_0 = Square("Super_Square", 100) - исполнение конструктора Square.__init__(shape_name, size), откуда первой очередью
+                // вызвавается Rect.__init__(shape_name, width, height), а из него, в свою очередь, Shape.__init__(shape_name).:
+                "Shape_Init - Shape_Name = Super_Square\n" +        // Печать из Shape.__init__(shape_name).
+                "Rect_Init_3\n" +                                   // Печать из Rect.__init__(shape_name, width, height).
+                "Square_Init_2\n";                                  // Печать из Square.__init__(shape_name, size)
+            ASSERT_EQUAL(context->output.str(), etalon_string);
         }
     }
 }  // namespace parse
 
 void TestParseProgram(TestRunner& tr)
 {
-    RUN_TEST(tr, parse::TestAnchestorCalls);
+    cout << endl << "Тесты построения абстрактного синтаксического дерева программы"s << endl;
+
     RUN_TEST(tr, parse::TestSimpleProgram);
     RUN_TEST(tr, parse::TestProgramWithClasses);
     RUN_TEST(tr, parse::TestProgramWithIf);
@@ -301,4 +330,5 @@ void TestParseProgram(TestRunner& tr)
     RUN_TEST(tr, parse::TestRecursion2);
     RUN_TEST(tr, parse::TestComplexLogicalExpression);
     RUN_TEST(tr, parse::TestClassicalPolymorphism);
+    RUN_TEST(tr, parse::TestAnchestorCalls);
 }

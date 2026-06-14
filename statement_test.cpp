@@ -476,10 +476,48 @@ namespace ast
             test_not(true);
             test_not(false);
         }
+
+        void TestComplexCompound()
+        { // Испытания составной инструкции и работы её шаблонного конструктора.
+            runtime::DummyContext context;
+
+            Closure closure =
+            {
+                {"x"s, ObjectHolder::Own(runtime::Number(42))},
+                {"y"s, ObjectHolder::Own(runtime::Number(24))},
+                {"z"s, ObjectHolder::Own(runtime::String("z"))}
+            };
+
+            auto print_statement_x_1 = Print::Variable("x"s),
+                 print_statement_y_1 = Print::Variable("y"s),
+                 print_statement_z_1 = Print::Variable("z"s),
+                 print_statement_x_2 = Print::Variable("x"s),
+                 print_statement_y_2 = Print::Variable("y"s),
+                 print_statement_z_2 = Print::Variable("z"s);
+            // Сплотка формируется в таком порядке.
+            auto compound_statement_1 = ast::Compound(print_statement_x_1, print_statement_y_1, print_statement_z_1, print_statement_y_2, print_statement_x_2, print_statement_z_2);
+            compound_statement_1.Execute(closure, context);
+            ASSERT_EQUAL(context.output.str(), "42\n24\nz\n24\n42\nz\n");
+
+            print_statement_x_1 = Print::Variable("x"s);
+            print_statement_y_1 = Print::Variable("y"s);
+            print_statement_z_1 = Print::Variable("z"s);
+            print_statement_x_2 = Print::Variable("x"s);
+            print_statement_y_2 = Print::Variable("y"s);
+            print_statement_z_2 = Print::Variable("z"s);
+
+            context.output.str("");
+            // А теперь - в обратном.
+            auto compound_statement_2 = ast::Compound(print_statement_z_2, print_statement_x_2, print_statement_y_2, print_statement_z_1,  print_statement_y_1, print_statement_x_1);
+            compound_statement_2.Execute(closure, context);
+            ASSERT_EQUAL(context.output.str(), "z\n42\n24\nz\n24\n42\n");
+        }
     }  // namespace
 
     void RunUnitTests(TestRunner& tr)
     {
+        cout << "\nТесты отдельных инструкций и операторов языка" << endl;
+
         RUN_TEST(tr, ast::TestNumericConst);
         RUN_TEST(tr, ast::TestStringConst);
         RUN_TEST(tr, ast::TestVariable);
@@ -500,5 +538,6 @@ namespace ast
         RUN_TEST(tr, ast::TestOr);
         RUN_TEST(tr, ast::TestAnd);
         RUN_TEST(tr, ast::TestNot);
+        RUN_TEST(tr, ast::TestComplexCompound);
     }
 }  // namespace ast

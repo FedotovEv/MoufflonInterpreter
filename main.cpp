@@ -4,6 +4,7 @@
 #include "runtime.h"
 #include "statement.h"
 #include "test_runner_p.h"
+#include "error_classes.h"
 
 #include <iostream>
 #include <string>
@@ -1303,6 +1304,139 @@ print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_
 
     }
 
+    void TestDelOperator()
+    {  // Проверка работы инструкции del над простыми переменными и полями объектов.
+        { // Применение del для простой переменной.
+            istringstream simple_del_using(R"--(
+x = 1
+print x  # Эта инструкция должна выполниться нормально.
+del x
+print x  # А вот эта уже должна привести к выбрасыванию исключения ("отсутствие переменной").
+)--");
+            ostringstream ostr;
+            ThrowMessageNumber err_msg_num = ThrowMessageNumber::THRM_UNKNOWN;
+            try
+            {
+                RunMythonProgram(simple_del_using, ostr);
+            }
+            catch (runtime::RuntimeError& runtime_error)
+            { // Здесь перехватывается общая ошибка типа runtime::RuntimeError, генерируемая интерпретатором МУФЛОНА всякий раз,
+              // если внутренняя ошибка МУФЛОН-программы не обрабатывается внутри неё самой и выходит за её пределы. Тип ретранслируемой
+              // "наружу" ошибки всегда в этом случае будет именно таким - runtime::RuntimeError. Частный же тип возникшей ошибки
+              // можно выяснить путём анализа поля error_object_ этого класса, содержащего уже более конкретный экземпляр ошибки,
+              // принадлежащей к одному из классов, определенных в заголовке error_classes.h.
+                if (runtime_error)
+                {
+                    runtime::SyntaxError* syntax_error_ptr = runtime_error.error_object_.TryAs<runtime::SyntaxError>();
+                    if (syntax_error_ptr)
+                        err_msg_num = syntax_error_ptr->GetMsgNum();
+                }
+            }
+            ASSERT_EQUAL(ostr.str(), "1\n");
+            ASSERT_EQUAL(err_msg_num, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+        }
+
+        { // Применение del к полю объекта - экземпляра класса.
+            istringstream field_del_using(R"--(
+class OneClass:
+  def ClassMethod(arg_1):
+    self.x = arg_1
+
+one_class_var = OneClass()
+one_class_var.ClassMethod(1)
+print one_class_var.x # Эта инструкция должна выполниться нормально и вывести к контекст строку "1\n".
+del one_class_var.x
+print one_class_var.x # А вот эта уже должна привести к выбрасыванию исключения ("отсутствие переменной").
+)--");
+            ostringstream ostr;
+            ThrowMessageNumber err_msg_num = ThrowMessageNumber::THRM_UNKNOWN;
+            try
+            {
+                RunMythonProgram(field_del_using, ostr);
+            }
+            catch (runtime::RuntimeError& runtime_error)
+            {
+                if (runtime_error)
+                {
+                    runtime::SyntaxError* syntax_error_ptr = runtime_error.error_object_.TryAs<runtime::SyntaxError>();
+                    if (syntax_error_ptr)
+                        err_msg_num = syntax_error_ptr->GetMsgNum();
+                }
+            }
+            ASSERT_EQUAL(ostr.str(), "1\n");
+            ASSERT_EQUAL(err_msg_num, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+        }
+
+        { // Обращение к оператору del с контролем результата с помощью функции IsVisible().
+            istringstream using_del_is_visible(R"--(
+x = 1
+print IsVisible(x)
+del x
+print IsVisible(x)
+x = 2
+print IsVisible(x)
+del x
+print IsVisible(x)
+
+class OneClass:
+  def ClassMethod(arg_1):
+    self.x = arg_1
+
+one_class_var = OneClass()
+one_class_var.ClassMethod(1)
+print IsVisible(one_class_var.x)
+del one_class_var.x
+print IsVisible(one_class_var.x)
+one_class_var.ClassMethod(1)
+print IsVisible(one_class_var.x)
+del one_class_var.x
+print IsVisible(one_class_var.x)
+)--");
+            ostringstream ostr;
+            RunMythonProgram(using_del_is_visible, ostr);
+            ASSERT_EQUAL(ostr.str(), "True\nFalse\nTrue\nFalse\nTrue\nFalse\nTrue\nFalse\n");
+        }
+
+        { // Контроль за работой del с помощью объекта типового отпечатка TypeTraits.
+            istringstream using_del_type_traits(R"--(
+class OneClass:
+  def ClassMethod_1(arg_1):
+    self.x = arg_1
+  def ClassMethod_2(arg_1):
+    self.y = arg_1
+
+# Создаем экземпляр класса и его характеристику.
+one_class_var = OneClass()
+one_class_var_traits = TypeTraits(one_class_var)
+
+# Начинаем производить действия над объектом one_class_var, наблюдая за изменениями в one_class_var_traits.
+one_class_var.ClassMethod_1(1)
+print one_class_var_traits.HasField("x")
+del one_class_var.x
+print one_class_var_traits.HasField("x")
+
+one_class_var.ClassMethod_2(1)
+print one_class_var_traits.HasField("y")
+del one_class_var.y
+print one_class_var_traits.HasField("y")
+
+one_class_var.ClassMethod_1(2)
+one_class_var.ClassMethod_2(3)
+print one_class_var_traits.HasField("x")
+print one_class_var_traits.HasField("y")
+del one_class_var.y
+print one_class_var_traits.HasField("x")
+print one_class_var_traits.HasField("y")
+del one_class_var.x
+print one_class_var_traits.HasField("x")
+print one_class_var_traits.HasField("y")
+)--");
+            ostringstream ostr;
+            RunMythonProgram(using_del_type_traits, ostr);
+            ASSERT_EQUAL(ostr.str(), "True\nFalse\nTrue\nFalse\nTrue\nTrue\nTrue\nFalse\nFalse\nFalse\n");
+        }
+    }
+
     void TestClassDestructor()
     {
         { // Проверка вызова деструктора класса при уничтожении последней ссылки на него.
@@ -1319,23 +1453,40 @@ z1_2 = z1_1
 z1_3 = z1_1
 # Удаляем ссылки на объект по одной.
 del z1_3
-print "z1_3"
+print "del:z1_3"
 del z1_1
-print "z1_1"
+print "del:z1_1"
 del z1_2    # Тут должен быть вызван деструктор класса.
-print "z1_2"
+print "del:z1_2"
+
+print "assign:create_z1_1"
+z1_1 = OneClass(2) # Повторно создаём переменную z1_1 с новым экземпляром класса OneClass.
+z1_1 = 5 # Здесь созданный в вышерасположенной команде объект должен быть уничтожен с вызовом его деструктора.
+print "assign:z1_1"
+
+# Наконец, проверим наличие обращений к деструкторам в процессе уничтожения объектов при завершении программы.
+print "end:create_z1_2"
+z1_2 = OneClass(3)
+print "end:create_z1_3"
+z1_3 = OneClass(4)
+# При окончании программы будут разрушены объекты в z1_2 и z1_3.
 )--");
             ostringstream ostr;
             RunMythonProgram(class_with_dtor, ostr);
             // std::cout << ostr.str() << std::endl;
-            ASSERT_EQUAL(ostr.str(), "z1_3\nz1_1\nDestructor : 1\nz1_2\n");
+            std::string etalon_string =
+                "del:z1_3\ndel:z1_1\nDestructor : 1\ndel:z1_2\n"s +                     // Операции первой группы - удаление объектов по del.
+                "assign:create_z1_1\nDestructor : 2\nassign:z1_1\n"s +                  // Операции второй группы - удаление объектов при присваивании.
+                "end:create_z1_2\nend:create_z1_3\nDestructor : 3\nDestructor : 4\n"s;  // Операции третьей группы  - уничтожение объектов по завершении программы.
+
+            ASSERT_EQUAL(ostr.str(), etalon_string);
         }
     }
 
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
-        cout << endl << "Тесты грамматического разбора и синтаксического анализа"s << endl;
+        cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);
@@ -1343,8 +1494,8 @@ print "z1_2"
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
 
-        cout << endl << "Тесты исполнения примерных программ"s << endl;
-        RUN_TEST(tr, TestSimpleCoroutine);
+        cout << endl << "Категория тестов исполнения полных примерных программ"s << endl;
+
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);
         RUN_TEST(tr, TestArithmetics);
@@ -1364,8 +1515,10 @@ print "z1_2"
         RUN_TEST(tr, TestIsSameTarget);
         RUN_TEST(tr, TestMethodsOverload);
         RUN_TEST(tr, TestTryExceptions);
+        RUN_TEST(tr, TestSimpleCoroutine);
         RUN_TEST(tr, TestAwaitables);
         RUN_TEST(tr, TestTypeTraits);
+        RUN_TEST(tr, TestDelOperator);
         RUN_TEST(tr, TestClassDestructor);
     }
 }  // namespace
