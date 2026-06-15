@@ -15,18 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
+    <ClInclude Include="include\file_plugin.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="file_plugin.h">
+    <ClInclude Include="include\framework.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.c">
+    <ClCompile Include="src\dllmain.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="file_plugin.c">
+    <ClCompile Include="src\file_plugin.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>

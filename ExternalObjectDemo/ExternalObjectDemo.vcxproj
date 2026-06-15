@@ -75,6 +75,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(ProjectDir)..\MythonKernel\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -155,24 +156,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\error_classes.cpp" />
-    <ClCompile Include="..\lexer.cpp" />
-    <ClCompile Include="..\math_object.cpp" />
-    <ClCompile Include="..\parse.cpp" />
-    <ClCompile Include="..\plugin_caller.cpp" />
-    <ClCompile Include="..\runtime.cpp" />
-    <ClCompile Include="..\special_objects.cpp" />
-    <ClCompile Include="..\statement.cpp" />
-    <ClCompile Include="..\throw_messages.cpp" />
-    <ClCompile Include="ExternalObjectDemo.cpp" />
+    <ClCompile Include="..\MythonKernel\src\error_classes.cpp" />
+    <ClCompile Include="..\MythonKernel\src\lexer.cpp" />
+    <ClCompile Include="..\MythonKernel\src\math_object.cpp" />
+    <ClCompile Include="..\MythonKernel\src\parse.cpp" />
+    <ClCompile Include="..\MythonKernel\src\plugin_caller.cpp" />
+    <ClCompile Include="..\MythonKernel\src\runtime.cpp" />
+    <ClCompile Include="..\MythonKernel\src\special_objects.cpp" />
+    <ClCompile Include="..\MythonKernel\src\statement.cpp" />
+    <ClCompile Include="..\MythonKernel\src\throw_messages.cpp" />
+    <ClCompile Include="src\ExternalObjectDemo.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\declares.h" />
-    <ClInclude Include="..\lexer.h" />
-    <ClInclude Include="..\parse.h" />
-    <ClInclude Include="..\runtime.h" />
-    <ClInclude Include="..\statement.h" />
-    <ClInclude Include="..\throw_messages.h" />
+    <ClInclude Include="..\MythonKernel\include\declares.h" />
+    <ClInclude Include="..\MythonKernel\include\lexer.h" />
+    <ClInclude Include="..\MythonKernel\include\parse.h" />
+    <ClInclude Include="..\MythonKernel\include\runtime.h" />
+    <ClInclude Include="..\MythonKernel\include\statement.h" />
+    <ClInclude Include="..\MythonKernel\include\throw_messages.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

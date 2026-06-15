@@ -1,9 +1,8 @@
 
 // dllmain.cpp : Определяет точку входа для приложения DLL.
-#include "pch.h"
-
 #if defined (_WIN64) || defined(_WIN32)
     // Вариант точки входа в динамическую библиотеку для Windows.
+    #include "framework.h"
     BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
     {
         switch (ul_reason_for_call)

@@ -146,53 +146,53 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\debug_context.h" />
-    <ClInclude Include="..\declares.h" />
-    <ClInclude Include="..\lexer.h" />
-    <ClInclude Include="..\math_object.h" />
-    <ClInclude Include="..\math_object_statement.h" />
-    <ClInclude Include="..\parse.h" />
-    <ClInclude Include="..\runtime.h" />
-    <ClInclude Include="..\special_objects.h" />
-    <ClInclude Include="..\special_objects_statement.h" />
-    <ClInclude Include="..\statement.h" />
-    <ClInclude Include="..\throw_messages.h" />
-    <ClInclude Include="DebuggerDataStruct.h" />
-    <ClInclude Include="DebuggerExecutor.h" />
+    <ClInclude Include="..\MythonKernel\include\debug_context.h" />
+    <ClInclude Include="..\MythonKernel\include\declares.h" />
+    <ClInclude Include="..\MythonKernel\include\lexer.h" />
+    <ClInclude Include="..\MythonKernel\include\math_object.h" />
+    <ClInclude Include="..\MythonKernel\include\math_object_statement.h" />
+    <ClInclude Include="..\MythonKernel\include\parse.h" />
+    <ClInclude Include="...MythonKernel\include\runtime.h" />
+    <ClInclude Include="..\MythonKernel\include\special_objects.h" />
+    <ClInclude Include="..\MythonKernel\include\special_objects_statement.h" />
+    <ClInclude Include="..\MythonKernel\include\statement.h" />
+    <ClInclude Include="..\MythonKernel\include\throw_messages.h" />
+    <ClInclude Include="include\DebuggerDataStruct.h" />
+    <ClInclude Include="include\DebuggerExecutor.h" />
     <ClInclude Include="GUI\ConfigDialog.h" />
     <ClInclude Include="GUI\EditModulePropsDialog.h" />
     <ClInclude Include="GUI\MainDebuggerWindow.h" />
     <ClInclude Include="GUI\MythonDebuggerGui.h" />
     <ClInclude Include="GUI\OutputDebuggerWindow.h" />
-    <ClInclude Include="MythonDebugger.h" />
+    <ClInclude Include="include\MythonDebugger.h" />
     <ClInclude Include="PugiXML\pugiconfig.hpp" />
     <ClInclude Include="PugiXML\pugixml.hpp" />
-    <ClInclude Include="redefine_.h" />
+    <ClInclude Include="include\redefine_.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\lexer.cpp" />
-    <ClCompile Include="..\math_object.cpp" />
-    <ClCompile Include="..\parse.cpp" />
-    <ClCompile Include="..\runtime.cpp" />
-    <ClCompile Include="..\special_objects.cpp" />
-    <ClCompile Include="..\statement.cpp" />
-    <ClCompile Include="..\throw_messages.cpp" />
-    <ClCompile Include="DebuggerDataStruct.cpp" />
-    <ClCompile Include="DebuggerExecutor.cpp" />
+    <ClCompile Include="..\MythonKernel\src\lexer.cpp" />
+    <ClCompile Include="..\MythonKernel\src\math_object.cpp" />
+    <ClCompile Include="..\MythonKernel\src\parse.cpp" />
+    <ClCompile Include="..\MythonKernel\src\runtime.cpp" />
+    <ClCompile Include="..\MythonKernel\src\special_objects.cpp" />
+    <ClCompile Include="..\MythonKernel\src\statement.cpp" />
+    <ClCompile Include="..\MythonKernel\src\throw_messages.cpp" />
+    <ClCompile Include="src\DebuggerDataStruct.cpp" />
+    <ClCompile Include="src\DebuggerExecutor.cpp" />
     <ClCompile Include="GUI\ConfigDialog.cpp" />
     <ClCompile Include="GUI\EditModulePropsDialog.cpp" />
     <ClCompile Include="GUI\MainDebuggerWindow.cpp" />
     <ClCompile Include="GUI\MythonDebuggerGui.cpp" />
     <ClCompile Include="GUI\OutputDebuggerWindow.cpp" />
-    <ClCompile Include="MythonDebugger.cpp" />
+    <ClCompile Include="src\MythonDebugger.cpp" />
     <ClCompile Include="PugiXML\pugixml.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="MythonDebugger.rc" />
+    <ResourceCompile Include="resource\MythonDebugger.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="MythonDebugger.ico" />
-    <Image Include="small.ico" />
+    <Image Include="resource\MythonDebugger.ico" />
+    <Image Include="resource\small.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="GUI\MythonDebugger.fbp" />

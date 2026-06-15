@@ -1,9 +1,16 @@
 cmake_minimum_required(VERSION 3.19)
 project(MythonFilePlugin)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 17)
 
-set(COMMON_HEADERS_PLUG_FILE ../declares.h ../throw_messages.h ../runtime.h ../statement.h ../parse.h)
-set(MAIN_FILES_PLUG_FILE file_plugin.h framework.h dllmain.cpp file_plugin.cpp)
-add_library(MythonFilePlugin SHARED ${COMMON_HEADERS_PLUG_FILE} ${MAIN_FILES_PLUG_FILE})
-target_link_library(MythonFilePlugin MythlonInterpreter.lib)
+message(STATUS "MythonFilePlugin current source dir - " ${CMAKE_CURRENT_SOURCE_DIR})
+
+set(FILE_PLUGIN_MODULES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(FILE_PLUGIN_HEADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+set(FILE_PLUGIN_MODULES
+    ${FILE_PLUGIN_MODULES_DIR}/dllmain.c
+    ${FILE_PLUGIN_MODULES_DIR}/file_plugin.c)
+
+add_library(MythonFilePlugin SHARED ${FILE_PLUGIN_MODULES})
+target_include_directories(MythonFilePlugin PRIVATE ${FILE_PLUGIN_HEADERS_DIR} ${KERNEL_HEADERS_SOURCE_DIR})

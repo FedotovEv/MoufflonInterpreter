@@ -15,90 +15,90 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="lexer.cpp">
+    <ClCompile Include="src\error_classes.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="lexer_test_open.cpp">
+    <ClCompile Include="src\lexer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="src\lexer_test_open.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="parse.cpp">
+    <ClCompile Include="src\main.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="parse_test.cpp">
+    <ClCompile Include="src\math_object.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="runtime.cpp">
+    <ClCompile Include="src\parse.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="runtime_test.cpp">
+    <ClCompile Include="src\parse_test.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="statement.cpp">
+    <ClCompile Include="src\plugin_caller.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="statement_test.cpp">
+    <ClCompile Include="src\runtime.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="special_objects.cpp">
+    <ClCompile Include="src\runtime_test.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="throw_messages.cpp">
+    <ClCompile Include="src\special_objects.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="math_object.cpp">
+    <ClCompile Include="src\statement.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="error_classes.cpp">
+    <ClCompile Include="src\statement_test.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="plugin_caller.cpp">
+    <ClCompile Include="src\throw_messages.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="lexer.h">
+    <ClInclude Include="include\declares.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="parse.h">
+    <ClInclude Include="include\error_classes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="runtime.h">
+    <ClInclude Include="include\lexer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="statement.h">
+    <ClInclude Include="include\math_object.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="test_runner_p.h">
+    <ClInclude Include="include\math_object_statement.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="declares.h">
+    <ClInclude Include="include\parse.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="special_objects.h">
+    <ClInclude Include="include\plugin_caller.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="throw_messages.h">
+    <ClInclude Include="include\plugin_helpers.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="math_object.h">
+    <ClInclude Include="include\runtime.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="special_objects_statement.h">
+    <ClInclude Include="include\special_objects.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="math_object_statement.h">
+    <ClInclude Include="include\special_objects_statement.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="error_classes.h">
+    <ClInclude Include="include\statement.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="plugin_caller.h">
+    <ClInclude Include="include\test_runner_p.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="plugin_helpers.h">
+    <ClInclude Include="include\throw_messages.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

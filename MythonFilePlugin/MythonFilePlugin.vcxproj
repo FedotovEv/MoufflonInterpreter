@@ -79,7 +79,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir)\..\;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\MythonKernel\include;$(ProjectDir)include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -160,12 +160,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="file_plugin.h" />
-    <ClInclude Include="framework.h" />
+    <ClInclude Include="include\file_plugin.h" />
+    <ClInclude Include="include\framework.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="file_plugin.c" />
-    <ClCompile Include="dllmain.c" />
+    <ClCompile Include="src\file_plugin.c" />
+    <ClCompile Include="src\dllmain.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

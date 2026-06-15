@@ -1,12 +1,12 @@
 ﻿
 // Макетная программа для демонстрации техники применения объекта __external
 
-#include "..\declares.h"
-#include "..\throw_messages.h"
-#include "..\lexer.h"
-#include "..\parse.h"
-#include "..\runtime.h"
-#include "..\statement.h"
+#include "declares.h"
+#include "throw_messages.h"
+#include "lexer.h"
+#include "parse.h"
+#include "runtime.h"
+#include "statement.h"
 
 #include <iostream>
 #include <streambuf>

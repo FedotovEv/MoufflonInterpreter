@@ -5,64 +5,64 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Файлы заголовков">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
     <Filter Include="Файлы ресурсов">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Файлы заголовков">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="NonStdPrint.cpp">
+    <ClCompile Include="..\MythonKernel\src\error_classes.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\lexer.cpp">
+    <ClCompile Include="..\MythonKernel\src\lexer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\parse.cpp">
+    <ClCompile Include="..\MythonKernel\src\math_object.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\runtime.cpp">
+    <ClCompile Include="src\NonStdPrint.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\statement.cpp">
+    <ClCompile Include="..\MythonKernel\src\parse.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\special_objects.cpp">
+    <ClCompile Include="..\MythonKernel\src\plugin_caller.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\throw_messages.cpp">
+    <ClCompile Include="..\MythonKernel\src\runtime.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\math_object.cpp">
+    <ClCompile Include="..\MythonKernel\src\special_objects.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\error_classes.cpp">
+    <ClCompile Include="..\MythonKernel\src\statement.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\plugin_caller.cpp">
+    <ClCompile Include="..\MythonKernel\src\throw_messages.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\lexer.h">
+    <ClInclude Include="..\MythonKernel\include\declares.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\parse.h">
+    <ClInclude Include="..\MythonKernel\include\lexer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\runtime.h">
+    <ClInclude Include="..\MythonKernel\include\parse.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\statement.h">
+    <ClInclude Include="..\MythonKernel\include\runtime.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\declares.h">
+    <ClInclude Include="..\MythonKernel\include\statement.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\throw_messages.h">
+    <ClInclude Include="..\MythonKernel\include\throw_messages.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
