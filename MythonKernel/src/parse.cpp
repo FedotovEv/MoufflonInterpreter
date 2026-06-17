@@ -128,14 +128,18 @@ namespace
             runtime::TypeTraitsInstance::ClearDeclaredClassDefs();
             // Регистрируем внутренние встроенные "завершённые" классы - с фиксированным набором методов, реализуемых непосредственно
             // в коде данной исполняющей среды и без возможности наследования от них и их дальнейшей модификации.
+            // Регистрация класса массива "array".
             internal_classes_[ARRAY_CLASS_NAME] = {.creator = ast::CreateArray};
             runtime::TypeTraitsInstance::AppendInternalClassId(ARRAY_CLASS_NAME, internal_classes_[ARRAY_CLASS_NAME].my_id);
-
+            // Регистрация класса ассоциативного массива (словаря) map.
             internal_classes_[MAP_CLASS_NAME] = {.creator = ast::CreateMap};
             runtime::TypeTraitsInstance::AppendInternalClassId(MAP_CLASS_NAME, internal_classes_[MAP_CLASS_NAME].my_id);
-
+            // Регистрация класса коллекции математических функций math.
             internal_classes_[MATH_CLASS_NAME] = {.creator = ast::CreateMath};
             runtime::TypeTraitsInstance::AppendInternalClassId(MATH_CLASS_NAME, internal_classes_[MATH_CLASS_NAME].my_id);
+            // Регистрация класса коллекции строковых преобразований string_ops.
+            internal_classes_[STRINGOPS_CLASS_NAME] = {.creator = ast::CreateStringOps};
+            runtime::TypeTraitsInstance::AppendInternalClassId(STRINGOPS_CLASS_NAME, internal_classes_[STRINGOPS_CLASS_NAME].my_id);
 
             // Набор записей с указаниями на производящие функции экземпляров классов ошибок.
             internal_classes_[COMMON_ERROR_CLASS_NAME] = {.creator = ast::CreateCommonError};
@@ -669,31 +673,41 @@ namespace
             return result;
         }
 
-        // Метод обработки грамматической продукции Condition -> if LogicalExpr: Suite [else: Suite]
-        unique_ptr<ast::Statement> ParseCondition()
+        // Метод обработки грамматической продукции Condition -> if LogicalExpr: Suite [elif LogicalExpr: Suite]* [else: Suite]
+        unique_ptr<ast::Statement> ParseIfCondition()
         {
             lexer_.Expect<ITokenType::If>();
             // Запомним истинное положение в исходном тексте оператора if.
             runtime::ProgramCommandDescriptor if_desc = lexer_.GetCurrentCommandDesc();
-            lexer_.NextToken();
 
-            auto condition = ParseTest();
-
-            lexer_.Expect<ITokenType::Char>(':');
-            lexer_.NextToken();
-
-            auto if_body = ParseSuite();
-
-            unique_ptr<ast::Statement> else_body;
-            if (lexer_.CurrentToken().Is<ITokenType::Else>())
+            std::vector<std::pair<std::unique_ptr<ast::Statement>, std::unique_ptr<ast::Statement>>> condition_body_pairs;
+            while (true)
             {
-                lexer_.ExpectNext<ITokenType::Char>(':');
+                bool is_else_block = lexer_.CurrentToken().Is<ITokenType::Else>();
+                lexer_.NextToken(); // Пропуск "if/elif/else"-лексемы.
+
+                condition_body_pairs.push_back({});
+                auto& current_condition_pair = condition_body_pairs.back();
+                if (!is_else_block)
+                    current_condition_pair.first = ParseTest();
+
+                lexer_.Expect<ITokenType::Char>(':');
                 lexer_.NextToken();
-                else_body = ParseSuite();
+
+                current_condition_pair.second = ParseSuite();
+
+                if (is_else_block)
+                    // Блок "else" должен быть последним в if-структуре. Если он встречен и обработан, завершаем работу
+                    // с данным if в целом.
+                    break;
+
+                if (!lexer_.CurrentToken().Is<ITokenType::Elif>() && !lexer_.CurrentToken().Is<ITokenType::Else>())
+                    // Если следующий лексический жетон не совпадает с одним из внутренних ключевых слов оператора if,
+                    // то разбор этой инструкции также полагаем законченным.
+                    break;
             }
 
-            return exec_factory_.Create(ast::IfElse(std::move(condition), std::move(if_body),
-                                            std::move(else_body)), if_desc);
+            return exec_factory_.Create(ast::IfElse(std::move(condition_body_pairs)), if_desc);
         }
 
         // Обработка продукции Condition -> while LogicalExpr: Suite
@@ -906,7 +920,7 @@ namespace
                 }
                 else if (tok.Is<ITokenType::If>())
                 {
-                    return ParseCondition();
+                    return ParseIfCondition();
                 }
                 else if (tok.Is<ITokenType::While>())
                 {
@@ -1388,7 +1402,7 @@ namespace
                 return exec_factory_.Create(ast::Print(std::move(args)));
             }
 
-            if (tok.Is<ITokenType::Delete>())
+            if (tok.Is<ITokenType::Del>())
             { // Разбор оператора del - удаление объекта из области видимости (таблицы символов).
                 lexer_.NextToken();
                 vector<string> id_list = ParseDottedIds();

@@ -11,53 +11,56 @@ namespace parse
     static const string special_symb = "<>=!"s;
 
     static const unordered_map<std::string, Token> keyword_tokens
-        {{"class"s, token_type::Class{}},
-        // Лексемы операторов завершения или приостановки методов.
-         {"return"s, token_type::Return{}},
-         {"co_yield"s, token_type::CoYield{}},
-         {"return_ref"s, token_type::ReturnRef{}},
-         {"co_yield_ref"s, token_type::CoYieldRef{}},
-         {"co_await"s, token_type::CoAwait{}},
-        //
-         {"if"s, token_type::If{}},
-         {"else"s, token_type::Else{}},
-         {"while"s, token_type::While{}},
-         {"break"s, token_type::Break{}},
-         {"continue"s, token_type::Continue{}},
-         {"pass"s, token_type::Pass{}},
-         {"del"s, token_type::Delete{}},
-        // Специальные лексемы обработки исключений.
-         {"try"s, token_type::Try{}},
-         {"except"s, token_type::Except{}},
-         {"finally"s, token_type::Finally{}},
-         {"as"s, token_type::As{}},
-         {"raise"s, token_type::Raise{}},
-        //
-         {"def"s, token_type::Def{}},
-         {"print"s, token_type::Print{}},
-         {"import"s, token_type::Import{}},
-         {"include"s, token_type::Include{}},
-         {"and"s, token_type::And{}},
-         {"or"s, token_type::Or{}},
-         {"not"s, token_type::Not{}},
-         {"xor"s, token_type::Xor{}},
-         {"None"s, token_type::None{}},
-         {"True"s, token_type::True{}},
-         {"False"s, token_type::False{}}
+        {
+            {"class"s, token_type::Class{}},
+            // Лексемы операторов завершения или приостановки методов.
+            {"return"s, token_type::Return{}},
+            {"co_yield"s, token_type::CoYield{}},
+            {"return_ref"s, token_type::ReturnRef{}},
+            {"co_yield_ref"s, token_type::CoYieldRef{}},
+            {"co_await"s, token_type::CoAwait{}},
+            // Лексемы, связанные с обработкой условных операторов.
+            {"if"s, token_type::If{}},
+            {"elif"s, token_type::Elif{}},
+            {"else"s, token_type::Else{}},
+            {"while"s, token_type::While{}},
+            {"break"s, token_type::Break{}},
+            {"continue"s, token_type::Continue{}},
+            //
+            {"pass"s, token_type::Pass{}},
+            {"del"s, token_type::Del{}},
+            // Специальные лексемы обработки исключений.
+            {"try"s, token_type::Try{}},
+            {"except"s, token_type::Except{}},
+            {"finally"s, token_type::Finally{}},
+            {"as"s, token_type::As{}},
+            {"raise"s, token_type::Raise{}},
+            // Прочие негруппированные лексемы.
+            {"def"s, token_type::Def{}},
+            {"print"s, token_type::Print{}},
+            {"import"s, token_type::Import{}},
+            {"include"s, token_type::Include{}},
+            {"and"s, token_type::And{}},
+            {"or"s, token_type::Or{}},
+            {"not"s, token_type::Not{}},
+            {"xor"s, token_type::Xor{}},
+            {"None"s, token_type::None{}},
+            {"True"s, token_type::True{}},
+            {"False"s, token_type::False{}}
         };
 
     static const unordered_map<std::string, Token> special_tokens
         {
-         {"<"s, token_type::Char{'<'}},
-         {">"s, token_type::Char{'>'}},
-         {"="s, token_type::Char{'='}},
-         {"!"s, token_type::Char{'!'}},
-         {"=="s, token_type::Eq{}},
-         {"!="s, token_type::NotEq{}},
-         {"<="s, token_type::LessOrEq{}},
-         {">="s, token_type::GreaterOrEq{}},
-         {"<<"s, token_type::ShiftLeft{}},
-         {">>"s, token_type::ShiftRight{}}
+            {"<"s, token_type::Char{'<'}},
+            {">"s, token_type::Char{'>'}},
+            {"="s, token_type::Char{'='}},
+            {"!"s, token_type::Char{'!'}},
+            {"=="s, token_type::Eq{}},
+            {"!="s, token_type::NotEq{}},
+            {"<="s, token_type::LessOrEq{}},
+            {">="s, token_type::GreaterOrEq{}},
+            {"<<"s, token_type::ShiftLeft{}},
+            {">>"s, token_type::ShiftRight{}}
         };
 
     enum class TokenTypeId
@@ -356,11 +359,13 @@ namespace parse
         UNVALUED_OUTPUT(ReturnRef);
         UNVALUED_OUTPUT(CoYieldRef);
         UNVALUED_OUTPUT(If);
+        UNVALUED_OUTPUT(Elif);
         UNVALUED_OUTPUT(Else);
         UNVALUED_OUTPUT(While);
         UNVALUED_OUTPUT(Break);
         UNVALUED_OUTPUT(Continue);
         UNVALUED_OUTPUT(Pass);
+        UNVALUED_OUTPUT(Del);
         UNVALUED_OUTPUT(Try);
         UNVALUED_OUTPUT(Except);
         UNVALUED_OUTPUT(Finally);
@@ -411,11 +416,13 @@ namespace parse
         STRINGIZE_TOKEN_TYPE(ReturnRef);
         STRINGIZE_TOKEN_TYPE(CoYieldRef);
         STRINGIZE_TOKEN_TYPE(If);
+        STRINGIZE_TOKEN_TYPE(Elif);
         STRINGIZE_TOKEN_TYPE(Else);
         STRINGIZE_TOKEN_TYPE(While);
         STRINGIZE_TOKEN_TYPE(Break);
         STRINGIZE_TOKEN_TYPE(Continue);
         STRINGIZE_TOKEN_TYPE(Pass);
+        STRINGIZE_TOKEN_TYPE(Del);
         STRINGIZE_TOKEN_TYPE(Try);
         STRINGIZE_TOKEN_TYPE(Except);
         STRINGIZE_TOKEN_TYPE(Finally);

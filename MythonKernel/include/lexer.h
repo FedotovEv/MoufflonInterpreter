@@ -44,12 +44,13 @@ namespace parse
         struct CoYieldRef {};// Лексема «co_yield_ref»
         struct CoAwait {};   // Лексема «co_await»
         struct If {};        // Лексема «if»
+        struct Elif {};      // Лексема «elif»
         struct Else {};      // Лексема «else»
         struct While {};     // Лексема "while"
         struct Break {};     // Лексема "break"
         struct Continue {};  // Лексема "continue"
         struct Pass {};      // Лексема "pass"
-        struct Delete {};    // Лексема "del"
+        struct Del {};       // Лексема "del"
         // Лексемы обслуживания системы обработки исключений.
         struct Try {};       // Лексема "try"
         struct Except {};    // Лексема "except"
@@ -84,8 +85,8 @@ namespace parse
         = std::variant<token_type::NumberInt, token_type::NumberDouble, token_type::Id, token_type::Char,
                        token_type::String, token_type::Class,
                        token_type::Return, token_type::CoYield, token_type::ReturnRef, token_type::CoYieldRef, token_type::CoAwait,
-                       token_type::If, token_type::Else,
-                       token_type::While, token_type::Break, token_type::Continue, token_type::Pass, token_type::Delete,
+                       token_type::If, token_type::Elif, token_type::Else,
+                       token_type::While, token_type::Break, token_type::Continue, token_type::Pass, token_type::Del,
                        token_type::Try, token_type::Except, token_type::Finally, token_type::As, token_type::Raise,
                        token_type::Def, token_type::Newline,
                        token_type::Print, token_type::Import, token_type::Include,
@@ -218,7 +219,7 @@ namespace parse
         Token NextToken();
 
         // Если текущий токен имеет тип T, метод возвращает ссылку на него.
-        // В противном случае метод выбрасывает исключение LexerError
+        // В противном случае метод выбрасывает исключение LexerError.
         template <typename T>
         const T& Expect() const
         {
@@ -236,7 +237,7 @@ namespace parse
         }
 
         // Метод проверяет, что текущий токен имеет тип T, а сам токен содержит значение value.
-        // В противном случае метод выбрасывает исключение LexerError
+        // В противном случае метод выбрасывает исключение LexerError.
         template <typename T, typename U>
         void Expect(const U& value) const
         {
@@ -253,7 +254,7 @@ namespace parse
         }
 
         // Если следующий токен имеет тип T, метод возвращает ссылку на него.
-        // В противном случае метод выбрасывает исключение LexerError
+        // В противном случае метод выбрасывает исключение LexerError.
         template <typename T>
         const T& ExpectNext()
         {
@@ -263,7 +264,7 @@ namespace parse
         }
 
         // Метод проверяет, что следующий токен имеет тип T, а сам токен содержит значение value.
-        // В противном случае метод выбрасывает исключение LexerError
+        // В противном случае метод выбрасывает исключение LexerError.
         template <typename T, typename U>
         void ExpectNext(const U& value)
         {

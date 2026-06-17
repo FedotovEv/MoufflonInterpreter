@@ -341,7 +341,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
                     else
                     { // Полагать аргумент верным дробным числом тоже, увы, не получается. Возвращаем ошибку.
                         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                                              "Строка не содержит корректного числа");
+                                                             "Строка не содержит корректного числа");
                         return;
                     }
                 }
@@ -357,7 +357,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
             default:    // Неподдерживаемый тип аргумента.
             {
                 helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
-                                      "Суммирование значений такого типа не поддерживается");
+                                                     "Суммирование значений такого типа не поддерживается");
                 return;
             }
         }
@@ -365,7 +365,7 @@ void PluginInstance::MethodTestAddAll(uintptr_t plugin_method_call_id)
         if (is_arg_error)
         { // Произошёл сбой при получении очередного аргумента функции.
             helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                                  "Сбой при извлечении аргумента");
+                                                 "Сбой при извлечении аргумента");
             return;
         }
     }
@@ -433,7 +433,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
             default:     // Неподдерживаемый тип аргумента.
             {
                 helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
-                                      "Поиск нуля среди значений такого типа не поддерживается");
+                                                     "Поиск нуля среди значений такого типа не поддерживается");
                 return;
             }
         }
@@ -441,14 +441,14 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
         if (is_arg_error)
         { // Произошёл сбой при получении очередного аргумента функции.
             helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                                  "Сбой при извлечении аргумента");
+                                                 "Сбой при извлечении аргумента");
             return;
         }
 
         if (is_zero_found)
         {
             helper_funcs_.set_result_value_func(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
-                                 &arg_index, static_cast<int32_t>(sizeof(int32_t)));
+                                                &arg_index, static_cast<int32_t>(sizeof(int32_t)));
             return;
         }
     }
@@ -456,7 +456,7 @@ void PluginInstance::MethodTestFindZero(uintptr_t plugin_method_call_id)
     // Нулевого члена в последовательности аргументов не найдено. Возвращаем -1.
     int32_t arg_index = -1;
     helper_funcs_.set_result_value_func(plugin_method_call_id, static_cast<uint32_t>(ObjectType::OBJECT_TYPE_INTEGER),
-                         &arg_index, static_cast<int32_t>(sizeof(int32_t)));
+                                        &arg_index, static_cast<int32_t>(sizeof(int32_t)));
 }
 
 // Функция имеет два строковых формальных аргумента. Выполняет поиск положения первой буквы (символа) второй строки в первой. Возвращает целое
@@ -467,7 +467,7 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
     if (helper_funcs_.params_count_func(plugin_method_call_id) != 2)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
-                              "Метод принимает строго два строковых параметра");
+                                             "Метод принимает строго два строковых параметра");
         return;
     }
 
@@ -475,7 +475,7 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
         helper_funcs_.param_type_func(plugin_method_call_id, 1) != static_cast<int32_t>(ObjectType::OBJECT_TYPE_STRING))
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
-                              "Метод принимает только строковые параметры");
+                                             "Метод принимает только строковые параметры");
         return;
     }
 
@@ -484,7 +484,7 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
     if (arg_0_string_size < 0 || arg_1_string_size < 0)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                              "Сбой при извлечении длины параметров");
+                                             "Сбой при извлечении длины параметров");
         return;
     }
 
@@ -494,7 +494,7 @@ void PluginInstance::MethodTestFindChar(uintptr_t plugin_method_call_id)
         helper_funcs_.param_get_value_func(plugin_method_call_id, 1, arg_1_ptr->data(), arg_1_string_size) != arg_1_string_size)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                              "Сбой при извлечении содержимого параметров");
+                                             "Сбой при извлечении содержимого параметров");
         return;
     }
 
@@ -516,14 +516,14 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
     if (helper_funcs_.params_count_func(plugin_method_call_id) != 1)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
-                              "Метод принимает строго один строковый параметр");
+                                             "Метод принимает строго один строковый параметр");
         return;
     }
 
     if (helper_funcs_.param_type_func(plugin_method_call_id, 0) != static_cast<int32_t>(ObjectType::OBJECT_TYPE_STRING))
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_TYPE),
-                              "Метод принимает только строковый параметр");
+                                             "Метод принимает только строковый параметр");
         return;
     }
 
@@ -531,7 +531,7 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
     if (arg_0_string_size < 0)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                              "Сбой при извлечении длины параметров");
+                                             "Сбой при извлечении длины параметров");
         return;
     }
 
@@ -539,7 +539,7 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
     if (helper_funcs_.param_get_value_func(plugin_method_call_id, 0, arg_0_ptr->data(), arg_0_string_size) != arg_0_string_size)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                              "Сбой при извлечении содержимого параметров");
+                                             "Сбой при извлечении содержимого параметров");
         return;
     }
 
@@ -560,7 +560,7 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
         {
             // Строка кодирует целое число, но за пределами типа int32_t.
             helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_OVERFLOW),
-                                  "Целочисленное переполнение");
+                                                 "Целочисленное переполнение");
         }
         else
         {
@@ -578,7 +578,7 @@ void PluginInstance::MethodTestSton(uintptr_t plugin_method_call_id)
     {
         // Обе функции преобразования строки в число (strtol() и strtod()) не могут преобразовать весь исходник в число.
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAM_VALUE),
-                              "Строка не содержит корректного числа");
+                                             "Строка не содержит корректного числа");
     }
 }
 
@@ -588,7 +588,7 @@ void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
     if (helper_funcs_.params_count_func(plugin_method_call_id) != 0)
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT),
-                              "Метод не принимает никаких параметров");
+                                             "Метод не принимает никаких параметров");
         return;
     }
 
@@ -597,7 +597,7 @@ void PluginInstance::MethodTestPrintHello(uintptr_t plugin_method_call_id)
                              hello_string.data(), static_cast<int32_t>(hello_string.size())) != static_cast<int32_t>(hello_string.size()))
     {
         helper_funcs_.set_runtime_error_func(plugin_method_call_id, static_cast<uint32_t>(ThrowMessageNumber::THRM_CONTEXT_OUT_FAIL),
-                              "Печать данных в контекст завершилась неудачно");
+                                             "Печать данных в контекст завершилась неудачно");
         return;
     }
 

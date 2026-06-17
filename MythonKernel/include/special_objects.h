@@ -2,10 +2,10 @@
 
 // Итератор для словаря (ассоциативного массива).
 class MapInstance;
-class MapIterator : public Object
+class MapCursor : public Object
 {
 public:
-    MapIterator(MapInstance& map_instance, std::map<std::string, ObjectHolder>& map_storage);
+    MapCursor(MapInstance& map_instance, std::map<std::string, ObjectHolder>& map_storage);
     void Print(std::ostream& os, Context& context) override;
     const void* GetPtr() const
     {
@@ -16,15 +16,15 @@ public:
     {
         return 0;
     }
-    bool IsIteratorValid();
-    ObjectHolder IteratorGetKey();
-    ObjectHolder IteratorGetValue();
+    bool IsCursorValid();
+    ObjectHolder CursorGetKey();
+    ObjectHolder CursorGetValue();
     bool Begin();
-    bool IteratorLowerBound(const std::string& map_key);
-    bool IteratorNext();
-    bool IteratorPrevious();
-    bool IsIteratorEnd();
-    bool IsIteratorBegin();
+    bool CursorLowerBound(const std::string& map_key);
+    bool CursorNext();
+    bool CursorPrevious();
+    bool IsCursorEnd();
+    bool IsCursorBegin();
 
 private:
     MapInstance& map_instance_ref_;
@@ -36,7 +36,6 @@ private:
 class ArrayInstance : public CommonClassInstance
 { // Экземпляр массива - специального встроенного объекта с предопределенным набором методов.
 public:
-
     using ArrayCallMethod = ObjectHolder(ArrayInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
                                                            Context&);
     ArrayInstance(std::vector<int> elements_count);
@@ -103,7 +102,6 @@ private:
 class MapInstance : public CommonClassInstance
 { // Экземпляр ассоциативного массива (словаря) - специального встроенного объекта с предопределенным набором методов.
 public:
-
     using MapCallMethod = ObjectHolder(MapInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
                                                        Context&);
     MapInstance() = default;
@@ -180,9 +178,9 @@ private:
                            Context& context);
     ObjectHolder MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                              Context& context);
-    ObjectHolder MethodIsIteratorBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+    ObjectHolder MethodIsCursorBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                        Context& context);
-    ObjectHolder MethodIsIteratorEnd(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+    ObjectHolder MethodIsCursorEnd(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                      Context& context);
     ObjectHolder MethodRelease(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                Context& context);
@@ -411,4 +409,9 @@ private:
     ObjectHolder MethodName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodHasMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodHasField(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // Методы извлечение-установки значений полей объекта по их строковым именам (именам в виде текстовой строки).
+    ObjectHolder MethodGetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodSetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // Метод вызова метода того объекта, для которого создана данная характеристика, по его строковому имени.
+    ObjectHolder MethodCallMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
 };

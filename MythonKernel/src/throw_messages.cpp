@@ -32,7 +32,7 @@ namespace runtime
         {ThrowMessageNumber::THRM_DIVISION_BY_ZERO, "Деление на нуль"s},
         {ThrowMessageNumber::THRM_IMPOSSIBLE_MODULO_DIVISION, "Невозможно выполнить взятие остатка от деления"s},
         {ThrowMessageNumber::THRM_MODULO_DIVISION_BY_ZERO, "Модульное деление на нуль"s},
-        {ThrowMessageNumber::THRM_NOT_DIGIT_SIZES, "Количество элементов в массиве должно задаваться числами"s},
+        {ThrowMessageNumber::THRM_ARRAY_SIZE_NOT_NUMERIC, "Количество элементов в массиве должно задаваться числами"s},
         {ThrowMessageNumber::THRM_INVALID_ARRAY_INDEX, "Недопустимое значение индекса массива"s},
         {ThrowMessageNumber::THRM_PUSH_BACK_ONE_DIM_ONLY, "Метод PushBack допустим только для одномерных массивов"s},
         {ThrowMessageNumber::THRM_BACK_ONE_DIM_ONLY, "Метод Back допустим только для одномерных массивов"s},
@@ -45,19 +45,7 @@ namespace runtime
         {ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Неверное количество параметров метода"s},
         {ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Недопустимое значение параметра"s},
         {ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Недопустимый тип параметра"s},
-        {ThrowMessageNumber::THRM_METHOD, "Метод "s},
-        {ThrowMessageNumber::THRM_ARGUMENTS, " аргументов"s},
-        {ThrowMessageNumber::THRM_DEMAND_EQUAL, " требует "s},
-        {ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL, " требует не более "s},
-        {ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL, " требует не менее "s},
-        {ThrowMessageNumber::THRM_PARAMETER, "Параметр "s},
-        {ThrowMessageNumber::THRM_OF_METHOD, " метода "s},
-        {ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE, " имеет несоответствующий тип"s},
-        {ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT, " требует 1 аргумент"s},
-        {ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD, "Параметр 1 метода "s},
-        {ThrowMessageNumber::THRM_MUST_BE_ITERATOR, " должен быть итератором"s},
-        {ThrowMessageNumber::THRM_IN_METHOD, "В методе "s},
-        {ThrowMessageNumber::THRM_ITERATOR_INVALID, " итератор недействителен"s},
+
         //
         {ThrowMessageNumber::THRM_MATH_CTOR_HAS_NO_PARAMS, "Конструктор math не должен иметь аргументов"s},
         {ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST, "Ошибка в параметрах команды"s},
@@ -72,11 +60,84 @@ namespace runtime
         //
         {ThrowMessageNumber::THRM_INVALID_LOAD_PLUGIN_LIST, "Загружен неверный список имён функций-информаторов"s},
         {ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA, "От информатора втыкалы получены недопустимые данные"s},
+        {ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS, "Конструктор объекта-втыкалы не имеет аргументов"s},
 
         {ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE, "Метод не является сопрограммой"s},
         {ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE, "Специальный метод не может быть сопрограммой"s},
-        {ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS, "Конструктор объекта-втыкалы не имеет аргументов"s},
+
         //
-        {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s}
+        {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s},
+        // Подстановочные фрагменты, предназначенные для формирования составных, более сложных, сообщений.
+        {ThrowMessageNumber::THRM_METHOD, "Метод "s},
+        {ThrowMessageNumber::THRM_ARGUMENTS, " аргументов"s},
+        {ThrowMessageNumber::THRM_DEMAND_EQUAL, " требует "s},
+        {ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL, " требует не более "s},
+        {ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL, " требует не менее "s},
+        {ThrowMessageNumber::THRM_PARAMETER, "Параметр "s},
+        {ThrowMessageNumber::THRM_OF_METHOD, " метода "s},
+        {ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE, " имеет несоответствующий тип"s},
+        {ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT, " требует 1 аргумент"s},
+        {ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD, "Параметр 1 метода "s},
+        {ThrowMessageNumber::THRM_MUST_BE_ITERATOR, " должен быть итератором"s},
+        {ThrowMessageNumber::THRM_IN_METHOD, "В методе "s},
+        {ThrowMessageNumber::THRM_ITERATOR_INVALID, " итератор недействителен"s},
     };
+
+    const std::string& ThrowMessages::GetThrowText(ThrowMessageNumber throw_message_number)
+    {
+        if (throw_messages_.count(throw_message_number))
+            return throw_messages_.at(throw_message_number);
+        else
+            return throw_messages_.at(ThrowMessageNumber::THRM_UNKNOWN);
+    }
+
+    // Функция генерации сообщения об ошибке по трафарету text_pattern. Подстановочные коды передаются в массиве throw_messages.
+    std::string ThrowMessages::ConstructThrowText(const std::string& text_pattern, std::vector<ThrowMessageNumber> throw_messages)
+    {
+        std::string result;
+        for (size_t i = 0; i < text_pattern.size(); ++i)
+        {
+            char c = text_pattern[i];
+            if (c == '\\')
+            { // Следующий символ экранируется - рассматривается как обычный символ строки, без служебного значения.
+              // Сам же обратный слэш отбрасывается, если не является последним символом трафарета.
+                if (++i < text_pattern.size())
+                    result += text_pattern[i];
+                else
+                    result += c;
+            }
+            else if (c == '%')
+            { // Местоблюститель для замены на элемент из throw_messages.
+                if (++i < text_pattern.size())
+                {
+                    std::string pattern_tail = text_pattern.substr(i);
+                    const char* start_index_symbol = pattern_tail.c_str();
+                    char* end_index_symbol;
+                    size_t msg_index = strtoul(start_index_symbol, &end_index_symbol, 10);                    
+                    if (size_t end_index_strlen = end_index_symbol - start_index_symbol)
+                    {
+                        if (msg_index >= 0 && msg_index < throw_messages.size())
+                            result += GetThrowText(throw_messages[msg_index]);
+                        i += end_index_strlen;
+                    }
+                    else
+                    { // После опознавателя '%' вообще нет корректного номера подстановки.
+                      // В таком случае воспринимаем его как обыковенный знак.
+                        --i;
+                        result += c;
+                    }
+                }
+                else
+                { // Символ '%' - последний в строке. Присоединяем его к результату как есть, а затем выходим.
+                    result += c;
+                }
+            }
+            else
+            { // Обыкновенный очередной символ выходной строки.
+                result += c;
+            }
+        }
+
+        return result;
+    }
 } // namespace runtime

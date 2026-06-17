@@ -15,13 +15,10 @@ namespace runtime
         ThrowMessages() = delete;
         ThrowMessages(const ThrowMessages&) = delete;
         ThrowMessages& operator=(const ThrowMessages&) = delete;
-        static const std::string& GetThrowText(ThrowMessageNumber thow_message_number)
-        {
-            if (throw_messages_.count(thow_message_number))
-                return throw_messages_.at(thow_message_number);
-            else
-                return throw_messages_.at(ThrowMessageNumber::THRM_UNKNOWN);
-        }
+        // Возврат сообщения об ошибке, соответствующего коду throw_message_number.
+        static const std::string& GetThrowText(ThrowMessageNumber throw_message_number);
+        // Трафаретная генерация сложного сообщения об ошибке.
+        static std::string ConstructThrowText(const std::string& text_pattern, std::vector<ThrowMessageNumber> throw_messages);
 
     private:
         static const std::unordered_map<ThrowMessageNumber, std::string> throw_messages_;

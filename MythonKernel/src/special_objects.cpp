@@ -30,7 +30,7 @@ namespace ast
             if (cur_element_count_ptr)
                 elements_count.push_back(cur_element_count_ptr->GetIntValue());
             else
-                ThrowRuntimeError(this, ThrowMessageNumber::THRM_NOT_DIGIT_SIZES);
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_ARRAY_SIZE_NOT_NUMERIC);
         }
 
         return ObjectHolder::Own(runtime::ArrayInstance(move(elements_count)));
@@ -143,10 +143,10 @@ namespace runtime
         {"Key"sv, &MapInstance::MethodKey},
         {"value"sv, &MapInstance::MethodValue},
         {"Value"sv, &MapInstance::MethodValue},
-        {"is_iterator_begin"sv, &MapInstance::MethodIsIteratorBegin},
-        {"IsIteratorBegin"sv, &MapInstance::MethodIsIteratorBegin},
-        {"is_iterator_end"sv, &MapInstance::MethodIsIteratorEnd},
-        {"IsIteratorEnd"sv, &MapInstance::MethodIsIteratorEnd},
+        {"is_cursor_begin"sv, &MapInstance::MethodIsCursorBegin},
+        {"IsCursorBegin"sv, &MapInstance::MethodIsCursorBegin},
+        {"is_cursor_end"sv, &MapInstance::MethodIsCursorEnd},
+        {"IsCursorEnd"sv, &MapInstance::MethodIsCursorEnd},
         {"release"sv, &MapInstance::MethodRelease},
         {"Release"sv, &MapInstance::MethodRelease}
     };
@@ -173,10 +173,10 @@ namespace runtime
         {"Key"sv, {1, 1}},
         {"value"sv, {1, 1}},
         {"Value"sv, {1, 1}},
-        {"is_iterator_begin"sv, {1, 1}},
-        {"IsIteratorBegin"sv, {1, 1}},
-        {"is_iterator_end"sv, {1, 1}},
-        {"IsIteratorEnd"sv, {1, 1}},
+        {"is_cursor_begin"sv, {1, 1}},
+        {"IsCursorBegin"sv, {1, 1}},
+        {"is_cursor_end"sv, {1, 1}},
+        {"IsCursorEnd"sv, {1, 1}},
         {"release"sv, {0, 0}},
         {"Release"sv, {0, 0}}
     };
@@ -225,34 +225,31 @@ namespace runtime
                            const vector<ObjectHolder>& actual_args)
     {
         static constexpr int PARAM_CHECK_QUANTITY_MASK = 3;
-        string err_mess;
+        string pattern_text = "%1"s + method_name + "%2"s + to_string(required_params) + "%3", err_mess;
 
         switch (check_mode & PARAM_CHECK_QUANTITY_MASK)
         {
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL:
             if (actual_args.size() != required_params)
             {
-                err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
-                           ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_EQUAL) +
-                           to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
+                err_mess = ThrowMessages::ConstructThrowText(pattern_text,
+                    {ThrowMessageNumber::THRM_METHOD, ThrowMessageNumber::THRM_DEMAND_EQUAL, ThrowMessageNumber::THRM_ARGUMENTS});
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_LESS_EQ:
             if (actual_args.size() > required_params)
             {
-                err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
-                    ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL) +
-                    to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
+                err_mess = ThrowMessages::ConstructThrowText(pattern_text,
+                    {ThrowMessageNumber::THRM_METHOD, ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL, ThrowMessageNumber::THRM_ARGUMENTS});
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
         case MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ:
             if (actual_args.size() < required_params)
             {
-                err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD) + method_name +
-                    ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL) +
-                    to_string(required_params) + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ARGUMENTS);
+                err_mess = ThrowMessages::ConstructThrowText(pattern_text,
+                    {ThrowMessageNumber::THRM_METHOD, ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL, ThrowMessageNumber::THRM_ARGUMENTS});
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
             }
             break;
@@ -262,10 +259,13 @@ namespace runtime
 
         if (check_mode & MethodParamCheckMode::PARAM_CHECK_TYPE)
         {
-            size_t i = 1;
             bool is_throw_exception = false;
-            for (auto& current_param : actual_args)
+            // Если флаг PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS установлен, рассматриваем соответствие типа только для первых
+            // required_params параметров. Иначе проверяем все имеющиеся.
+            size_t i_max = check_mode & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS ? required_params : actual_args.size();
+            for (size_t i = 1; i < i_max; ++i)
             {
+                auto& current_param = actual_args[i];
                 if (current_param)
                 {
                     if (current_param.TryAs<Number>() && !(param_type & MethodParamType::PARAM_TYPE_NUMERIC))
@@ -287,7 +287,6 @@ namespace runtime
                         ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
                     ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, err_mess);
                 }
-                ++i;
             }
         }
     }
@@ -477,24 +476,24 @@ namespace runtime
         }
     }
 
-    MapIterator::MapIterator(MapInstance & map_instance, map<string, ObjectHolder> & map_storage) :
+    MapCursor::MapCursor(MapInstance & map_instance, map<string, ObjectHolder> & map_storage) :
         map_instance_ref_(map_instance), map_storage_ref_(map_storage), map_iterator_(map_storage.begin()),
         iterator_pack_serial_(map_instance.AllocIteratorPackSerial())
     {}
 
-    bool MapIterator::Begin()
+    bool MapCursor::Begin()
     {
         map_iterator_ = map_storage_ref_.begin();
         return map_iterator_ != map_storage_ref_.end();
     }
 
-    bool MapIterator::IteratorLowerBound(const string& map_key)
+    bool MapCursor::CursorLowerBound(const string& map_key)
     {
         map_iterator_ = map_storage_ref_.lower_bound(map_key);
         return map_iterator_ != map_storage_ref_.end();
     }
 
-    ObjectHolder MapIterator::IteratorGetKey()
+    ObjectHolder MapCursor::CursorGetKey()
     {
         if (map_iterator_ != map_storage_ref_.end())
             return ObjectHolder::Own(String(map_iterator_->first));
@@ -502,7 +501,7 @@ namespace runtime
             return ObjectHolder::None();
     }
 
-    ObjectHolder MapIterator::IteratorGetValue()
+    ObjectHolder MapCursor::CursorGetValue()
     {
         if (map_iterator_ != map_storage_ref_.end())
             return ObjectHolder::Own(PointerObject(&(map_iterator_->second)));
@@ -510,36 +509,36 @@ namespace runtime
             return ObjectHolder::Own(PointerObject());
     }
 
-    bool MapIterator::IteratorNext()
+    bool MapCursor::CursorNext()
     {
         if (map_iterator_ != map_storage_ref_.end())
             ++map_iterator_;
         return map_iterator_ != map_storage_ref_.end();
     }
 
-    bool MapIterator::IteratorPrevious()
+    bool MapCursor::CursorPrevious()
     {
         if (map_iterator_ != map_storage_ref_.begin())
             --map_iterator_;
         return map_iterator_ != map_storage_ref_.begin();
     }
 
-    bool MapIterator::IsIteratorEnd()
+    bool MapCursor::IsCursorEnd()
     {
         return map_iterator_ == map_storage_ref_.end();
     }
 
-    bool MapIterator::IsIteratorBegin()
+    bool MapCursor::IsCursorBegin()
     {
         return map_iterator_ == map_storage_ref_.begin();
     }
 
-    void MapIterator::Print(std::ostream& os, Context& context)
+    void MapCursor::Print(std::ostream& os, Context& context)
     {
-        os << "MapIter:" << iterator_pack_serial_ << ' ' << boolalpha << IsIteratorValid();
+        os << "MapIter:" << iterator_pack_serial_ << ' ' << boolalpha << IsCursorValid();
     }
 
-    bool MapIterator::IsIteratorValid()
+    bool MapCursor::IsCursorValid()
     {
         return map_instance_ref_.GetIteratorModeFlag() &&
             map_instance_ref_.GetIteratorPackSerial() == iterator_pack_serial_;
@@ -563,15 +562,15 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
         }
 
-        MapIterator * map_iter_ptr = actual_args[0].TryAs<MapIterator>();
-        if (!map_iter_ptr)
+        MapCursor* map_cursor_ptr = actual_args[0].TryAs<MapCursor>();
+        if (!map_cursor_ptr)
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD) +
                        method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_MUST_BE_ITERATOR);
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, err_mess);
         }
 
-        if (!map_iter_ptr->IsIteratorValid())
+        if (!map_cursor_ptr->IsCursorValid())
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_IN_METHOD) +
                 method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ITERATOR_INVALID);
@@ -601,7 +600,7 @@ namespace runtime
                                            Context& context)
     {
         CheckMethodParams(context, "Insert"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
         if (is_in_iterator_mode_)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_INSERT);
 
@@ -613,7 +612,7 @@ namespace runtime
                                          Context& context)
     {
         CheckMethodParams(context, "Find"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
         auto map_iterator = map_storage_.find(GetStringKey(actual_args[0], context));
         if (map_iterator != map_storage_.end())
@@ -626,7 +625,7 @@ namespace runtime
                                           Context& context)
     {
         CheckMethodParams(context, "Erase"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
         if (is_in_iterator_mode_)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_ERASE);
 
@@ -638,7 +637,7 @@ namespace runtime
                                              Context& context)
     {
         CheckMethodParams(context, "Contains"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
         return ObjectHolder::Own(Bool(map_storage_.count(GetStringKey(actual_args[0], context))));
     }
@@ -647,7 +646,7 @@ namespace runtime
                                           Context& context)
     {
         CheckMethodParams(context, "Clear"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
             
         map_storage_.clear();
         return ObjectHolder::None();            
@@ -657,9 +656,9 @@ namespace runtime
                                           Context& context)
     {
         CheckMethodParams(context, "Begin"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
 
-        return ObjectHolder::Own(MapIterator(*this, map_storage_));
+        return ObjectHolder::Own(MapCursor(*this, map_storage_));
     }
 
     ObjectHolder MapInstance::MethodPrevious(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -667,7 +666,7 @@ namespace runtime
     {
         CheckMapIteratorParam(context, "Previous"s, actual_args);
 
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapIterator>()->IteratorPrevious()));
+        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->CursorPrevious()));
     }
 
     ObjectHolder MapInstance::MethodNext(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -675,7 +674,7 @@ namespace runtime
     {
         CheckMapIteratorParam(context, "Next"s, actual_args);
 
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapIterator>()->IteratorNext()));
+        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->CursorNext()));
     }
 
     ObjectHolder MapInstance::MethodKey(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -683,7 +682,7 @@ namespace runtime
     {
         CheckMapIteratorParam(context, "Key"s, actual_args);
 
-        return actual_args[0].TryAs<MapIterator>()->IteratorGetKey();
+        return actual_args[0].TryAs<MapCursor>()->CursorGetKey();
     }
 
     ObjectHolder MapInstance::MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args,
@@ -691,30 +690,30 @@ namespace runtime
     {
         CheckMapIteratorParam(context, "Value"s, actual_args);
 
-        return actual_args[0].TryAs<MapIterator>()->IteratorGetValue();
+        return actual_args[0].TryAs<MapCursor>()->CursorGetValue();
     }
 
-    ObjectHolder MapInstance::MethodIsIteratorBegin(const std::string& method,
+    ObjectHolder MapInstance::MethodIsCursorBegin(const std::string& method,
                             const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "IsIteratorBegin"s, actual_args);
 
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapIterator>()->IsIteratorBegin()));
+        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->IsCursorBegin()));
     }
 
-    ObjectHolder MapInstance::MethodIsIteratorEnd(const std::string& method,
+    ObjectHolder MapInstance::MethodIsCursorEnd(const std::string& method,
                             const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "IsIteratorEnd"s, actual_args);
 
-        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapIterator>()->IsIteratorEnd()));
+        return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->IsCursorEnd()));
     }
 
     ObjectHolder MapInstance::MethodRelease(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                             Context& context)
     {
         CheckMethodParams(context, "Release"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-            MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
 
         is_in_iterator_mode_ = false;
         return ObjectHolder::None();
@@ -900,7 +899,13 @@ namespace runtime
         {"has_method"sv, &TypeTraitsInstance::MethodHasMethod},
         {"HasMethod"sv, &TypeTraitsInstance::MethodHasMethod},
         {"has_field"sv, &TypeTraitsInstance::MethodHasField},
-        {"HasField"sv, &TypeTraitsInstance::MethodHasField}
+        {"HasField"sv, &TypeTraitsInstance::MethodHasField},
+        {"get_field_value"sv, &TypeTraitsInstance::MethodGetFieldValue},
+        {"GetFieldValue"sv, &TypeTraitsInstance::MethodGetFieldValue},
+        {"set_field_value"sv, &TypeTraitsInstance::MethodSetFieldValue},
+        {"SetFieldValue"sv, &TypeTraitsInstance::MethodSetFieldValue},
+        {"call_method"sv, &TypeTraitsInstance::MethodCallMethod},
+        {"CallMethod"sv, &TypeTraitsInstance::MethodCallMethod}
     };
 
     // Описание аргументов внешних методов этого класса.
@@ -935,7 +940,13 @@ namespace runtime
         {"has_method"sv, {2, 2}},
         {"HasMethod"sv, {2, 2}},
         {"has_field"sv, {1, 1}},
-        {"HasField"sv, {1, 1}}
+        {"HasField"sv, {1, 1}},
+        {"get_field_value"sv, {1, 1}},
+        {"GetFieldValue"sv, {1, 1}},
+        {"set_field_value"sv, {2, 2}},
+        {"SetFieldValue"sv, {2, 2}},
+        {"call_method"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"CallMethod"sv, {1, (std::numeric_limits<size_t>::max)()}}
     };
 
     // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
@@ -1231,5 +1242,69 @@ namespace runtime
             return ObjectHolder::Own(Bool(false));  // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
 
         return ObjectHolder::Own(Bool(class_instance->Fields().contains(find_field_name->GetValue())));
+    }
+
+    // Функции-члены извлечения и установки значения некоторого поля объекта. Имя поля передаётся первым строковым аргументом.
+    // Второй аргумент есть у функции-установщика и является значением, которое будет назначено указанному полю.
+    ObjectHolder TypeTraitsInstance::MethodGetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "GetFieldValue"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+
+        String* find_field_name = actual_args[0].TryAs<String>();
+        runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        if (!class_instance)
+            // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
+
+        Closure& class_closure = class_instance->Fields();
+        if (auto closure_field_it = class_closure.find(find_field_name->GetValue()); closure_field_it != class_closure.end())
+            return closure_field_it->second;
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    ObjectHolder TypeTraitsInstance::MethodSetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "SetFieldValue"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
+
+        String* find_field_name = actual_args[0].TryAs<String>();
+        if (!find_field_name) // Имя поля должно быть строкой.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE);
+        runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        if (!class_instance)
+            // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
+
+        Closure& class_closure = class_instance->Fields();
+        if (auto closure_field_it = class_closure.find(find_field_name->GetValue()); closure_field_it != class_closure.end())
+        {
+            ObjectHolder old_value = move(closure_field_it->second);
+            closure_field_it->second = actual_args[1];
+            return old_value;
+        }
+        else
+        {
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+        }
+    }
+
+    // Метод вызова метода того объекта, для которого создана данная характеристика, по его строковому имени. Первый аргумент - строковое имя
+    // вызываемого метода, остальные аргументы передаются этому методу "как есть". При вызове выполняется проверка наличия требуемого метода
+    // целевого класса по его имени и количеству параметров.
+    ObjectHolder TypeTraitsInstance::MethodCallMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "CallMethod"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+
+        String* find_field_name = actual_args[0].TryAs<String>();
+        if (!find_field_name) // Имя метода должно быть строкой.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE);
+        runtime::CommonClassInstance* common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        if (!common_class_instance)
+            // Это не какой-либо класс. У прочих простых типов выражений методов нет вовсе.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
+        return common_class_instance->Call(find_field_name->GetValue(), {actual_args.begin() + 1, actual_args.end()}, context);
     }
 } //namespace runtime

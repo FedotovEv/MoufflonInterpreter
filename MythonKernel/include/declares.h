@@ -30,6 +30,7 @@ const std::string SELF_FIELD_NAME = "self";
 const std::string ARRAY_CLASS_NAME = "array";
 const std::string MAP_CLASS_NAME = "map";
 const std::string MATH_CLASS_NAME = "math";
+const std::string STRINGOPS_CLASS_NAME = "string_ops";
 // Имена стандартных классов ошибок (также ненаследуемых).
 const std::string COMMON_ERROR_CLASS_NAME = "CommonError";
 const std::string ERROR_DIVISION_BY_ZERO_CLASS_NAME = "ErrorDivisionByZero";

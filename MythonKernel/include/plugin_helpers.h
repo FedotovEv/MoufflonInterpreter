@@ -86,8 +86,9 @@
                                                     // а также производится проверка их всех на соответствие требуемым типам.
     PARAM_CHECK_TYPE_QUANTITY_LESS_EQ = 6,          // Аналогично сочетает требование на количество параметров (должно быть менее
                                                     // или равным указанному) с проверкой типового соответствия.
-    PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ = 7        // Сочетает требование на количество параметров (должно быть более или равным
+    PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ = 7,       // Сочетает требование на количество параметров (должно быть более или равным
                                                     // указанному) с проверкой типового соответствия.
+    PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS = 8          // Проверять тип только для первых arg_count_min фактических парметров.
 };
 
 // Перечисление возможных проверок фактических параметров метода по их типу (соответствию требуемому типу).
@@ -122,34 +123,49 @@
     enum ThrowMessageNumber
 #endif
 {
-    THRM_UNKNOWN = 0,
-    THRM_MEMORY_ALLOCATION_ERROR,
-    THRM_NOT_SUPPORT_FREE_FUNCTION,
-    THRM_ARRAY_MUST_HAVE_DIMS,
-    THRM_MAP_CTOR_HAS_NO_PARAMS,
-    THRM_STR_HAS_ONE_PARAM,
-    THRM_IS_SAME_TARGET_HAS_TWO_PARAMS,
-    THRM_UNKNOWN_METHOD_CALL,
-    THRM_POINTER_RET_TO_VAL_DENIED,
-    THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED,
-    THRM_BASE_CLASS,
-    THRM_NOT_FOUND_FOR_CLASS,
-    THRM_CLASS,
-    THRM_ALREADY_EXISTS,
-    THRM_METHOD_NOT_FOUND,
-    THRM_INDIRECT_ASSIGN_ERROR,
+    THRM_UNKNOWN = 0,                       // Нет ошибки.
+    // Общие ошибки системного происхождения.
+    THRM_MEMORY_ALLOCATION_ERROR,           // Сбой при выделении динамической памяти.
+    // Неверная характеристика параметра(ов) метода - неверное их полное количество, недопустимый тип, значение или длина
+    // какого-либо из них.
+    THRM_INVALID_PARAMS_COUNT,              // Несответствующее количество переданных параметров.
+    THRM_INVALID_PARAM_VALUE,
+    THRM_INVALID_PARAM_TYPE,
+    THRM_INVALID_PARAM_LENGTH,
+    THRM_ARRAY_SIZE_NOT_NUMERIC,            // Количество элементов в массиве должно задаваться числами    
+    THRM_PARAMS_TYPE_INCONSISTENCY,         // Несогласованность типов параметров метода (их расхождение с требованиям).
+    THRM_ARRAY_MUST_HAVE_DIMS,              // Для массива array при конструировании нужно указать размерность.
+    THRM_MAP_CTOR_HAS_NO_PARAMS,            // Конструктор ассоциативного массива (словаря) map не имеет параметров.
+    THRM_MATH_CTOR_HAS_NO_PARAMS,           // Конструктор класса математической коллекции math не имеет аргументов.
+    THRM_STRINGOPS_CTOR_HAS_NO_PARAMS,      // Конструктор класса строковых преобразователей StringOps также не имеет аргументов.
+    THRM_OBJECT_CTOR_HAS_NO_PARAMS,         // Конструктор данного класса не должен иметь аргументов.
+    THRM_STR_HAS_ONE_PARAM,                 // Функция str() должна быть вызвана строго с единственным аргументом.
+    THRM_IS_SAME_TARGET_HAS_TWO_PARAMS,     // Функция IsSameTarget() должна иметь ровно два параметра.
+    // Общие грамматические и синтаксические ошибки разбора исходного текста.
+    THRM_SYNTAX_ERROR,
+    THRM_NOT_SUPPORT_FREE_FUNCTION,         // Язык не поддерживает определение свободных функций.
     THRM_VARIABLE_NOT_FOUND,
+    THRM_METHOD_NOT_FOUND,                  // Попытка обращения к неизвестному методу класса.
+    THRM_QUALIFIER_NOT_ANCESTOR,            // Уточнитель метода не является предком этого класса.
+    THRM_AMBIGUOUS_OVERLOAD,                // Неоднозначная перегрузка метода.
+    THRM_FIELD_NOT_FOUND,                   // Обращение к несуществующему или недоступному полю.
+    THRM_POINTER_RET_TO_VAL_DENIED,         // Ссылка на временное значение недопустима.
+    THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED,  // Ссылка на локальную переменную метода невозможна.
+    THRM_INDIRECT_ASSIGN_ERROR,             // Ошибка косвенного присваивания.
+    // Недопустимые и невыполнимые операции.
     THRM_IMPOSSIBLE_ADDITION,
     THRM_IMPOSSIBLE_SUBTRACTION,
     THRM_IMPOSSIBLE_MULTIPLICATION,
     THRM_IMPOSSIBLE_DIVISION,
     THRM_IMPOSSIBLE_COMPARE_EQUAL,
     THRM_IMPOSSIBLE_COMPARE_LESS,
-    THRM_DIVISION_BY_ZERO,
+    THRM_DIVISION_BY_ZERO,                      // Деление на нуль.
     THRM_IMPOSSIBLE_MODULO_DIVISION,
-    THRM_MODULO_DIVISION_BY_ZERO,
-    THRM_OVERFLOW,
-    THRM_NOT_DIGIT_SIZES,
+    THRM_MODULO_DIVISION_BY_ZERO,               // Целочисленное деление на нуль.
+    THRM_SHIFT_INVALID_PARAMS,                  // Недопустимые параметры для операции сдвига.
+    THRM_OVERFLOW,                              // Математическое переполнение при вычислениях.
+    THRM_CONTEXT_OUT_FAIL,                      // Печать данных в контекст по какой-то причине завершилась неудачно.
+    // Ошибки при работе с массивами и словарями.
     THRM_INVALID_ARRAY_INDEX,
     THRM_PUSH_BACK_ONE_DIM_ONLY,
     THRM_BACK_ONE_DIM_ONLY,
@@ -157,12 +173,33 @@
     THRM_ARRAY_IS_EMPTY,
     THRM_ITERATOR_IN_PROGRESS_INSERT,
     THRM_ITERATOR_IN_PROGRESS_ERASE,
-    THRM_PARAMS_TYPE_INCONSISTENCY,
-    THRM_INVALID_PARAMS_COUNT,
-    THRM_INVALID_PARAM_VALUE,
-    THRM_INVALID_PARAM_TYPE,
-    THRM_INVALID_PARAM_LENGTH,
-    THRM_CONTEXT_OUT_FAIL,
+
+
+
+
+    THRM_INCORRECT_TOKEN_LIST,
+    //
+    THRM_INCLUDE_INVALID_PARAMS,
+    THRM_INVALID_IMPORT_FILENAME,
+    // Коды ошибок, связанные с неполадками при загрузке и обработке втыкал.
+    THRM_DYNAMIC_LIBRARY_NOT_LOADED,
+    THRM_LOAD_PLUGIN_LIST_NOT_FOUND,
+    THRM_INVALID_LOAD_PLUGIN_LIST,
+    THRM_INVALID_PLUGIN_DATA,
+    // Специфические проблемы при работе с сопрограммами и ждунами.
+    THRM_METHOD_NOT_COROUTINE,                  // Метод не является сопрограммой.
+    THRM_SPECIAL_METHOD_CANT_COROUTINE,         // Методы специального назначения не могут быть сопрограммами.
+    THRM_OBJECT_NOT_AWAITABLE,                  // Данный объект не относится к стопусловным (не является ждуном).
+    // Условные коды для нормальных рабочих процедур, обрабатываемых как ошибки.
+    THRM_RAISE_CALL,                            // Исполнение оператора выброса исключения raise.
+    THRM_URGENT_TERMINATE,                      // Экстренное завершение работы программы.
+    // Завершение блока кодов возможных ошибок разбора и исполнения программы, которые при своём возникновении порождают такие коды.
+    THRM_MAX_ERROR = THRM_URGENT_TERMINATE,
+    // Предложения для формирования составных сообщений об ошибках.
+    THRM_BASE_CLASS,
+    THRM_NOT_FOUND_FOR_CLASS,
+    THRM_CLASS,
+    THRM_ALREADY_EXISTS,
     THRM_METHOD,
     THRM_ARGUMENTS,
     THRM_DEMAND_EQUAL,
@@ -176,26 +213,8 @@
     THRM_MUST_BE_ITERATOR,
     THRM_IN_METHOD,
     THRM_ITERATOR_INVALID,
-    THRM_MATH_CTOR_HAS_NO_PARAMS,
-    THRM_INCORRECT_TOKEN_LIST,
-    THRM_INVALID_IMPORT_FILENAME,
-    // Коды ошибок, связанные с неполадками при загрузке и обработке втыкал.
-    THRM_DYNAMIC_LIBRARY_NOT_LOADED,
-    THRM_LOAD_PLUGIN_LIST_NOT_FOUND,
-    THRM_INVALID_LOAD_PLUGIN_LIST,
-    THRM_INVALID_PLUGIN_DATA,
     //
-    THRM_INCLUDE_INVALID_PARAMS,
-    THRM_SHIFT_INVALID_PARAMS,
-    THRM_RAISE_CALL,
-    THRM_QUALIFIER_NOT_ANCESTOR,
-    THRM_AMBIGUOUS_OVERLOAD,
-    THRM_METHOD_NOT_COROUTINE,
-    THRM_SPECIAL_METHOD_CANT_COROUTINE,
-    THRM_OBJECT_NOT_AWAITABLE,
-    THRM_OBJECT_CTOR_HAS_NO_PARAMS,
-    THRM_URGENT_TERMINATE,
-    THRM_MAX_VALUE = THRM_URGENT_TERMINATE
+    THRM_MAX_VALUE = THRM_ITERATOR_INVALID      // Абсолютно максимальное значение данного перечисления.
 };
 
 // Функциональный тип головной функции динамической библиотеки, содержащей одну или несколько втыкал. Наличие этого уровня абстракции

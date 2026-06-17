@@ -118,6 +118,43 @@ print x.calc(2)
         ASSERT_EQUAL(context->output.str(), "2\n"s);
     }
 
+    // Проверка работы многовариантного оператора if ... elif ... else ... .
+    void TestProgramWithComplexIf()
+    {
+        const string program = R"(
+class ValClassify:
+  def calc(n):
+    if n > 1000:
+      return 4
+    elif n > 100:
+      return 3
+    elif n > 10:
+      return 2
+    elif n > 0:
+      return 1
+    elif n == 0:
+      return 0
+    elif n >= -10:
+      return -1
+    elif n >= -100:
+      return -2
+    elif n >= -1000:
+      return -3
+    else:
+      return -4
+
+x = ValClassify()
+print x.calc(0), x.calc(1), x.calc(11), x.calc(111), x.calc(1111), x.calc(500), x.calc(50), x.calc(5), x.calc(0)
+print x.calc(0), x.calc(-1), x.calc(-11), x.calc(-111), x.calc(-1111), x.calc(-500), x.calc(-50), x.calc(-5), x.calc(0)
+)"s;
+        CplxParsedProgram cplx_program = ParseProgramFromString(program);
+        cplx_program.SetContext(runtime::DummyContext());
+        ExecuteProgram(cplx_program);
+
+        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+        ASSERT_EQUAL(context->output.str(), "0 1 2 3 4 3 2 1 0\n0 -1 -2 -3 -4 -3 -2 -1 0\n"s);
+    }
+
     void TestRecursion()
     { // Рекурсивный вызов метода с накоплением результата в поле класса.
         const string program = R"(
@@ -325,6 +362,7 @@ void TestParseProgram(TestRunner& tr)
     RUN_TEST(tr, parse::TestSimpleProgram);
     RUN_TEST(tr, parse::TestProgramWithClasses);
     RUN_TEST(tr, parse::TestProgramWithIf);
+    RUN_TEST(tr, parse::TestProgramWithComplexIf);
     RUN_TEST(tr, parse::TestReturnFromIf);
     RUN_TEST(tr, parse::TestRecursion);
     RUN_TEST(tr, parse::TestRecursion2);

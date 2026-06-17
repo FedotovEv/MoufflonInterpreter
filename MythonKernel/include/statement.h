@@ -818,19 +818,18 @@ namespace ast
         runtime::Class* GetClass();
     };
 
-    // Инструкция if <condition> <if_body> else <else_body>.
+    // Инструкция if <condition> <if_body> [elif <elif_condition> <elif_body>]* [else <else_body>].
     class IfElse : public Statement
     {
     public:
-        // Параметр else_body может быть равен nullptr.
-        IfElse(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> if_body,
-               std::unique_ptr<Statement> else_body);
+        // Описание каждого условного блока состоит из пары, первый член которой - условие входа в блок, а второй член - его
+        // исполняемое тело. Для последнего терма else, возможно завершающего инструкцию, условный член пары равен nullptr.
+        IfElse(std::vector<std::pair<std::unique_ptr<Statement>, std::unique_ptr<Statement>>> condition_body_pairs);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
     private:
-        std::unique_ptr<Statement> condition_;
-        std::unique_ptr<Statement> if_body_;
-        std::unique_ptr<Statement> else_body_;
+        std::vector<std::pair<std::unique_ptr<Statement>, std::unique_ptr<Statement>>> condition_body_pairs_;
     };
 
     // Инструкция while <condition> <while_body>.

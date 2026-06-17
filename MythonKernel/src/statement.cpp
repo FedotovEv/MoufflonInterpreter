@@ -544,10 +544,10 @@ namespace ast
     }
 
     // Поддерживается сложение:
-     //  число + число
-     //  строка + строка
-     //  объект1 + объект2, если у объект1 - пользовательский класс с методом __add__(rhs)
-     // В противном случае при вычислении выбрасывается runtime_error
+    //  число + число.
+    //  строка + строка.
+    //  объект1 + объект2, если у объект1 - пользовательский класс с методом __add__(rhs).
+    // В противном случае при вычислении выбрасывается runtime_error.
     ObjectHolder Add::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -579,8 +579,8 @@ namespace ast
     }
 
     // Поддерживается вычитание:
-    //  число - число
-    // Если lhs и rhs - не числа, выбрасывается исключение runtime_error
+    //  число - число.
+    // Если lhs и rhs - не числа, выбрасывается исключение runtime_error.
     ObjectHolder Sub::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -991,12 +991,11 @@ namespace ast
         return {};
     }
 
-    IfElse::IfElse(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> if_body,
-                   std::unique_ptr<Statement> else_body) :
-                   condition_(move(condition)), if_body_(move(if_body)), else_body_(move(else_body))
+    IfElse::IfElse(std::vector<std::pair<std::unique_ptr<Statement>, std::unique_ptr<Statement>>> condition_body_pairs) :
+        condition_body_pairs_(move(condition_body_pairs))
     {}
 
-    ObjectHolder IfElse::Execute(Closure& closure, Context& context)
+    runtime::ObjectHolder IfElse::Execute(runtime::Closure& closure, runtime::Context& context)
     {
         PrepareExecute(this, closure, context);
         // Несколько локальных переменных, управляющих нашей работой в составе сопрограммы.
@@ -1007,11 +1006,11 @@ namespace ast
         if (auto closure_it = closure.find(COROUTINE_STATUS_VAR); closure_it != closure.end())
         {
             if (coro_status_instance = closure_it->second.TryAs<runtime::CoroutineInstance>())
-            {  // Данный оператор co_yield принадлежит и исполняется в составе сопрограммы.
+            {  // Данный оператор if...elif...else принадлежит и исполняется в составе сопрограммы.
                 workflow_current = coro_status_instance->Advance(1);
                 if (workflow_current)
                 { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
                     assert(workflow_current->GetOwningStatement() == this);
                     workflow_if = &std::get<runtime::IfElseWorkflowPosData>(workflow_current->GetData());
                 }
@@ -1024,47 +1023,32 @@ namespace ast
         }
 
         ObjectHolder if_return_value;
-        bool if_selector;
+        int if_selector_index = -1;
         if (workflow_current)
         { // При работе в составе сопрограммы в случае её возобноления альтернативную ветвь оператора if выбираем по содержимому
-          // дескриптора, зафиксировавшего ту ветвь, которая ведёт к нужной точке приостановки (и, соответственно, возобновления) ее работы.
-            switch (workflow_if->if_pass_branch)
-            {
-            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_IF:
-                // Экстренно переходим к ветке if без расчёта условия, так как оно уже было вычислено к моменту приостановки сопрограммы.
-                if_selector = true;
-                break;
-            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_ELSE:
-                // Аналогично форсированно выполняем переход без расчёта условия, но уже к варианту else.
-                if_selector = false;
-                break;
-            case runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_UNKNOWN:
-                [[fallthrough]];
-            default:
-                if_selector = runtime::IsTrue(condition_->Execute(closure, context));
-                break;
-            }
+          // дескриптора, зафиксировавшего ту ветвь, которая ведёт к нужной точке приостановки (и, соответственно, возобновления)
+          // ее работы.
+            if_selector_index = workflow_if->index;
         }
         else
         { // Работа вне сопрограммы.
-            if_selector = runtime::IsTrue(condition_->Execute(closure, context));
+            for (if_selector_index = 0; if_selector_index < static_cast<int>(condition_body_pairs_.size()); ++if_selector_index)
+            {
+                std::unique_ptr<Statement>& current_condition = condition_body_pairs_[if_selector_index].first;
+                if (!current_condition || runtime::IsTrue(current_condition->Execute(closure, context)))
+                    break; // Если встречен безусловный блок (else) или блок, для которого условие выполнено, выбираем именно его.
+            }
         }
 
-        // Выбираем ту условную альтернативу, которую указывает if_selector, определённый выше как для случая нормальной работы, так и для
-        // случая возобновлния работы сопрограммы.
-        if (if_selector)
+        // Выбираем ту условную альтернативу, которую указывает if_selector_index, определённый выше как для случая нормальной
+        // работы, так и для случая возобновлния работы сопрограммы.
+        if (if_selector_index >= 0 && if_selector_index < static_cast<int>(condition_body_pairs_.size()))
         {
             if (workflow_current)
-                workflow_if->if_pass_branch = runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_IF;
-            if_return_value = if_body_->Execute(closure, context);
+                workflow_if->index = if_selector_index;
+            if_return_value = condition_body_pairs_[if_selector_index].second->Execute(closure, context);
         }
-        else if (else_body_)
-        {
-            if (workflow_current)
-                workflow_if->if_pass_branch = runtime::IfElseWorkflowPosData::IfElseBranch::IFELSE_BRANCH_ELSE;
-            if_return_value = else_body_->Execute(closure, context);
-        }
-        
+
         if (workflow_current)
             // Исполнение условнрго оператора в составе сопрограммы завершилось, удаляем из стека сохранения состояний его запись.
             coro_status_instance->PopBack();
@@ -1093,7 +1077,7 @@ namespace ast
                 workflow_current = coro_status_instance->Advance(1);
                 if (workflow_current)
                 { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
                     assert(workflow_current->GetOwningStatement() == this);
                     workflow_while = &std::get<runtime::WhileWorkflowPosData>(workflow_current->GetData());
                     is_direct_pass = workflow_while->is_pass_internal;
@@ -1160,7 +1144,7 @@ namespace ast
                 workflow_current = coro_status_instance->Advance(1);
                 if (workflow_current)
                 { // Сейчас мы возобновляем работу после приостановки сопрограммы данным оператором в предыдущем
-                  // сеансе ее работы. Нужно просто продолжить её работу до следующей тчоки приостановки или завершения.
+                  // сеансе ее работы. Нужно просто продолжить её работу до следующей точки приостановки или завершения.
                     assert(workflow_current->GetOwningStatement() == this);
                     workflow_try_except = &std::get<runtime::TryExceptWorkflowPosData>(workflow_current->GetData());
                     is_resume_in_coro = true;

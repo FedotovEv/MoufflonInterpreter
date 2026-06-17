@@ -78,7 +78,7 @@ namespace runtime
         // Создаёт пустое значение
         ObjectHolder() = default;
 
-        // Возвращает ObjectHolder, владеющий объектом типа T
+        // Возвращает ObjectHolder, владеющий объектом типа T.
         // Тип T - конкретный класс-наследник Object.
         // object копируется или перемещается в кучу.
         template <typename T>
@@ -613,6 +613,7 @@ namespace runtime
         int index = -1;
     };
 
+    /*
     // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора if ... else ... .
     struct IfElseWorkflowPosData
     {
@@ -625,6 +626,13 @@ namespace runtime
 
         IfElseBranch if_pass_branch = IfElseBranch::IFELSE_BRANCH_UNKNOWN;
     };
+    */
+
+    struct IfElseWorkflowPosData
+    {
+        int index = -1; // Индекс (базированный к нулю) ветви (варианта) оператора if...elif...else, которая в данный момент исполняется.
+    };
+
 
     // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора while ... .
     struct WhileWorkflowPosData
@@ -671,7 +679,7 @@ namespace runtime
             WORK_POS_UNKNOWN = 0,
             WORK_POS_METHOD,        // Исполняется метод класса.
             WORK_POS_COMPOUND,      // Исполняется составной оператор типа Compound.
-            WORK_POS_IF_ELSE,       // Исполняется блок if ... else ... .
+            WORK_POS_IF_ELSE,       // Исполняется блок if ... elif ... else ... .
             WORK_POS_WHILE,         // Исполняется блок while.
             WORK_POS_CO_YIELD,      // Исполняется какой-либо оператор приостановки сопрограммы - co_yield ... или co_yield_ref ... .
             WORK_POS_TRY_EXCEPT     // Производится выполнение блока try ... except ... .
