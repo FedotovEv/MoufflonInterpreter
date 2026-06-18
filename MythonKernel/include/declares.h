@@ -33,6 +33,7 @@ const std::string MATH_CLASS_NAME = "math";
 const std::string STRINGOPS_CLASS_NAME = "string_ops";
 // Имена стандартных классов ошибок (также ненаследуемых).
 const std::string COMMON_ERROR_CLASS_NAME = "CommonError";
+const std::string SYSTEM_ERROR_CLASS_NAME = "SystemError";
 const std::string ERROR_DIVISION_BY_ZERO_CLASS_NAME = "ErrorDivisionByZero";
 const std::string OVERFLOW_ERROR_CLASS_NAME = "OverflowError";
 const std::string DOMAIN_ERROR_CLASS_NAME = "DomainError";

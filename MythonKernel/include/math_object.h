@@ -106,12 +106,17 @@ public:
      * replace(arg_str, arg_pos, arg_count, arg_str_ins, arg_pos_ins, arg_count_ins) - замена arg_count символов строки arg_str, начиная с положения arg_pos, на
                                                                                        arg_count_ins символов строки arg_str_ins, взятых с позиции arg_pos_ins в ней.
      * replicate(arg_str, arg_count) - конструирование строки из arg_count копий строки arg_str.
+     * reverse(arg_str) - обращение (реверсирование) строки-аргумента arg_str.
+     // Анализ и генерация кодов отдельных символов строки.
+     * asc(arg_str, arg_pos) - получение ASCII-кода символа строки arg_str, находящегося в позиции arg_pos.
+     * chr(arg_code, arg_code, ...) - генерация строки из символов с ASCII-кодами arg_code.
      // Преобразование из/в численного представления числа в/из строковое.
      * to_number(arg_str, arg_pos, base_value) - преобразование в числовую форму фрагмента строки arg_str, начинающегося с arg_pos, представляющего некоторое
      *                                           число в base_value-ичной системе счисления.
      * to_number_length() - возврат длины подстроки, которую удалось преобразовать в число в ходе последнего вызова to_number().
      * to_number_error() - код ошибки, которая могла возникнуть при последнем вызове to_number().
-     * to_string(arg_number) - преобразование в строку числового аргумента arg_number.
+     * to_string(arg_number, base_value, double_precision) - преобразование в строку числового аргумента arg_number. Возможное назначение системы счисления (base_value
+                                                             для целых чисел), а также формы представления и точности для чисел дробных (base_value и double_precision).
      */
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
@@ -145,8 +150,9 @@ private:
     ObjectHolder MethodConcat(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodAppend(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodSubstr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    //
     ObjectHolder MethodFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
-    ObjectHolder MethodRfind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodRFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodFindFirstOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodFindFirstNotOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodFindLastOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
@@ -154,10 +160,16 @@ private:
     ObjectHolder MethodStartsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodEndsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    //
     ObjectHolder MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodReplace(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodReplicate(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodReverse(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    //
+    ObjectHolder MethodAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodChr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    //
     ObjectHolder MethodToNumber(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodToNumberLength(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodToNumberError(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

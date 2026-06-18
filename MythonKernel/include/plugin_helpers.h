@@ -1,8 +1,9 @@
 #pragma once
 
-// Кроме того, тут находятся некоторые вспомогательные функции и прочий синтаксический сахар, облегчающий использование втыкал другими
-// частями комплекса. Некоторые особенности структуры данного заголовка и использованных в нём грамматических конструкций связаны с тем,
-// что он может использоваться и должен правильно транслироваться как в C, так и в C++-модулях.
+// В этом заголовке находятся необходимые макросы, константы, структуры данных, объявления вспомогательных функции и прочий синтаксический сахар,
+// предназначенный для написания втыкал, а также облегчающий использование втыкал другими частями комплекса. Некоторые особенности структуры
+// данного заголовка и использованных в нём грамматических конструкций связаны с тем, что он может использоваться и должен правильно
+// транслироваться как в C, так и в C++-модулях.
 
 #include <stdint.h>
 
@@ -129,10 +130,10 @@
     // Неверная характеристика параметра(ов) метода - неверное их полное количество, недопустимый тип, значение или длина
     // какого-либо из них.
     THRM_INVALID_PARAMS_COUNT,              // Несответствующее количество переданных параметров.
-    THRM_INVALID_PARAM_VALUE,
-    THRM_INVALID_PARAM_TYPE,
-    THRM_INVALID_PARAM_LENGTH,
-    THRM_ARRAY_SIZE_NOT_NUMERIC,            // Количество элементов в массиве должно задаваться числами    
+    THRM_INVALID_PARAM_VALUE,               // Некорректное величина параметра.
+    THRM_INVALID_PARAM_TYPE,                // Недопустимый тип параметра.
+    THRM_INVALID_PARAM_LENGTH,              // Недопустимая длина параметра (как правило, чрезмерная длина переданной строки).
+    THRM_ARRAY_SIZE_NOT_NUMERIC,            // Количество элементов в массиве должно задаваться числами.
     THRM_PARAMS_TYPE_INCONSISTENCY,         // Несогласованность типов параметров метода (их расхождение с требованиям).
     THRM_ARRAY_MUST_HAVE_DIMS,              // Для массива array при конструировании нужно указать размерность.
     THRM_MAP_CTOR_HAS_NO_PARAMS,            // Конструктор ассоциативного массива (словаря) map не имеет параметров.
@@ -142,10 +143,10 @@
     THRM_STR_HAS_ONE_PARAM,                 // Функция str() должна быть вызвана строго с единственным аргументом.
     THRM_IS_SAME_TARGET_HAS_TWO_PARAMS,     // Функция IsSameTarget() должна иметь ровно два параметра.
     // Общие грамматические и синтаксические ошибки разбора исходного текста.
-    THRM_SYNTAX_ERROR,
-    THRM_NOT_SUPPORT_FREE_FUNCTION,         // Язык не поддерживает определение свободных функций.
-    THRM_VARIABLE_NOT_FOUND,
+    THRM_SYNTAX_ERROR,                      // Общая синтаксическая ошибка (при отсутствии более детального определения).
+    THRM_VARIABLE_NOT_FOUND,                // Обращение к недоступной переменной (отсутствующей в данный момент в области видимости).
     THRM_METHOD_NOT_FOUND,                  // Попытка обращения к неизвестному методу класса.
+    THRM_FREE_FUNCTION_NOT_FOUND,           // Попытка вызова неизвестной свободной функции.
     THRM_QUALIFIER_NOT_ANCESTOR,            // Уточнитель метода не является предком этого класса.
     THRM_AMBIGUOUS_OVERLOAD,                // Неоднозначная перегрузка метода.
     THRM_FIELD_NOT_FOUND,                   // Обращение к несуществующему или недоступному полю.
@@ -153,39 +154,42 @@
     THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED,  // Ссылка на локальную переменную метода невозможна.
     THRM_INDIRECT_ASSIGN_ERROR,             // Ошибка косвенного присваивания.
     // Недопустимые и невыполнимые операции.
-    THRM_IMPOSSIBLE_ADDITION,
-    THRM_IMPOSSIBLE_SUBTRACTION,
-    THRM_IMPOSSIBLE_MULTIPLICATION,
-    THRM_IMPOSSIBLE_DIVISION,
-    THRM_IMPOSSIBLE_COMPARE_EQUAL,
-    THRM_IMPOSSIBLE_COMPARE_LESS,
+    THRM_IMPOSSIBLE_ADDITION,                   // Невозможно произвести такое сложение.
+    THRM_IMPOSSIBLE_SUBTRACTION,                // Невозможно произвести такое вычитание.
+    THRM_IMPOSSIBLE_MULTIPLICATION,             // Невозможно произвести указанное умножение.
+    THRM_IMPOSSIBLE_DIVISION,                   // Невозможно произвести указанное деление.
+    THRM_IMPOSSIBLE_COMPARE_EQUAL,              // Невозможно выполнить сравнение на равенство с такими операндами.
+    THRM_IMPOSSIBLE_COMPARE_LESS,               // Невозможно выполнить сравнение на "меньше" с такими операндами.
     THRM_DIVISION_BY_ZERO,                      // Деление на нуль.
-    THRM_IMPOSSIBLE_MODULO_DIVISION,
+    THRM_IMPOSSIBLE_MODULO_DIVISION,            // Невозможно выполнить такое деление по модулю.
     THRM_MODULO_DIVISION_BY_ZERO,               // Целочисленное деление на нуль.
     THRM_SHIFT_INVALID_PARAMS,                  // Недопустимые параметры для операции сдвига.
     THRM_OVERFLOW,                              // Математическое переполнение при вычислениях.
+    THRM_NUMBER_STRING_CONVERSION_ERROR,        // Ошибка при преобразовании числа в строку или обратно (из строкового представления в числовое).
     THRM_CONTEXT_OUT_FAIL,                      // Печать данных в контекст по какой-то причине завершилась неудачно.
     // Ошибки при работе с массивами и словарями.
-    THRM_INVALID_ARRAY_INDEX,
-    THRM_PUSH_BACK_ONE_DIM_ONLY,
-    THRM_BACK_ONE_DIM_ONLY,
-    THRM_POP_BACK_ONE_DIM_ONLY,
-    THRM_ARRAY_IS_EMPTY,
-    THRM_ITERATOR_IN_PROGRESS_INSERT,
-    THRM_ITERATOR_IN_PROGRESS_ERASE,
-
-
-
-
-    THRM_INCORRECT_TOKEN_LIST,
-    //
-    THRM_INCLUDE_INVALID_PARAMS,
-    THRM_INVALID_IMPORT_FILENAME,
+    THRM_INVALID_ARRAY_INDEX,                   // Индекс массива некорректен или лежит вне пределов его размера.
+    THRM_PUSH_BACK_ONE_DIM_ONLY,                // PushBack() применим только для одномерных массивов.
+    THRM_BACK_ONE_DIM_ONLY,                     // Back() применим только для одномерных массивов.
+    THRM_POP_BACK_ONE_DIM_ONLY,                 // PopBack() допустим только для одномерных массивов.
+    THRM_ARRAY_IS_EMPTY,                        // Массив пуст.
+    THRM_CURSOR_IN_PROGRESS_INSERT,             // Метод insert выполнить невозможно, так как имеются активные курсоры.
+    THRM_CURSOR_IN_PROGRESS_ERASE,              // Метод erase выполнить невозможно, так как имеются активные курсоры.
+    // Ошибки разбора аргументов директив синтаксического анализатора.
+    THRM_INCORRECT_TOKEN_LIST,                  // Недопустимый список лексем-параметров директивы.
+    THRM_INCLUDE_INVALID_PARAMS,                // Невалидные параметры директивы "include".
     // Коды ошибок, связанные с неполадками при загрузке и обработке втыкал.
-    THRM_DYNAMIC_LIBRARY_NOT_LOADED,
-    THRM_LOAD_PLUGIN_LIST_NOT_FOUND,
-    THRM_INVALID_LOAD_PLUGIN_LIST,
-    THRM_INVALID_PLUGIN_DATA,
+    THRM_INVALID_IMPORT_FILENAME,               // Некорректное имя файла в директиве "import".
+    THRM_DYNAMIC_LIBRARY_NOT_LOADED,            // Динамическая разделяемая библиотека не загружена (при загрузке возникла системная ошибка).
+    THRM_LOAD_PLUGINS_LIST_NOT_FOUND,           // Неверный формат динамической библиотеки коллекции втыкал - не найдена корневая функция-информатор GetPluginsInfoFunction.
+    // Следующая группа кодов свидетельствует о ситуации получения невалидного ответа на какой-либо запрос к функции-информатору отдельной втыкалы.
+    THRM_INVALID_PLUGIN_INFO_FUNC,              // Некорректное имя информирующей функции отдельной втыкалы - слишком длинное, содержит недопустимые символы
+                                                // или отсутствует среди экспортируемых динамической библиотекой.
+    THRM_INVALID_PLUGIN_METHOD_LIST,            // Недопустимый формат списка методов втыкалы или он содержит некорректные имена функций.
+    THRM_INCORRECT_METHOD_DEFINER,              // Получен невалидный описатель парметров конкретного метода - слишком короткий либо с явно недопустимыми значениями полей.
+    THRM_INVALID_PLUGIN_NAME,                   // У информатора получено некорректное имя втыкалы - пустое, слишком длинное или с недопустимыми символами.
+    THRM_INVALID_PLUGIN_CALL_FUNC,              // Некорректное имя вызывающей функции отдельной втыкалы - слишком длинное, содержит недопустимые символы
+                                                // или отсутствует среди экспортируемых динамической библиотекой.
     // Специфические проблемы при работе с сопрограммами и ждунами.
     THRM_METHOD_NOT_COROUTINE,                  // Метод не является сопрограммой.
     THRM_SPECIAL_METHOD_CANT_COROUTINE,         // Методы специального назначения не могут быть сопрограммами.
@@ -194,27 +198,28 @@
     THRM_RAISE_CALL,                            // Исполнение оператора выброса исключения raise.
     THRM_URGENT_TERMINATE,                      // Экстренное завершение работы программы.
     // Завершение блока кодов возможных ошибок разбора и исполнения программы, которые при своём возникновении порождают такие коды.
-    THRM_MAX_ERROR = THRM_URGENT_TERMINATE,
+    THRM_MAX_ERROR = THRM_URGENT_TERMINATE,     // Максимальное значение единичного (определяющего тип отдельной ошибки) кода ошибки.
     // Предложения для формирования составных сообщений об ошибках.
-    THRM_BASE_CLASS,
-    THRM_NOT_FOUND_FOR_CLASS,
-    THRM_CLASS,
-    THRM_ALREADY_EXISTS,
-    THRM_METHOD,
-    THRM_ARGUMENTS,
-    THRM_DEMAND_EQUAL,
-    THRM_DEMAND_LESS_OR_EQUAL,
-    THRM_DEMAND_GREATER_OR_EQUAL,
-    THRM_PARAMETER,
-    THRM_OF_METHOD,
-    THRM_HAVE_INCOMPATIBLE_TYPE,
-    THRM_DEMAND_ONE_ARGUMENT,
-    THRM_FIRST_PARAM_OF_METHOD,
-    THRM_MUST_BE_ITERATOR,
-    THRM_IN_METHOD,
-    THRM_ITERATOR_INVALID,
-    //
-    THRM_MAX_VALUE = THRM_ITERATOR_INVALID      // Абсолютно максимальное значение данного перечисления.
+    THRM_BASE_CLASS,                // "Базовый класс "
+    THRM_NOT_FOUND_FOR_CLASS,       // " не найден для класса "
+    THRM_CLASS,                     // "Класс "
+    THRM_FUNCTION,                  // "Функция "
+    THRM_ALREADY_EXISTS,            // "уже сущестует"
+    THRM_METHOD,                    // "Метод "
+    THRM_ARGUMENTS,                 // " аргументов"
+    THRM_DEMAND_EQUAL,              // " требует "
+    THRM_DEMAND_LESS_OR_EQUAL,      // " требует не более "
+    THRM_DEMAND_GREATER_OR_EQUAL,   // " требует не менее "
+    THRM_PARAMETER,                 // "Параметр "
+    THRM_OF_METHOD,                 // " метода "
+    THRM_HAVE_INCOMPATIBLE_TYPE,    // " имеет несоответствующий тип"
+    THRM_DEMAND_ONE_ARGUMENT,       // " требует 1 аргумент"
+    THRM_FIRST_PARAM_OF_METHOD,     // "Параметр 1 метода "
+    THRM_MUST_BE_CURSOR,            // " должен быть курсором"
+    THRM_IN_METHOD,                 // "В методе "
+    THRM_CURSOR_INVALID,            // " курсор недействителен"
+    // Конец определения списка кодов ошибок.
+    THRM_MAX_VALUE = THRM_CURSOR_INVALID      // Абсолютно максимальное значение данного перечисления.
 };
 
 // Функциональный тип головной функции динамической библиотеки, содержащей одну или несколько втыкал. Наличие этого уровня абстракции

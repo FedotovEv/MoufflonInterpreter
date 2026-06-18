@@ -291,6 +291,41 @@ namespace runtime
             return first_op.GetDoubleValue() == second_op.GetDoubleValue();
     }
 
+    FreeFunction::FreeFunction(Method method_func) : method_func_(move(method_func))
+    {}
+
+    void FreeFunction::Print(std::ostream& os, Context& context)
+    {
+        os << "FreeFunction " << method_func_.name;
+        if (method_func_.is_coroutine)
+            os << " - coro";
+    }
+    
+    ObjectHolder FreeFunction::Call(const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        Closure temp_closure;
+        // Создаём для вызова свободной функции специальную версию таблицы символов.
+        // У свободной функции не будет доступа ни к каким переменным, кроме собственных локальных, которые она будет создавать
+        // сама по ходу собственного выполнения, а также фактическим её параметрам, переданным нам через массив actual_args.
+        // И именно эти фактические параметры нужно будет сейчас добавить в формируемую таблицу temp_closure.
+        if (method_func_.formal_params.size() != actual_args.size())
+        {
+            std::string err_mess = "Функция " + method_func_.name + ": требуется " + std::to_string(method_func_.formal_params.size()) +
+                                   " параметров, передано " + std::to_string(actual_args.size());
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
+        }
+
+        for (size_t param_index = 0; param_index < method_func_.formal_params.size(); ++param_index)
+            temp_closure[method_func_.formal_params[param_index]] = actual_args[param_index];
+        // Таблица символов подготовлена, можно исполнить тело функции.
+        return method_func_.body->Execute(temp_closure, context);
+    }
+
+    std::string FreeFunction::GetName() const
+    {
+        return method_func_.name;
+    }
+
     void ClassInstance::Print(std::ostream& os, Context& context)
     {
         if (HasMethod(STR_FUNCTION_METHOD, 0))

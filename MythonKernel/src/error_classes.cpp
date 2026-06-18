@@ -11,18 +11,27 @@ namespace runtime
         std::string use_except_text = !except_text.empty() ? except_text : ThrowMessages::GetThrowText(msg_num);
         switch (msg_num)
         {
-            // Различные типы несогласованности параметров по типу или количеству.
+        // Общесистемные ошибки.
+        case ThrowMessageNumber::THRM_CONTEXT_OUT_FAIL:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_MEMORY_ALLOCATION_ERROR:
+            return RuntimeError(ObjectHolder::Own(SystemError(msg_num, command_desc, use_except_text)));
+        // Различные типы несогласованности параметров по типу или количеству.
         case ThrowMessageNumber::THRM_ARRAY_MUST_HAVE_DIMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MAP_CTOR_HAS_NO_PARAMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MATH_CTOR_HAS_NO_PARAMS:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_STRINGOPS_CTOR_HAS_NO_PARAMS:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_IS_SAME_TARGET_HAS_TWO_PARAMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_NOT_DIGIT_SIZES:
+        case ThrowMessageNumber::THRM_ARRAY_SIZE_NOT_NUMERIC:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_ARGUMENTS:
             [[fallthrough]];
@@ -38,11 +47,13 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_INVALID_PARAM_TYPE:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_MUST_BE_ITERATOR:
+        case ThrowMessageNumber::THRM_MUST_BE_CURSOR:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY:
             [[fallthrough]];
@@ -50,10 +61,10 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IN_METHOD:
             return RuntimeError(ObjectHolder::Own(ErrorParamsInconsistency(msg_num, command_desc, use_except_text)));
-            // Синтаксические ошибки.
-        case ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION:
+        // Синтаксические ошибки.
+        case ThrowMessageNumber::THRM_SYNTAX_ERROR:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL:
+        case ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_FOUND:
             [[fallthrough]];
@@ -67,9 +78,13 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_FIELD_NOT_FOUND:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_FUNCTION:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR:
             [[fallthrough]];
@@ -78,20 +93,22 @@ namespace runtime
         case ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_COROUTINE:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_OBJECT_NOT_AWAITABLE:
             return RuntimeError(ObjectHolder::Own(SyntaxError(msg_num, command_desc, use_except_text)));
-            // Неверная работа со ссылками.
+        // Неверная работа со ссылками.
         case ThrowMessageNumber::THRM_POINTER_RET_TO_VAL_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR:
             return RuntimeError(ObjectHolder::Own(ReferenceError(msg_num, command_desc, use_except_text)));
-            // Деление на нуль.
+        // Деление на нуль.
         case ThrowMessageNumber::THRM_DIVISION_BY_ZERO:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_MODULO_DIVISION_BY_ZERO:
             return RuntimeError(ObjectHolder::Own(ErrorDivisionByZero(msg_num, command_desc, use_except_text)));
-            // Неопределённые или недопустимые операции.
+        // Неопределённые или недопустимые операции.
         case ThrowMessageNumber::THRM_IMPOSSIBLE_ADDITION:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION:
@@ -106,9 +123,13 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_IMPOSSIBLE_MODULO_DIVISION:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_INVALID_PARAM_LENGTH:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_INVALID_PARAM_VALUE:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_NUMBER_STRING_CONVERSION_ERROR:
             return RuntimeError(ObjectHolder::Own(DomainError(msg_num, command_desc, use_except_text)));
-            // Некорректная работа со встроенными классами.
+        // Некорректная работа со встроенными классами.
         case ThrowMessageNumber::THRM_INVALID_ARRAY_INDEX:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_PUSH_BACK_ONE_DIM_ONLY:
@@ -119,24 +140,37 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_ARRAY_IS_EMPTY:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_INSERT:
+        case ThrowMessageNumber::THRM_CURSOR_IN_PROGRESS_INSERT:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_ERASE:
+        case ThrowMessageNumber::THRM_CURSOR_IN_PROGRESS_ERASE:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_ITERATOR_INVALID:
+        case ThrowMessageNumber::THRM_CURSOR_INVALID:
             return RuntimeError(ObjectHolder::Own(LogicError(msg_num, command_desc, use_except_text)));
-            // Неверная работа с подключением внешних модулей - в исходниках или двоичных("втыкал").
+        // Ошибка переполнения при вычислениях.
+        case ThrowMessageNumber::THRM_OVERFLOW:
+            return RuntimeError(ObjectHolder::Own(OverflowError(msg_num, command_desc, use_except_text)));
+        // Неверная работа с подключением внешних модулей - в исходниках или двоичных("втыкал").
         case ThrowMessageNumber::THRM_INVALID_IMPORT_FILENAME:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_LOAD_PLUGINS_LIST_NOT_FOUND:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_INVALID_PLUGIN_INFO_FUNC:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_DYNAMIC_LIBRARY_NOT_LOADED:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND:
+        case ThrowMessageNumber::THRM_INVALID_PLUGIN_METHOD_LIST:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_INCORRECT_METHOD_DEFINER:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME:
+            [[fallthrough]];
+        case ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_OBJECT_CTOR_HAS_NO_PARAMS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS:
             return RuntimeError(ObjectHolder::Own(ModuleError(msg_num, command_desc, use_except_text)));
-            // Прочие ошибки.
+        // Прочие ошибки.
         case ThrowMessageNumber::THRM_RAISE_CALL:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_URGENT_TERMINATE:
@@ -269,6 +303,15 @@ namespace runtime
         return ObjectHolder::Own(runtime::CommonError(error_params.first, this->GetCommandDesc(), error_params.second));
     }
 
+    // Возвращает объект, содержащий значение типа SystemError - экземпляр класса ошибки SystemError.
+    runtime::ObjectHolder NewSystemError::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        std::pair<ThrowMessageNumber, string> error_params = CountParams(closure, context);
+
+        return ObjectHolder::Own(runtime::SystemError(error_params.first, this->GetCommandDesc(), error_params.second));
+    }
+
     // Возвращает объект, содержащий значение типа ErrorDivisionByZero - экземпляр класса ошибки ErrorDivisionByZero.
     runtime::ObjectHolder NewErrorDivisionByZero::Execute(runtime::Closure& closure, runtime::Context& context)
     {
@@ -347,6 +390,11 @@ namespace ast
     unique_ptr<Statement> CreateCommonError(std::vector<std::unique_ptr<Statement>> args)
     {
         return make_unique<runtime::NewCommonError>(runtime::NewCommonError(move(args)));
+    }
+
+    unique_ptr<Statement> CreateSystemError(std::vector<std::unique_ptr<Statement>> args)
+    {
+        return make_unique<runtime::NewSystemError>(runtime::NewSystemError(move(args)));
     }
 
     unique_ptr<Statement> CreateErrorDivisionByZero(std::vector<std::unique_ptr<Statement>> args)

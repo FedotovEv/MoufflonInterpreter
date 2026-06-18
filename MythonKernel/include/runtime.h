@@ -58,7 +58,7 @@ namespace runtime
         ProgramCommandDescriptor last_command_desc_;
     };
 
-    // Базовый класс для всех объектов языка Mython
+    // Базовый класс для всех объектов языка Mython.
     class Object
     {
     public:
@@ -504,6 +504,31 @@ namespace runtime
         std::unordered_multimap<std::string, Method> virtual_method_table_;
     };
 
+    // Объект, хранящий описание свободной функции, определённой в программе, в таком виде, в котором его можно упаковать
+    // во вместилище ObjectHolder.
+    class FreeFunction : public Object
+    {
+    public:
+        explicit FreeFunction(Method method_func);
+
+        const void* GetPtr() const override
+        {
+            return nullptr;
+        }
+
+        size_t SizeOf() const override
+        {
+            return 0;
+        }
+
+        void Print(std::ostream& os, Context& context);
+        ObjectHolder Call(const std::vector<ObjectHolder>& actual_args, Context& context);
+        std::string GetName() const;
+
+    private:
+        Method method_func_;
+    };
+
     // Абстрактный чисто виртуальный класс, выражающий сущность экземпляра "обобщённого" класса, как программно определённого (структура
     // ClassInstance, представляет собой экземпляр класса, определённого непосредственно в МУФЛОН-программе), так и специального (определённого
     // прямо в исходном коде данного интерпретатора, классы типа ArrayInstance, MapInstance, MathInstance, и. т. д.).
@@ -613,21 +638,7 @@ namespace runtime
         int index = -1;
     };
 
-    /*
-    // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора if ... else ... .
-    struct IfElseWorkflowPosData
-    {
-        enum class IfElseBranch
-        {
-            IFELSE_BRANCH_UNKNOWN = 0,
-            IFELSE_BRANCH_IF,
-            IFELSE_BRANCH_ELSE
-        };
-
-        IfElseBranch if_pass_branch = IfElseBranch::IFELSE_BRANCH_UNKNOWN;
-    };
-    */
-
+    // Тип хранения информации о текущем положении потока исполнения внутри структурного оператора if...elif...else ... .
     struct IfElseWorkflowPosData
     {
         int index = -1; // Индекс (базированный к нулю) ветви (варианта) оператора if...elif...else, которая в данный момент исполняется.

@@ -536,7 +536,7 @@ while i < 10:
   i = i + 1
               
 map_iter = map_var.begin()
-while not map_var.is_iterator_end(map_iter):
+while not map_var.is_cursor_end(map_iter):
   print map_var.key(map_iter), map_var.value(map_iter)
   map_var.next(map_iter)
 map_var.release()
@@ -615,6 +615,126 @@ print m.atan(1), m.atan2(1, 1)
         }
     }
     
+    void TestStringOperations()
+    { // Функция опробования функций класса операций над строками string_ops.
+        { // Сцепление и поиск.
+            istringstream input(R"--(
+str_ops = string_ops()
+str_var_1 = "ABCDEFGH"
+str_var_2 = "IJKLMNOPQR"
+str_var_3 = "STRUVWXYZ"
+alphabet_var = str_ops.concat(str_var_1, str_var_2, str_var_3)
+print alphabet_var, str_ops.size(alphabet_var)
+print str_ops.size(str_var_1), str_ops.size(str_var_2), str_ops.size(str_var_3)
+# Прямой поиск
+alphabet_var = alphabet_var + str_ops.reverse(alphabet_var)
+print str_ops.find(alphabet_var, "A"), str_ops.find(alphabet_var, "I"), str_ops.find(alphabet_var, "S"), str_ops.find(alphabet_var, "KLM")
+# Обратный поиск - должны быть найдены концевые буквы из второй половины сцепки alphabet_var.
+print str_ops.rfind(alphabet_var, "A"), str_ops.rfind(alphabet_var, "I"), str_ops.rfind(alphabet_var, "S"), str_ops.find(alphabet_var, "MLK")
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            cout << ostr.str() << endl;
+            //ASSERT_EQUAL(ostr.str(), ""s);
+        }
+        { // Подстроки.
+            istringstream input(R"--(
+str_ops = string_ops()
+str_var = "SubString_1:SubString_2:SubString_3"
+#
+sub_1_start = str_ops.find(str_var, "Sub")
+sub_1_end = str_ops.find(str_var, ":")
+#
+sub_2_start = str_ops.find(str_var, "Sub", sub_1_end)
+sub_2_end = str_ops.find(str_var, ":", sub_2_start)
+#
+sub_3_start = str_ops.find(str_var, "Sub", sub_2_end)
+sub_3_end = str_ops.find(str_var, ":", sub_3_start)
+#
+sub_1_str = str_ops.substr(str_var, sub_1_start, sub_1_end - sub_1_start)
+sub_2_str = str_ops.substr(str_var, sub_2_start, sub_2_end - sub_2_start)
+sub_3_str = str_ops.substr(str_var, sub_3_start)
+#
+print sub_1_start, sub_1_end, sub_1_str
+print sub_2_start, sub_2_end, sub_2_str
+print sub_3_start, sub_3_end, sub_3_str
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            cout << ostr.str() << endl;
+            //ASSERT_EQUAL(ostr.str(), ""s);
+        }
+        { // Преобразование чисел в строки и обратно.
+            istringstream input(R"--(
+str_ops = string_ops()
+# Простые примеры преобразований в числа.
+ival_1 = str_ops.to_number("123")
+dval_2 = str_ops.to_number("123.321")
+# Преобразование в числа из подстрок.
+ival_3 = str_ops.to_number("sss123 sss", 3)
+len_3 = str_ops.to_number_length()
+dval_4 = str_ops.to_number("jklu123.321kkk", 4)
+len_4 = str_ops.to_number_length()
+# Вывод в консоль результатов всех расположенных выше конверсий.
+print ival_1, dval_2, ival_3, dval_4
+print len_3, len_4
+
+# Разные базы систем счисления для целочисленных значений.
+ival_base_2 = str_ops.to_number("10110011", 0, 2)
+ival_base_8 = str_ops.to_number("1237654", 0, 8)
+ival_base_10 = str_ops.to_number("123987", 0, 10)
+ival_base_16 = str_ops.to_number("123AB8EF", 0, 16)
+ival_base_32 = str_ops.to_number("12IJK", 0, 26)
+print ival_base_2, ival_base_8, ival_base_10, ival_base_16, ival_base_32
+
+# Далее опробуем обратное превращение - строк в числа.
+# Целое число в разных системах счисления.
+test_int_val = 123456
+str_int_0 = str_ops.to_string(test_int_val)
+str_int_2 = str_ops.to_string(test_int_val, 2)
+str_int_8 = str_ops.to_string(test_int_val, 8)
+str_int_10 = str_ops.to_string(test_int_val, 10)
+str_int_16 = str_ops.to_string(test_int_val, 16)
+str_int_32 = str_ops.to_string(test_int_val, 32)
+# Вывод результатов целочисленных превращений.
+print str_int_0, str_int_2, str_int_8, str_int_10, str_int_16, str_int_32
+
+# Различные форматы представления дробных чисел.
+#------------
+CHARS_FORMAT_FIXED_MASK = 1
+CHARS_FORMAT_SCIENTIFIC_MASK = 2
+CHARS_FORMAT_HEX_MASK = 4
+CHARS_FORMAT_GEN_MASK = CHARS_FORMAT_FIXED_MASK |  CHARS_FORMAT_SCIENTIFIC_MASK
+#------------
+test_double_val = 123456.87654321
+str_double_typ = str_ops.to_string(test_double_val)
+str_double_gen = str_ops.to_string(test_double_val, CHARS_FORMAT_GEN_MASK)
+str_double_fix = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK)
+str_double_sci = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK)
+str_double_hex = str_ops.to_string(test_double_val, CHARS_FORMAT_HEX_MASK)
+str_double_fix_2 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 2)
+str_double_fix_3 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 3)
+str_double_sci_4 = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK, 4)
+# Вывод результатов дробных превращений.
+print str_double_typ, str_double_gen, str_double_fix, str_double_sci, str_double_hex
+print str_double_fix_2, str_double_fix_3, str_double_sci_4
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            cout << ostr.str() << endl;
+            //ASSERT_EQUAL(ostr.str(), ""s);
+        }
+        { // Различные изменяющие операции над строками.
+            istringstream input(R"--(
+
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            cout << ostr.str() << endl;
+            //ASSERT_EQUAL(ostr.str(), ""s);
+        }
+    }
+
     void TestImportBinaryModule()
     {
         {
@@ -1508,6 +1628,7 @@ z1_3 = OneClass(4)
         RUN_TEST(tr, TestArrays);
         RUN_TEST(tr, TestMaps);
         RUN_TEST(tr, TestFloatPointEvaluation);
+        RUN_TEST(tr, TestStringOperations);
         RUN_TEST(tr, TestImportBinaryModule);
         RUN_TEST(tr, TestIncludes);
         RUN_TEST(tr, TestBitwiseOps);

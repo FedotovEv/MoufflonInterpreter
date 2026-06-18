@@ -473,6 +473,21 @@ namespace ast
         return result;
     }
 
+    FreeFunctionCall::FreeFunctionCall(runtime::FreeFunction& free_function, std::vector<std::unique_ptr<Statement>> args) :
+        free_function_(free_function), args_(move(args))
+    {}
+
+    runtime::ObjectHolder FreeFunctionCall::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        vector<ObjectHolder> real_args;
+        for (auto& cur_arg_ptr : args_)
+            // Вычисляем истинные значения аргументов функции.
+            real_args.push_back(cur_arg_ptr->Execute(closure, context));
+
+        return free_function_.Call(real_args, context);
+    }
+
     MethodCall::MethodCall(unique_ptr<Statement> object, string method,
                            vector<std::unique_ptr<Statement>> args, std::string parent_name) :
                            object_(move(object)),
@@ -952,6 +967,16 @@ namespace ast
     runtime::Class* ClassDefinition::GetClass()
     {
         return cls_.TryAs<runtime::Class>();
+    }
+
+    FreeFunctionDefinition::FreeFunctionDefinition(runtime::ObjectHolder free_function)
+    {}
+    
+    runtime::ObjectHolder FreeFunctionDefinition::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        closure[free_function_.TryAs<runtime::FreeFunction>()->GetName()] = free_function_;
+        return free_function_;
     }
 
     FieldAssignment::FieldAssignment(VariableValue object, std::string field_name,

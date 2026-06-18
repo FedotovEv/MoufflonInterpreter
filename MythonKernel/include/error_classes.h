@@ -117,6 +117,16 @@ namespace runtime
         ObjectHolder MethodGetStringNumber(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     };
 
+    class SystemError : public CommonError
+    { // Общая системная ошибка (произошла по внешним причинам, не связанным с исполняемой программой или исполняющей средой интерпретатора).
+    public:
+        using CommonError::CommonError;
+        [[nodiscard]] std::string GetClassName() const override
+        {
+            return "SystemError";
+        }
+    };
+
     class ErrorDivisionByZero : public CommonError
     { // Класс ошибки деления на нуль.
     public:
@@ -215,6 +225,16 @@ namespace runtime
         std::vector<std::unique_ptr<Statement>> args_;
     };
 
+    class NewSystemError : public NewCommonError
+    {
+    public:
+        NewSystemError(std::vector<std::unique_ptr<Statement>> args) :
+            NewCommonError(std::move(args))
+        {}
+        // Возвращает объект, содержащий значение типа SystemError - экземпляр класса ошибки SystemError.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
     class NewErrorDivisionByZero : public NewCommonError
     {
     public:
@@ -306,6 +326,7 @@ namespace ast
     using Statement = runtime::Executable;
     // Подборка фабричных функций - переходников к соответствующим фабричным класса для создания объектов ошибок.
     std::unique_ptr<Statement> CreateCommonError(std::vector<std::unique_ptr<Statement>> args);
+    std::unique_ptr<Statement> CreateSystemError(std::vector<std::unique_ptr<Statement>> args);
     std::unique_ptr<Statement> CreateErrorDivisionByZero(std::vector<std::unique_ptr<Statement>> args);
     std::unique_ptr<Statement> CreateOverflowError(std::vector<std::unique_ptr<Statement>> args);
     std::unique_ptr<Statement> CreateDomainError(std::vector<std::unique_ptr<Statement>> args);

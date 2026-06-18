@@ -566,14 +566,14 @@ namespace runtime
         if (!map_cursor_ptr)
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD) +
-                       method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_MUST_BE_ITERATOR);
+                       method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_MUST_BE_CURSOR);
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY, err_mess);
         }
 
         if (!map_cursor_ptr->IsCursorValid())
         {
             err_mess = ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_IN_METHOD) +
-                method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ITERATOR_INVALID);
+                method_name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_CURSOR_INVALID);
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, err_mess);
         }
     }
@@ -602,7 +602,7 @@ namespace runtime
         CheckMethodParams(context, "Insert"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
         if (is_in_iterator_mode_)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_INSERT);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_CURSOR_IN_PROGRESS_INSERT);
 
         auto [map_iterator, inserted] = map_storage_.insert({ GetStringKey(actual_args[0], context), actual_args[1] });
         return ObjectHolder::Own(PointerObject(&(map_iterator->second)));
@@ -627,7 +627,7 @@ namespace runtime
         CheckMethodParams(context, "Erase"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
         if (is_in_iterator_mode_)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_ITERATOR_IN_PROGRESS_ERASE);
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_CURSOR_IN_PROGRESS_ERASE);
 
         size_t items_deleted = map_storage_.erase(GetStringKey(actual_args[0], context));
         return ObjectHolder::Own(Number(static_cast<int>(items_deleted)));

@@ -142,32 +142,36 @@ namespace
             runtime::TypeTraitsInstance::AppendInternalClassId(STRINGOPS_CLASS_NAME, internal_classes_[STRINGOPS_CLASS_NAME].my_id);
 
             // Набор записей с указаниями на производящие функции экземпляров классов ошибок.
+            // Общая недетализированная ошибка. Родоначальник иерархии всех прочих классов ошибок.
             internal_classes_[COMMON_ERROR_CLASS_NAME] = {.creator = ast::CreateCommonError};
             runtime::TypeTraitsInstance::AppendInternalClassId(COMMON_ERROR_CLASS_NAME, internal_classes_[COMMON_ERROR_CLASS_NAME].my_id);
-
+            // Класс общесистемной ошибки.
+            internal_classes_[SYSTEM_ERROR_CLASS_NAME] = {.creator = ast::CreateSystemError};
+            runtime::TypeTraitsInstance::AppendInternalClassId(SYSTEM_ERROR_CLASS_NAME, internal_classes_[SYSTEM_ERROR_CLASS_NAME].my_id);
+            // Ошибка деления на нуль.
             internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME] = {.creator = ast::CreateErrorDivisionByZero};
             runtime::TypeTraitsInstance::AppendInternalClassId
                 (ERROR_DIVISION_BY_ZERO_CLASS_NAME, internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME].my_id);
-
+            // Ошибка математического переполнения.
             internal_classes_[OVERFLOW_ERROR_CLASS_NAME] = {.creator = ast::CreateOverflowError};
             runtime::TypeTraitsInstance::AppendInternalClassId(OVERFLOW_ERROR_CLASS_NAME, internal_classes_[OVERFLOW_ERROR_CLASS_NAME].my_id);
-
+            // Ошибка области определения функции.
             internal_classes_[DOMAIN_ERROR_CLASS_NAME] = {.creator = ast::CreateDomainError};
             runtime::TypeTraitsInstance::AppendInternalClassId(DOMAIN_ERROR_CLASS_NAME, internal_classes_[DOMAIN_ERROR_CLASS_NAME].my_id);
-
+            // Ошибка несогласованности формальных и фактических параметров метода или функции.
             internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME] = {.creator = ast::CreateErrorParamsInconsistency};
             runtime::TypeTraitsInstance::AppendInternalClassId
                 (ERROR_PARAMS_INCONSISTENCY_CLASS_NAME, internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME].my_id);
-
+            // Общая синтаксическая ошибка разбора программы.
             internal_classes_[SYNTAX_ERROR_CLASS_NAME] = {.creator = ast::CreateSyntaxError};
             runtime::TypeTraitsInstance::AppendInternalClassId(SYNTAX_ERROR_CLASS_NAME, internal_classes_[SYNTAX_ERROR_CLASS_NAME].my_id);
-
+            // Ошибка работы с подключаемыми модулями.
             internal_classes_[MODULE_ERROR_CLASS_NAME] = {.creator = ast::CreateModuleError};
             runtime::TypeTraitsInstance::AppendInternalClassId(MODULE_ERROR_CLASS_NAME, internal_classes_[MODULE_ERROR_CLASS_NAME].my_id);
-
+            // Логическая ошибка исполнения программы.
             internal_classes_[LOGIC_ERROR_CLASS_NAME] = {.creator = ast::CreateLogicError};
             runtime::TypeTraitsInstance::AppendInternalClassId(LOGIC_ERROR_CLASS_NAME, internal_classes_[LOGIC_ERROR_CLASS_NAME].my_id);
-
+            // Неверное формирование ссылки на поле объекта или некорректная работа с ней.
             internal_classes_[REFERENCE_ERROR_CLASS_NAME] = {.creator = ast::CreateReferenceError};
             runtime::TypeTraitsInstance::AppendInternalClassId(REFERENCE_ERROR_CLASS_NAME, internal_classes_[REFERENCE_ERROR_CLASS_NAME].my_id);
 
@@ -229,13 +233,31 @@ namespace
             return result;
         }
 
+        // Эта функция-член синтаксического анализатора разбирает и компонует определение свободной функции
+        // (то есть def-блока вне определения какого-либо класса).
+        // FreeFunction -> def id(Params) : Suite
+        unique_ptr<ast::Statement> ParseFreeFunction()
+        {
+            lexer_.Expect<ITokenType::Def>();
+            runtime::FreeFunction new_free_func = runtime::FreeFunction(ParseMethodDef());
+
+            std::string new_func_name = new_free_func.GetName();
+            auto [it, inserted] = declared_free_functions_.insert({new_func_name, runtime::ObjectHolder::Own(move(new_free_func))});
+            if (!inserted)
+                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + new_func_name + "%2",
+                                              {ThrowMessageNumber::THRM_FUNCTION, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
+
+            return exec_factory_.Create(ast::FreeFunctionDefinition(it->second));
+        }
+
         // Methods -> [def id(Params) : Suite]*
         vector<runtime::Method> ParseMethods()
         {
             vector<runtime::Method> result;
-
             while (lexer_.CurrentToken().Is<ITokenType::Def>())
             {
+                result.push_back(ParseMethodDef());
+                /*
                 // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
                 runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
                 runtime::Method m;
@@ -259,8 +281,38 @@ namespace
 
                 exec_factory_.SetCurrentMethod();
                 result.push_back(std::move(m));
+                */
             }
             return result;
+        }
+
+        // Функция выделяет и разбирает описание метода или свободной функции.
+        runtime::Method ParseMethodDef()
+        {
+            // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
+            runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
+            runtime::Method parsed_method;
+            exec_factory_.SetCurrentMethod(&parsed_method);
+
+            // Пропускаем лексему "def" и ожидаем далее имя определяемого метода.
+            parsed_method.name = lexer_.ExpectNext<ITokenType::Id>().value;
+            lexer_.ExpectNext<ITokenType::Char>('(');   // Открывающая скобка, начинающая список формальных параметров метода.
+
+            if (lexer_.NextToken().Is<ITokenType::Id>())
+            {
+                parsed_method.formal_params.push_back(lexer_.Expect<ITokenType::Id>().value);
+                while (lexer_.NextToken() == ',')
+                    parsed_method.formal_params.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
+            }
+
+            lexer_.Expect<ITokenType::Char>(')');
+            lexer_.ExpectNext<ITokenType::Char>(':');
+            lexer_.NextToken();
+
+            parsed_method.body = exec_factory_.Create(ast::MethodBody(ParseSuite()), def_desc);
+
+            exec_factory_.SetCurrentMethod();
+            return parsed_method;
         }
 
         // ClassDefinition -> Id ['(' Id ')'] : new_line indent MethodList dedent
@@ -296,10 +348,11 @@ namespace
             lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
 
-            auto [it, inserted] = declared_classes_.insert({
-                class_name,
-                runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class)),
-            });
+            auto [it, inserted] = declared_classes_.insert
+                ({
+                    class_name,
+                    runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class)),
+                });
 
             if (!inserted)
                 exec_factory_.ThrowParseError(
@@ -345,9 +398,20 @@ namespace
             lexer_.Expect<ITokenType::Char>('(');
             lexer_.NextToken();
 
+            vector<unique_ptr<ast::Statement>> args;
+            if (lexer_.CurrentToken() != ')')
+                args = ParseTestList();
+
             if (id_list.empty())
-                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText
-                    (ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
+            { // Это попытка вызова свободной функции, а не метода класса.
+                if (auto func_it = declared_free_functions_.find(last_name); func_it != declared_free_functions_.end())
+                    // Такая свободная функция программно определяемого типа существует - оформляем её вызов путём создания соответствующего узла АСД.
+                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction&>(*func_it->second), std::move(args)));
+                // Свободная функция с требуемым именем last_name ранее не определялась.
+                exec_factory_.ThrowParseError
+                    (ThrowMessages::ConstructThrowText("%1 - "s + last_name + "()"s, {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND}));
+                // exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
+            }
 
             // Выявим возможное наличие имени класса-уточнителя в терме, указывающем на вызываемый метод.
             string parent_class_name;
@@ -358,10 +422,6 @@ namespace
                 parent_class_name = id_list.back();
                 id_list.pop_back();
             }
-
-            vector<unique_ptr<ast::Statement>> args;
-            if (lexer_.CurrentToken() != ')')
-                args = ParseTestList();
 
             lexer_.Expect<ITokenType::Char>(')');
             lexer_.NextToken();
@@ -644,7 +704,7 @@ namespace
                 }
 
                 if (method_name == "is_same_target"sv || method_name == "IsSameTarget"sv)
-                { // Наконец, случай вызова встроенной свободной функции is_same_target(). Эта функция позволяет выяснить, указывают ли два её аргумента
+                { // Случай вызова встроенной свободной функции is_same_target(). Эта функция позволяет выяснить, указывают ли два её аргумента
                   // на один и тот же объект в памяти. Такое происходит, например, при присваивании какой-либо переменной значения другой переменной,
                   // так как семантика присвоения в языке предполагает именно перенацеливание принимающей переменной в левой части оператора присваивания
                   // на объект, вычисленный в правой части этого оператора.
@@ -654,8 +714,12 @@ namespace
                     return exec_factory_.Create(ast::IsSameTarget(std::move(args[0]), std::move(args[1])));
                 }
 
-                exec_factory_.ThrowParseError(ThrowMessages::GetThrowText
-                    (ThrowMessageNumber::THRM_UNKNOWN_METHOD_CALL) + method_name + "()"s);
+                if (auto func_it = declared_free_functions_.find(method_name); func_it != declared_free_functions_.end())
+                    // Наконец, разбираем случай вызова свободной функции общего, т.е. программно определяемого типа.
+                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction&>(*func_it->second), std::move(args)));
+
+                exec_factory_.ThrowParseError
+                    (ThrowMessages::ConstructThrowText("%1 - "s + method_name + "()"s, {ThrowMessageNumber::THRM_METHOD_NOT_FOUND}));
             }
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
         }
@@ -902,6 +966,7 @@ namespace
 
         // Statement -> SimpleStatement Newline
         //           | class ClassDefinition
+        //           | def FreeFunctionDefinition
         //           | if Condition
         //           | while Condition
         // В данном разборщике также размещена обработка специальной инструкции try начала контролируемого блока кода
@@ -914,9 +979,13 @@ namespace
                 const auto& tok = lexer_.CurrentToken();
 
                 if (tok.Is<ITokenType::Class>())
-                {
+                { // Это определение класса.
                     lexer_.NextToken();
                     return ParseClassDefinition();
+                }
+                else if (tok.Is<ITokenType::Def>())
+                { // Это определение свободной функции, не являющейся методом класса.
+                    return ParseFreeFunction();
                 }
                 else if (tok.Is<ITokenType::If>())
                 {
@@ -1020,14 +1089,14 @@ namespace
 
             // Получаем информацию о существующих методах класса втыкалы.
             if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_METHOD_LIST, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) == 0)
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получен пустой ответ вместо списка методов.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_METHOD_LIST);    // Получен пустой ответ вместо списка методов.
             const char* plugin_methods_scan_ptr = out_buffer;
             std::vector<std::string> plugin_methods_names;
             while (true)
             {
                 // Проверка очередного полученного имени публичного метода втыкалы на соблюдение правила предельной длины.
                 if (!CheckStringMaxLength(out_buffer, MAX_PLUGIN_NAMES_LEN))
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя метода превышает допустимую длину.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_METHOD_LIST);    // Имя метода превышает допустимую длину.
 
                 std::string plugin_method_name(plugin_methods_scan_ptr); // Строка, простирающаяся от plugin_methods_scan_ptr до ближайшего нуля.
                 if (plugin_method_name.empty())
@@ -1049,7 +1118,7 @@ namespace
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_METHOD_PARAMS, in_buffer, sizeof(RequestMethodParams), out_buffer, OUT_BUFFER_SIZE) <
                     static_cast<int32_t>(sizeof(PluginMethodDefiner)))
                     // Ответ на запрос о характеристиках фактических параметров метода должен как минимум содержать запись типа PluginMethodDefiner.
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCORRECT_METHOD_DEFINER);
 
                 // Структура PluginMethodDefiner упакованная, поэтому типовой указатель на неё может ссылаться на любой адрес, без учёта выравнивания.
                 PluginMethodDefiner* ext_method_definer = reinterpret_cast<PluginMethodDefiner*>(out_buffer);
@@ -1138,7 +1207,7 @@ namespace
                 return;
             #endif
             if (!get_plugins_info_func_name) // Корневая функция-перечислитель динамической библиотеки не найдена.
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGIN_LIST_NOT_FOUND);
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_LOAD_PLUGINS_LIST_NOT_FOUND);
 
             // Получаем от функции-перечислителя список доступных втыкал, предоставляемых загруженной библиотекой.
             // Для каждой из них нам возвращают имя информирующей функции, через которую мы получим всю прочую необходимую нам информацию.
@@ -1148,7 +1217,7 @@ namespace
             {
                 // Проверим очередную строку коллекции (предполагаемое имя функции-информатора) на соблюдение ей правила предельной длины.
                 if (!CheckStringMaxLength(plugin_names_scan_ptr, MAX_PLUGIN_NAMES_LEN))
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_LOAD_PLUGIN_LIST); // Имя функции слишком длинное.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_INFO_FUNC); // Имя функции слишком длинное.
 
                 std::string inform_func_name(plugin_names_scan_ptr); // Строка, простирающаяся от plugin_names_scan_ptr до ближайшего нуля.
                 if (inform_func_name.empty())
@@ -1173,28 +1242,34 @@ namespace
                         reinterpret_cast<PluginGetInfoFunc>(dlsym(hAddonDll, inform_func_name.c_str()));
                 #endif
                 if (!plugin_info_func) // Функция-информатор втыкалы не найдена среди экспорта динамической библиотеки.
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_INFO_FUNC);
 
                 // Запрашиваем у неё имя обслуживаемой ей втыкалы.
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0,
                                      wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);    // Получено имя втыкалы нулевой длины.
                 // Проверим возвращённое нам имя втыкалы на ограничение максимальной длины.
                 if (!CheckStringMaxLength(reinterpret_cast<char*>(wchar_buffer), MAX_PLUGIN_NAMES_LEN))
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя втыкалы слишком длинное.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);    // Имя втыкалы слишком длинное.
                 std::string plugin_name(reinterpret_cast<char*>(wchar_buffer));
+                if (plugin_name.empty())   // Имя втыкалы некорректное (пока это значит - пустое).
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);
 
                 // Далее выясним сначала имя "вызывной" функции, а затем её адрес.
                 if (plugin_info_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_NAME, nullptr, 0,
                                      wchar_buffer, WCHAR_FILENAME_SIZE * sizeof(wchar_t)) == 0)
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос имени вызывной функции.
+                    // Пустой ответ на запрос имени вызывной функции.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
 
                 // Проверим полученное нами имя вызывающей функции на непревышение им предельной длины.
                 if (!CheckStringMaxLength(reinterpret_cast<char*>(wchar_buffer), MAX_PLUGIN_NAMES_LEN))
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Ошибка - имя функции превышает макс. длину.
+                    // Ошибка - имя функции превышает макс. длину.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
                 std::string plugin_call_func_name(reinterpret_cast<char*>(wchar_buffer));
-                if (plugin_name.empty() || plugin_call_func_name.empty())   // Имя втыкалы или имя его вызываюшей функции некорректное.
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+                if (plugin_call_func_name.empty())
+                    // Имя вызываюшей функции втыкалы некорректное (пока проверка только на пустоту, но в дальнейшем могут быть
+                    // добавлены и какие-то другие тесты).
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
 
                 // Разрешение адреса вызывающей функции класса втыкалы в различных вариантах для разных ОС.
                 #if defined (_WIN64) || defined(_WIN32)
@@ -1207,9 +1282,9 @@ namespace
                         reinterpret_cast<PluginCallMethodFunc>(dlsym(hAddonDll, plugin_call_func_name.c_str()));
                 #endif
                 if (!plugins_call_func) // Не удалось установить адрес вызывающей функции.
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
 
-                // Выполняем операции по дальнейшей обработке втыкалы, оформленные как отдельная процедура.
+                // Выполняем операции по дальнейшей обработке втыкалы, весь код которой уже загружен в память.
                 LoadCommonLibrary(plugin_name, plugin_info_func, plugins_call_func, library_alias);
             }
 
@@ -1228,24 +1303,26 @@ namespace
             // в исполнительский комплекс.
             // Сначала запрашиваем у неё имя обслуживаемой ей втыкалы.
             if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_PLUGIN_NAME, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) == 0)
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Получено пустое имя втыкалы.            
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);    // Получено имя втыкалы нулевой длины.
             // Проверим возвращённую нам информацию (имя втыкалы) в out_buffer на предельную длину.
             if (!CheckStringMaxLength(out_buffer, MAX_PLUGIN_NAMES_LEN))
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Имя втыкалы превышает допустимую длину.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);    // Имя втыкалы превышает допустимую длину.
 
             std::string plugin_name(out_buffer);
-            if (plugin_name.empty())   // Имя втыкалы некорректное.
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+            if (plugin_name.empty())   // Имя втыкалы некорректное (пока проверка только на пустоту).
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_NAME);
 
             // Далее выясним адрес "вызывной" функции (получим указатель на неё).
-            if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_ADDR, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) < sizeof(PluginCallMethodFunc))
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);    // Пустой ответ на запрос адреса вызывной функции.
+            if (plugin_inform_func(PluginInfoRequest::PLUG_REQUEST_CALL_FUNCTION_ADDR, nullptr, 0, out_buffer, OUT_BUFFER_SIZE) <
+                sizeof(PluginCallMethodFunc))
+                // Пустой ответ на запрос адреса вызывной функции.
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
             PluginCallMethodFunc plugins_call_func;
             memcpy(&plugins_call_func, out_buffer, sizeof(PluginCallMethodFunc));
             if (!plugins_call_func) // Не удалось установить адрес вызывающей функции.
-                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_DATA);
+                exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INVALID_PLUGIN_CALL_FUNC);
 
-            // Выполняем операции по дальнейшей обработке втыкалы, оформленные как отдельная процедура.
+            // Выполняем операции по дальнейшей обработке втыкалы, весь код которой уже присутствует в памяти.
             LoadCommonLibrary(plugin_name, plugin_inform_func, plugins_call_func, library_alias);
         }
 
@@ -1475,7 +1552,8 @@ namespace
 
         parse::Lexer& lexer_;
         StatementFactory exec_factory_;
-        runtime::Closure declared_classes_;
+        runtime::Closure declared_classes_;             // Словарь для хранения определённых в программе классов общего типа.
+        runtime::Closure declared_free_functions_;      // Словарь для хранения определённых в программе свободных функций.
         std::unordered_map<string, InternalObjectCreator> internal_classes_;
         parse::ParseContext& parse_context_;
     }; // class Parser

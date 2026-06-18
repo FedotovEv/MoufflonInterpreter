@@ -217,6 +217,18 @@ namespace ast
         std::string name_;
     };
 
+    // Вызывает свободную функцию free_function со списком параметров args.
+    class FreeFunctionCall : public Statement
+    {
+    public:
+        FreeFunctionCall(runtime::FreeFunction& free_function, std::vector<std::unique_ptr<Statement>> args);
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+    private:
+        runtime::FreeFunction& free_function_;
+        std::vector<std::unique_ptr<Statement>> args_;
+    };
+
     // Вызывает метод object.method со списком параметров args.
     class MethodCall : public Statement
     {
@@ -310,7 +322,7 @@ namespace ast
     public:
         explicit NewInstance(const runtime::Class& class_);
         explicit NewInstance(const runtime::Class& class_, std::vector<std::unique_ptr<Statement>> args);
-        // Возвращает объект, содержащий значение типа ClassInstance
+        // Возвращает объект, содержащий значение типа ClassInstance.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
     private:
@@ -791,9 +803,17 @@ namespace ast
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 
-    // Объявляет класс. Явлется определителем класса, образующим особый исполнимый узел АСД, соответствующий точке его
-    // определения по ходу исполнения программы. После его исполнения данный класс заносится в таблицу символов и становится
-    // доступным для создания его экземпляров runtime::ClassInstance с помощью фабричного узла АСД ast::NewInstance.
+    //   Объявляет класс. Явлется определителем класса, образующим особый исполнимый узел АСД, соответствующий точке его
+    // определения по ходу исполнения программы. Назначение такого узла в АСД - продлить время существания описания
+    // некоторого класса (который хранится в данном объекте и относится к типу runtime::Class) на всё время существования
+    // (и, соответственно, исполнения) программы, вне зависимости от существования каких-либо конкретных экземпляров данного
+    // класса. Активная часть инструкции (функция-член Execute()) является здесь, в значительной части, фиктивной, хотя
+    // после её исполнения описанный в этом узле класс заносится в таблицу символов как объект. Но эта запись фактически
+    // далее нигде не используется.
+    //   Экземпляры класса типа runtime::ClassInstance создаются с помощью фабричного узла АСД ast::NewInstance, описание
+    // же целевого (создаваемого им) класса передаётся в такой узел не из таблицы символов, а из специального накопителя,
+    // создаваемого и пополняемого синтаксическим разборщиком Parser в ходе синтаксического анализа исходного кода
+    // МУФЛОН-программы.
     class ClassDefinition : public Statement
     {
         friend class runtime::TypeTraitsInstance;
@@ -812,10 +832,33 @@ namespace ast
         std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
     
     private:
-        runtime::ObjectHolder cls_;
+        runtime::ObjectHolder cls_; // "По построению" будет содержать внутри только объект типа runtime::Class.
 
         // Функция возвращает указатель на класс (runtime::Class), хранящийся в cls_.
         runtime::Class* GetClass();
+    };
+
+    // Специальный исполняемый объект (узел АСД программы), хранящий в себе объект свободной функции. Так как
+    // этот объект представляет собой узел АСД, то он будет существовать на протяжении всего времени существования
+    // самой программы как таковой, вне зависимости от наличия каких-либо экземпляров прочих объектов, обращающихся
+    // к данной функции.
+    class FreeFunctionDefinition : public Statement
+    {
+    public:
+        // Гарантируется, что ObjectHolder содержит объект типа runtime::FreeFunction.
+        explicit FreeFunctionDefinition(runtime::ObjectHolder free_function);
+
+        // Создаёт внутри closure новый объект, совпадающий с именем функции и значением, переданным в
+        // конструктор.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        // Возвращает указатель на хранящийся внутри описатель функции, для которой создан данный объект.
+        runtime::FreeFunction* GetFunction()
+        {
+            return free_function_.TryAs<runtime::FreeFunction>();
+        }
+
+    private:
+        runtime::ObjectHolder free_function_; // "По построению" будет содержать внутри только объект типа runtime::FreeFunction.
     };
 
     // Инструкция if <condition> <if_body> [elif <elif_condition> <elif_body>]* [else <else_body>].

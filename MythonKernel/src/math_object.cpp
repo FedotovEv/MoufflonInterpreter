@@ -8,6 +8,7 @@
 #include <optional>
 #include <sstream>
 #include <cmath>
+#include <charconv>
 
 using namespace std;
 using namespace runtime;
@@ -277,12 +278,110 @@ namespace runtime
     // Таблицы описания методов класса StringOpsInstance и конвенций их вызова.
     const std::unordered_map<std::string_view, StringOpsInstance::StringOpsCallMethod> StringOpsInstance::string_ops_method_table_
     {
-
+        {"size"sv, &StringOpsInstance::MethodSize},
+        {"Size"sv, &StringOpsInstance::MethodSize},
+        {"length"sv, &StringOpsInstance::MethodSize},
+        {"Length"sv, &StringOpsInstance::MethodSize},
+        {"concat"sv, &StringOpsInstance::MethodConcat},
+        {"Concat"sv, &StringOpsInstance::MethodConcat},
+        {"append"sv, &StringOpsInstance::MethodAppend},
+        {"Append"sv, &StringOpsInstance::MethodAppend},
+        {"substr"sv, &StringOpsInstance::MethodSubstr},
+        {"Substr"sv, &StringOpsInstance::MethodSubstr},
+        {"find"sv, &StringOpsInstance::MethodFind},
+        {"Find"sv, &StringOpsInstance::MethodFind},
+        {"rfind"sv, &StringOpsInstance::MethodRFind},
+        {"RFind"sv, &StringOpsInstance::MethodRFind},
+        {"find_first_of"sv, &StringOpsInstance::MethodFindFirstOf},
+        {"FindFirstOf"sv, &StringOpsInstance::MethodFindFirstOf},
+        {"find_first_not_of"sv, &StringOpsInstance::MethodFindFirstNotOf},
+        {"FindFirstNotOf"sv, &StringOpsInstance::MethodFindFirstNotOf},
+        {"find_last_of"sv, &StringOpsInstance::MethodFindLastOf},
+        {"FindLastOf"sv, &StringOpsInstance::MethodFindLastOf},
+        {"find_last_not_of"sv, &StringOpsInstance::MethodFindLastNotOf},
+        {"FindLastNotOf"sv, &StringOpsInstance::MethodFindLastNotOf},
+        {"starts_with"sv, &StringOpsInstance::MethodStartsWith},
+        {"StartsWith"sv, &StringOpsInstance::MethodStartsWith},
+        {"ends_with"sv, &StringOpsInstance::MethodEndsWith},
+        {"EndsWith"sv, &StringOpsInstance::MethodEndsWith},
+        {"contains"sv, &StringOpsInstance::MethodContains},
+        {"Contains"sv, &StringOpsInstance::MethodContains},
+        {"insert"sv, &StringOpsInstance::MethodInsert},
+        {"Insert"sv, &StringOpsInstance::MethodInsert},
+        {"erase"sv, &StringOpsInstance::MethodErase},
+        {"Erase"sv, &StringOpsInstance::MethodErase},
+        {"replace"sv, &StringOpsInstance::MethodReplace},
+        {"Replace"sv, &StringOpsInstance::MethodReplace},
+        {"replicate"sv, &StringOpsInstance::MethodReplicate},
+        {"Replicate"sv, &StringOpsInstance::MethodReplicate},
+        {"reverse"sv, &StringOpsInstance::MethodReverse},
+        {"Reverse"sv, &StringOpsInstance::MethodReverse},
+        {"asc"sv, &StringOpsInstance::MethodAsc},
+        {"Asc"sv, &StringOpsInstance::MethodAsc},
+        {"chr"sv, &StringOpsInstance::MethodChr},
+        {"Chr"sv, &StringOpsInstance::MethodChr},
+        {"to_number"sv, &StringOpsInstance::MethodToNumber},
+        {"ToNumber"sv, &StringOpsInstance::MethodToNumber},
+        {"to_number_length"sv, &StringOpsInstance::MethodToNumberLength},
+        {"ToNumberLength"sv, &StringOpsInstance::MethodToNumberLength},
+        {"to_number_error"sv, &StringOpsInstance::MethodToNumberError},
+        {"ToNumberError"sv, &StringOpsInstance::MethodToNumberError},
+        {"to_string"sv, &StringOpsInstance::MethodToString},
+        {"ToString"sv, &StringOpsInstance::MethodToString}
     };
     
     const std::unordered_map<std::string_view, std::pair<size_t, size_t>> StringOpsInstance::string_ops_method_argument_count_
     {
-
+        {"size"sv, {1, 1}},
+        {"Size"sv, {1, 1}},
+        {"length"sv, {1, 1}},
+        {"Length"sv, {1, 1}},
+        {"concat"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"Concat"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"append"sv, {2, 4}},
+        {"Append"sv, {2, 4}},
+        {"substr"sv, {1, 3}},
+        {"Substr"sv, {1, 3}},
+        {"find"sv, {2, 3}},
+        {"Find"sv, {2, 3}},
+        {"rfind"sv, {2, 3}},
+        {"RFind"sv, {2, 3}},
+        {"find_first_of"sv, {2, 3}},
+        {"FindFirstOf"sv, {2, 3}},
+        {"find_first_not_of"sv, {2, 3}},
+        {"FindFirstNotOf"sv, {2, 3}},
+        {"find_last_of"sv, {2, 3}},
+        {"FindLastOf"sv, {2, 3}},
+        {"find_last_not_of"sv, {2, 3}},
+        {"FindLastNotOf"sv, {2, 3}},
+        {"starts_with"sv, {2, 2}},
+        {"StartsWith"sv, {2, 2}},
+        {"ends_with"sv, {2, 2}},
+        {"EndsWith"sv, {2, 2}},
+        {"contains"sv, {2, 2}},
+        {"Contains"sv, {2, 2}},
+        {"insert"sv, {3, 4}},
+        {"Insert"sv, {3, 4}},
+        {"erase"sv, {1, 3}},
+        {"Erase"sv, {1, 3}},
+        {"replace"sv, {4, 6}},
+        {"Replace"sv, {4, 6}},
+        {"replicate"sv, {1, 2}},
+        {"Replicate"sv, {1, 2}},
+        {"reverse"sv, {1, 1}},
+        {"Reverse"sv, {1, 1}},
+        {"asc"sv, {1, 2}},
+        {"Asc"sv, {1, 2}},
+        {"chr"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"Chr"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"to_number"sv, {1, 3}},
+        {"ToNumber"sv, {1, 3}},
+        {"to_number_length"sv, {0, 0}},
+        {"ToNumberLength"sv, {0, 0}},
+        {"to_number_error"sv, {0, 0}},
+        {"ToNumberError"sv, {0, 0}},
+        {"to_string"sv, {1, 3}},
+        {"ToString"sv, {1, 3}}
     };
 
     // Вспомогательная функция-член извлечения пары фактических параметров подстроки - начального её индекса и длины.
@@ -409,7 +508,7 @@ namespace runtime
     
     // rfind(arg_str_haystack, arg_str_needle, arg_pos) - поиск последнего вхождения подстроки arg_str_needle в строку arg_str_haystack,
     // начиная с позиции arg_pos.
-    ObjectHolder StringOpsInstance::MethodRfind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodRFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::rfind);
     }
@@ -578,6 +677,61 @@ namespace runtime
         return ObjectHolder::Own(runtime::String(move(result)));
     }
     
+    // reverse(arg_str) - обращение (реверсирование) строки-аргумента arg_str.
+    ObjectHolder StringOpsInstance::MethodReverse(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "Reverse"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        
+        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
+        std::reverse(arg_str.begin(), arg_str.end());
+        return ObjectHolder::Own(runtime::String(move(arg_str)));
+    }
+
+    // asc(arg_str, arg_pos) - получение ASCII-кода символа строки arg_str, находящегося в позиции arg_pos.
+    ObjectHolder StringOpsInstance::MethodAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        CheckMethodParams(context, "Asc"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Asc может принимать 1 или 2 параметра");
+
+        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
+        int arg_pos = 0; // Значение начальной позиции интересующего нас символа по умолчанию.
+
+        if (actual_args.size() >= 3)
+        { // Явно задан arg_pos.
+            const runtime::Number* arg_pos_ptr = actual_args[2].TryAs<runtime::Number>();
+            if (!arg_pos_ptr)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
+            arg_pos = arg_pos_ptr->GetIntValue();
+            if (arg_pos < 0 || arg_pos >= static_cast<int>(arg_str.size()))
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Задана недопустимая позиция в строке");
+        }
+
+        // Все параметры предстоящей операции определены и проверены. Можно выполнять.
+        return ObjectHolder::Own(runtime::Number(arg_str[arg_pos]));
+    }
+    
+    // chr(arg_code, arg_code, ...) - генерация строки из символов с ASCII-кодами arg_code.
+    ObjectHolder StringOpsInstance::MethodChr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "Chr"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ,
+                          MethodParamType::PARAM_TYPE_NUMERIC, 1, actual_args);
+
+        std::string result;
+        for (size_t i = 0; i < actual_args.size(); ++i)
+        {
+            int code_value = actual_args[i].TryAs<runtime::Number>()->GetIntValue();
+            if (code_value < 0 || code_value > 0xff)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Недопустимое значение ASCII-кода символа");
+            result += code_value;
+        }
+
+        return ObjectHolder::Own(runtime::String(move(result)));
+    }
+
     // to_number(arg_str, arg_pos, base_value) - преобразование в числовую форму фрагмента строки arg_str, начинающегося с arg_pos,
     // представляющего некоторое число в base_value - ичной системе счисления.
     ObjectHolder StringOpsInstance::MethodToNumber(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
@@ -660,17 +814,84 @@ namespace runtime
         return ObjectHolder::Own(runtime::Number(last_to_number_error_));
     }
     
-    // to_string(arg_number) - преобразование в строку числового аргумента arg_number.
+    // to_string(arg_number, base_value, double_precision) - преобразование в строку числового аргумента arg_number.
+    // Для целых чисел строка формируется в base_value-ичной системе счисления.
+    // Для дробных чисел аргумент base_value воспринимается как спецификатор формата вывода числа - научный, с фиксированной точкой
+    // или шестнадцатеричный.
+    //      В этом случае base_value == 1 - это целевой формат, эквивалентный std::chars_format::fixed (с фиксированной точкой).
+    //                    base_value == 2 эквивалентно std::chars_format::scientific (научный формат).
+    //                    base_value == 4 эквивалентно std::chars_format::hex (шестнадцатеричный).
+    //      base_value здесь представляет собой битовую маску и указанные выше значения могут объединяться по ИЛИ.
+    // Также для дробных чисел применяется третий аргумент - настройка точности double_precision - число знаков после запятой.
     ObjectHolder StringOpsInstance::MethodToString(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        CheckMethodParams(context, "ToString"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+        static constexpr int CHARS_FORMAT_FIXED_MASK = 1;
+        static constexpr int CHARS_FORMAT_SCIENTIFIC_MASK = 2;
+        static constexpr int CHARS_FORMAT_HEX_MASK = 4;
+
+        CheckMethodParams(context, "ToString"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ,
                           MethodParamType::PARAM_TYPE_NUMERIC, 1, actual_args);
+        if (actual_args.size() > 3) // Допускается от 1 до 3 параметров (включительно).
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод ToString может принимать от 1 до 3 параметров");
         
-        const runtime::Number* arg_num = actual_args[2].TryAs<runtime::Number>();
+        const runtime::Number* arg_num = actual_args[0].TryAs<runtime::Number>();
+        bool is_second_arg = actual_args.size() >= 2;
+        int second_arg_val = 0;
+        if (is_second_arg)
+            second_arg_val = actual_args[1].TryAs<runtime::Number>()->GetIntValue();
+        bool is_third_arg = actual_args.size() >= 3;
+        int third_arg_val = 0;
+        if (is_third_arg)
+            third_arg_val = actual_args[2].TryAs<runtime::Number>()->GetIntValue();
+
+        static constexpr size_t TEMP_BUFFER_LEN = 512;
+        std::string temp_buffer(TEMP_BUFFER_LEN, '\0');
+        std::to_chars_result conv_result;
         if (arg_num->IsDouble())
-            return ObjectHolder::Own(runtime::String(std::to_string(arg_num->GetDoubleValue())));
+        {
+            std::chars_format use_fmt = std::chars_format::general;
+            if (is_second_arg)
+            {
+                use_fmt = static_cast<std::chars_format>(0);
+                if (second_arg_val & CHARS_FORMAT_FIXED_MASK)
+                    use_fmt |= std::chars_format::fixed;
+                if (second_arg_val & CHARS_FORMAT_SCIENTIFIC_MASK)
+                    use_fmt |= std::chars_format::scientific;
+                if (second_arg_val & CHARS_FORMAT_HEX_MASK)
+                    use_fmt |= std::chars_format::hex;
+            }
+            if (is_third_arg)
+            {
+                conv_result = std::to_chars(temp_buffer.data(), temp_buffer.data() + TEMP_BUFFER_LEN - 1, arg_num->GetDoubleValue(),
+                                            use_fmt, third_arg_val);
+            }
+            else
+            {
+                conv_result = std::to_chars(temp_buffer.data(), temp_buffer.data() + TEMP_BUFFER_LEN - 1, arg_num->GetDoubleValue(),
+                                            use_fmt);
+            }
+        }
         else
-            return ObjectHolder::Own(runtime::String(std::to_string(arg_num->GetIntValue())));
+        {
+            if (is_second_arg && (second_arg_val < 2 || second_arg_val > 36))
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Задана недопустимая база преобразуемого числа");
+            if (is_third_arg)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT,
+                                  "Для целых чисел метод ToString может принимать 1 или 2 параметра");
+            int base_value = is_second_arg ? second_arg_val : 10; // По умолчанию используется десятичная система счисления.
+            conv_result = std::to_chars(temp_buffer.data(), temp_buffer.data() + TEMP_BUFFER_LEN - 1, arg_num->GetIntValue(), base_value);
+        }
+
+        if (conv_result.ec != std::errc())
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_NUMBER_STRING_CONVERSION_ERROR,
+                              "ToString : ошибка конверсии - " + std::to_string(static_cast<int>(conv_result.ec)));
+        // Преобразование совершилось без ошибок - возвращаем его результат.
+        return ObjectHolder::Own(runtime::String(temp_buffer.substr(0, conv_result.ptr - temp_buffer.data())));
+    }
+
+    void StringOpsInstance::Print(std::ostream& os, Context& context)
+    {
+        os << "StringOps:Erros" << last_to_number_error_ << ":Length:" << last_to_number_length_;
     }
 
     ObjectHolder StringOpsInstance::Call
