@@ -969,7 +969,8 @@ namespace ast
         return cls_.TryAs<runtime::Class>();
     }
 
-    FreeFunctionDefinition::FreeFunctionDefinition(runtime::ObjectHolder free_function)
+    FreeFunctionDefinition::FreeFunctionDefinition(runtime::ObjectHolder free_function) :
+        free_function_(move(free_function))
     {}
     
     runtime::ObjectHolder FreeFunctionDefinition::Execute(runtime::Closure& closure, runtime::Context& context)

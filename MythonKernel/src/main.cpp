@@ -621,21 +621,24 @@ print m.atan(1), m.atan2(1, 1)
             istringstream input(R"--(
 str_ops = string_ops()
 str_var_1 = "ABCDEFGH"
-str_var_2 = "IJKLMNOPQR"
-str_var_3 = "STRUVWXYZ"
+str_var_2 = "IJKLMNOPQ"
+str_var_3 = "RSTUVWXYZ"
 alphabet_var = str_ops.concat(str_var_1, str_var_2, str_var_3)
-print alphabet_var, str_ops.size(alphabet_var)
-print str_ops.size(str_var_1), str_ops.size(str_var_2), str_ops.size(str_var_3)
+print alphabet_var, str_ops.size(alphabet_var) # Вывод в консоль полного латинского алфавита, а также его длины в 26 символов.
+print str_ops.size(str_var_1), str_ops.size(str_var_2), str_ops.size(str_var_3) # Вывод длин исходных компонент 8, 9 и 9 символов.
 # Прямой поиск
 alphabet_var = alphabet_var + str_ops.reverse(alphabet_var)
+# Следующие поисковые операции выведут в консоль следующие найденные положения - 0, 8, 18 и 10.
 print str_ops.find(alphabet_var, "A"), str_ops.find(alphabet_var, "I"), str_ops.find(alphabet_var, "S"), str_ops.find(alphabet_var, "KLM")
 # Обратный поиск - должны быть найдены концевые буквы из второй половины сцепки alphabet_var.
+# Правильные результаты поиска - 51, 43, 33, 39.
 print str_ops.rfind(alphabet_var, "A"), str_ops.rfind(alphabet_var, "I"), str_ops.rfind(alphabet_var, "S"), str_ops.find(alphabet_var, "MLK")
+print str_ops.find(alphabet_var, "0") == str_ops.not_found() # Сравнение возвращает True, так как "0" не содержится в alphabet_var.
 )--");
             ostringstream ostr;
             RunMythonProgram(input, ostr);
-            cout << ostr.str() << endl;
-            //ASSERT_EQUAL(ostr.str(), ""s);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ 26\n8 9 9\n0 8 18 10\n51 43 33 39\nTrue\n"s);
         }
         { // Подстроки.
             istringstream input(R"--(
@@ -655,14 +658,14 @@ sub_1_str = str_ops.substr(str_var, sub_1_start, sub_1_end - sub_1_start)
 sub_2_str = str_ops.substr(str_var, sub_2_start, sub_2_end - sub_2_start)
 sub_3_str = str_ops.substr(str_var, sub_3_start)
 #
-print sub_1_start, sub_1_end, sub_1_str
-print sub_2_start, sub_2_end, sub_2_str
-print sub_3_start, sub_3_end, sub_3_str
+print sub_1_start, sub_1_end, sub_1_str # Выделена подстрока "SubString_1" с позиции 0 до позиции 11.
+print sub_2_start, sub_2_end, sub_2_str # Выделена подстрока "SubString_2" с позиции 12 до позиции 23.
+print sub_3_start, sub_3_end, sub_3_str # Выделена подстрока "SubString_3" с позиции 24 до конца строки.
 )--");
             ostringstream ostr;
             RunMythonProgram(input, ostr);
-            cout << ostr.str() << endl;
-            //ASSERT_EQUAL(ostr.str(), ""s);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "0 11 SubString_1\n12 23 SubString_2\n24 -1 SubString_3\n"s);
         }
         { // Преобразование чисел в строки и обратно.
             istringstream input(R"--(
@@ -671,31 +674,31 @@ str_ops = string_ops()
 ival_1 = str_ops.to_number("123")
 dval_2 = str_ops.to_number("123.321")
 # Преобразование в числа из подстрок.
-ival_3 = str_ops.to_number("sss123 sss", 3)
+ival_3 = str_ops.to_number("sss123 sss", 3) # результат - "123", задействовано 3 символа.
 len_3 = str_ops.to_number_length()
-dval_4 = str_ops.to_number("jklu123.321kkk", 4)
+dval_4 = str_ops.to_number("jklu123.321kkk", 4) # результат - "123.321", задействовано 7 символов.
 len_4 = str_ops.to_number_length()
 # Вывод в консоль результатов всех расположенных выше конверсий.
 print ival_1, dval_2, ival_3, dval_4
-print len_3, len_4
+print len_3, len_4 # Использовано 3 и 7 символов соответственно.
 
 # Разные базы систем счисления для целочисленных значений.
-ival_base_2 = str_ops.to_number("10110011", 0, 2)
-ival_base_8 = str_ops.to_number("1237654", 0, 8)
-ival_base_10 = str_ops.to_number("123987", 0, 10)
-ival_base_16 = str_ops.to_number("123AB8EF", 0, 16)
-ival_base_32 = str_ops.to_number("12IJK", 0, 26)
+ival_base_2 = str_ops.to_number("10110011", 0, 2) # = 179
+ival_base_8 = str_ops.to_number("1237654", 0, 8) # = 343980
+ival_base_10 = str_ops.to_number("123987", 0, 10) # = 123987
+ival_base_16 = str_ops.to_number("123AB8EF", 0, 16) # = 305838319
+ival_base_32 = str_ops.to_number("12IJK", 0, 32) # = 1133172
 print ival_base_2, ival_base_8, ival_base_10, ival_base_16, ival_base_32
 
 # Далее опробуем обратное превращение - строк в числа.
 # Целое число в разных системах счисления.
 test_int_val = 123456
-str_int_0 = str_ops.to_string(test_int_val)
-str_int_2 = str_ops.to_string(test_int_val, 2)
-str_int_8 = str_ops.to_string(test_int_val, 8)
-str_int_10 = str_ops.to_string(test_int_val, 10)
-str_int_16 = str_ops.to_string(test_int_val, 16)
-str_int_32 = str_ops.to_string(test_int_val, 32)
+str_int_0 = str_ops.to_string(test_int_val) # = "123456"
+str_int_2 = str_ops.to_string(test_int_val, 2) # = "11110001001000000"
+str_int_8 = str_ops.to_string(test_int_val, 8) # = "361100"
+str_int_10 = str_ops.to_string(test_int_val, 10) # = "123456"
+str_int_16 = str_ops.to_string(test_int_val, 16) # = "1e240"
+str_int_32 = str_ops.to_string(test_int_val, 32) # = "3oi0"
 # Вывод результатов целочисленных превращений.
 print str_int_0, str_int_2, str_int_8, str_int_10, str_int_16, str_int_32
 
@@ -707,31 +710,112 @@ CHARS_FORMAT_HEX_MASK = 4
 CHARS_FORMAT_GEN_MASK = CHARS_FORMAT_FIXED_MASK |  CHARS_FORMAT_SCIENTIFIC_MASK
 #------------
 test_double_val = 123456.87654321
-str_double_typ = str_ops.to_string(test_double_val)
-str_double_gen = str_ops.to_string(test_double_val, CHARS_FORMAT_GEN_MASK)
-str_double_fix = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK)
-str_double_sci = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK)
-str_double_hex = str_ops.to_string(test_double_val, CHARS_FORMAT_HEX_MASK)
-str_double_fix_2 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 2)
-str_double_fix_3 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 3)
-str_double_sci_4 = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK, 4)
+str_double_typ = str_ops.to_string(test_double_val) # = "123456.87654321"
+str_double_gen = str_ops.to_string(test_double_val, CHARS_FORMAT_GEN_MASK) # = "123456.87654321"
+str_double_fix = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK) # = "123456.87654321"
+str_double_sci = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK) # = "1.2345687654321e+05"
+str_double_hex = str_ops.to_string(test_double_val, CHARS_FORMAT_HEX_MASK) # = "1.e240e06522c48p+16"
+str_double_fix_2 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 2) # = "123456.88"
+str_double_fix_3 = str_ops.to_string(test_double_val, CHARS_FORMAT_FIXED_MASK, 3) # = "123456.877"
+str_double_sci_4 = str_ops.to_string(test_double_val, CHARS_FORMAT_SCIENTIFIC_MASK, 4) # = "1.2346e+05"
 # Вывод результатов дробных превращений.
 print str_double_typ, str_double_gen, str_double_fix, str_double_sci, str_double_hex
 print str_double_fix_2, str_double_fix_3, str_double_sci_4
 )--");
             ostringstream ostr;
             RunMythonProgram(input, ostr);
-            cout << ostr.str() << endl;
-            //ASSERT_EQUAL(ostr.str(), ""s);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(),
+                "123 123.321 123 123.321\n"s + 
+                "3 7\n"s +
+                "179 343980 123987 305838319 1133172\n"s +
+                "123456 11110001001000000 361100 123456 1e240 3oi0\n"s +
+                "123456.87654321 123456.87654321 123456.87654321 1.2345687654321e+05 1.e240e06522c48p+16\n"s +
+                "123456.88 123456.877 1.2346e+05\n"s);
         }
         { // Различные изменяющие операции над строками.
             istringstream input(R"--(
+str_ops = string_ops()
+arg_str = "ABCDEFGHIJ1234567890"
+arg_str_rev = str_ops.reverse(arg_str) # Обращение строки-аргумента arg_str. Результат - "0987654321JIHGFEDCBA".
 
+# Вставка строки в строку arg_str перед символом "1". Результат - "ABCDEFGHIJZZZ1234567890".
+arg_str_ins = str_ops.insert(arg_str, str_ops.find(arg_str, "1"), "ZZZ")
+
+# Удаление 2 символов из строки arg_str_ins, начиная с положения первого символа "Z. Результат = "ABCDEFGHIJZ1234567890".
+arg_str_erase = str_ops.erase(arg_str_ins, str_ops.find(arg_str_ins, "Z"), 2)
+
+# Замена 4 символов строки arg_str, начиная с положения символа "1", на 3 символа строки "ZXCVBNM", взятых с позиции 2 в ней.
+# Результат - "ABCDEFGHIJCVB567890".
+arg_str_repl = str_ops.replace(arg_str, str_ops.find(arg_str, "1"), 4, "ZXCVBNM", 2, 3)
+
+# Конструирование строки из 3 копий строки "AFZ". Результат - "AFZAFZAFZ".
+res_str_replicate = str_ops.replicate("AFZ", 3)
+
+# Вывод в консоль результатов операций.
+print arg_str_rev
+print arg_str_ins
+print arg_str_erase
+print arg_str_repl
+print res_str_replicate
 )--");
             ostringstream ostr;
             RunMythonProgram(input, ostr);
-            cout << ostr.str() << endl;
-            //ASSERT_EQUAL(ostr.str(), ""s);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(),
+                "0987654321JIHGFEDCBA\n"s +
+                "ABCDEFGHIJZZZ1234567890\n"s +
+                "ABCDEFGHIJZ1234567890\n" +
+                "ABCDEFGHIJCVB567890\n"s +
+                "AFZAFZAFZ\n"s);
+        }
+    }
+
+    void TestFreeFunction()
+    { // Проверка нормального функционирования механизма свободных функций.
+        { // Обыкновенная свободная функция.
+            istringstream input(R"--(
+def free_func_add(arg_a, arg_b):
+  return arg_a + arg_b
+
+def free_func_sub(arg_a, arg_b):
+  return arg_a - arg_b
+
+def free_func_sqr(arg_a):
+  return arg_a * arg_a
+
+add_result = free_func_add(2, 3)
+sub_result = free_func_sub(3, 2)
+sqr_result_2 = free_func_sqr(2)
+sqr_result_3 = free_func_sqr(3)
+# Протокол результатов.
+print add_result, sub_result, sqr_result_2, sqr_result_3
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "5 1 4 9\n"s);
+        }
+        
+        { // Свободная функция как сопрограмма.
+            istringstream input(R"--(
+def free_func_coro(arg_a):
+  summator = arg_a
+  while (True):
+    co_yield summator
+    summator = summator + arg_a
+
+summ_coro = free_func_coro(2)
+# Несколько возобновлений приостановленной сопрограммы.
+summ_result_1 = summ_coro.resume()
+summ_result_2 = summ_coro.resume()
+summ_result_3 = summ_coro.resume()
+summ_result_4 = summ_coro.resume()
+# Протокол результатов.
+print summ_result_1, summ_result_2, summ_result_3, summ_result_4
+)--");
+            ostringstream ostr;
+            //RunMythonProgram(input, ostr);
+            //ASSERT_EQUAL(ostr.str(), "5 1 4 9\n"s);
         }
     }
 
@@ -740,7 +824,8 @@ print str_double_fix_2, str_double_fix_3, str_double_sci_4
         {
             istringstream input(R"--(
 import "MythonTestPlugin"
-# Если префикс класса втыкалы не задан явно (вторым параметром директивы import), то таким префиксом будет являться имя библиотеки (в нашем случае MythonTestPlugin).
+# Если префикс класса втыкалы не задан явно (вторым параметром директивы import), то таким префиксом будет являться
+# имя библиотеки (в нашем случае MythonTestPlugin).
 tst = MythonTestPlugin()
 print tst.print_hello()
 print tst.add_all(5, 6, 7, 8)
@@ -749,7 +834,6 @@ zp = tst.find_zero(5, 6, 0, 9, 10)
 zc = tst.find_char("ABCDabcd", "D")
 print zp, zc, tst.ston("56"), tst.ston("5.6")
 )--");
-
             ostringstream ostr;
             RunMythonProgram(input, ostr);
             ASSERT_EQUAL(ostr.str(), "HelloHello\n26\n28.6\n2 3 56 5.6\n"s);
@@ -767,7 +851,6 @@ zp = tst.find_zero(5, 6, 9, 5, 0, 9, 10)
 zc = tst.find_char("ABCDabcd", "d")
 print zp, zc
 )--");
-
             ostringstream ostr;
             RunMythonProgram(input, ostr);
             ASSERT_EQUAL(ostr.str(), "Hello27.5 Hello\n4 7\n"s);
@@ -1641,6 +1724,7 @@ z1_3 = OneClass(4)
         RUN_TEST(tr, TestTypeTraits);
         RUN_TEST(tr, TestDelOperator);
         RUN_TEST(tr, TestClassDestructor);
+        RUN_TEST(tr, TestFreeFunction);
     }
 }  // namespace
 

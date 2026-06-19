@@ -306,6 +306,8 @@ namespace runtime
         {"EndsWith"sv, &StringOpsInstance::MethodEndsWith},
         {"contains"sv, &StringOpsInstance::MethodContains},
         {"Contains"sv, &StringOpsInstance::MethodContains},
+        {"not_found"sv, &StringOpsInstance::MethodNotFound},
+        {"NotFound"sv, &StringOpsInstance::MethodNotFound},
         {"insert"sv, &StringOpsInstance::MethodInsert},
         {"Insert"sv, &StringOpsInstance::MethodInsert},
         {"erase"sv, &StringOpsInstance::MethodErase},
@@ -360,6 +362,8 @@ namespace runtime
         {"EndsWith"sv, {2, 2}},
         {"contains"sv, {2, 2}},
         {"Contains"sv, {2, 2}},
+        {"not_found"sv, {0, 0}},
+        {"NotFound"sv, {0, 0}},
         {"insert"sv, {3, 4}},
         {"Insert"sv, {3, 4}},
         {"erase"sv, {1, 3}},
@@ -507,13 +511,13 @@ namespace runtime
     }
     
     // rfind(arg_str_haystack, arg_str_needle, arg_pos) - поиск последнего вхождения подстроки arg_str_needle в строку arg_str_haystack,
-    // начиная с позиции arg_pos.
+    // заканчивая поиск позицией arg_pos.
     ObjectHolder StringOpsInstance::MethodRFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::rfind);
     }
     
-    //find_first_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа строки arg_str_needle в
+    // find_first_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа строки arg_str_needle в
     // строку arg_str_haystack, начиная с позиции arg_pos.
     ObjectHolder StringOpsInstance::MethodFindFirstOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
@@ -521,24 +525,31 @@ namespace runtime
         return MethodCommonFind(method, actual_args, context, 0, &std::string::find_first_of);
     }
     
+    // find_first_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа не из строки arg_str_needle в
+    // строку arg_str_haystack, начиная с позиции arg_pos.
     ObjectHolder StringOpsInstance::MethodFindFirstNotOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return MethodCommonFind(method, actual_args, context, 0, &std::string::find_first_not_of);
     }
     
+    // find_last_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа строки arg_str_needle в
+    // строку arg_str_haystack, заканчивая поиск позицией arg_pos.
     ObjectHolder StringOpsInstance::MethodFindLastOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::find_last_of);
     }
-    
+
+    // find_last_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа не из строки arg_str_needle в
+    // строку arg_str_haystack, заканчивая поиск позицией arg_pos.
     ObjectHolder StringOpsInstance::MethodFindLastNotOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::find_last_not_of);
     }
     
+    // starts_with(arg_str_test, arg_str_start) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test начинается с подстроки arg_str_start.
     ObjectHolder StringOpsInstance::MethodStartsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "StartsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
@@ -549,6 +560,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::Bool(arg_str_haystack.starts_with(arg_str_needle)));
     }
     
+    // ends_with(arg_str_test, arg_str_end) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test заканчиватеся подстрокой arg_str_end.
     ObjectHolder StringOpsInstance::MethodEndsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "EndsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
@@ -559,6 +571,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::Bool(arg_str_haystack.ends_with(arg_str_needle)));
     }
     
+    // contains(arg_str_haystack, arg_str_needle) - предикат, возвращающий "ИСТИНУ", если подстрока arg_str_needle входит в строку arg_str_haystack.
     ObjectHolder StringOpsInstance::MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Contains"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
@@ -569,6 +582,15 @@ namespace runtime
         return ObjectHolder::Own(runtime::Bool(arg_str_haystack.find(arg_str_needle) != std::string::npos));
     }
     
+    // not_found() - возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске (если найти искомый образец не удалось).
+    ObjectHolder StringOpsInstance::MethodNotFound(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "NotFound"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+    }
+
     // insert(arg_str, arg_pos, arg_str_ins, arg_count) - вставка строки arg_str_ins в количестве arg_count экземпляров в строку arg_str
     // в положение arg_pos.
     ObjectHolder StringOpsInstance::MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
@@ -594,9 +616,9 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Insert : указанная позиция в строке недопустима");
 
         size_t arg_count = 1; // По умолчанию вставляется один экземпляр arg_str_ins.
-        if (actual_args.size() >= 3)
+        if (actual_args.size() >= 4)
         { // Явно задан arg_count.
-            const runtime::Number* arg_count_ptr = actual_args[1].TryAs<runtime::Number>();
+            const runtime::Number* arg_count_ptr = actual_args[3].TryAs<runtime::Number>();
             if (!arg_count_ptr)
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Количество экземпляров должно быть числом");
             int arg_count_int = arg_count_ptr->GetIntValue();
@@ -660,9 +682,9 @@ namespace runtime
 
         std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
         int arg_count = 1; // По умолчанию создаём одну копию аргумента.
-        if (actual_args.size() >= 3)
+        if (actual_args.size() >= 2)
         { // Явно указан arg_count.
-            const runtime::Number* arg_count_ptr = actual_args[2].TryAs<runtime::Number>();
+            const runtime::Number* arg_count_ptr = actual_args[1].TryAs<runtime::Number>();
             if (!arg_count_ptr)
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Количество копий строки должно быть числом");
             arg_count = arg_count_ptr->GetIntValue();

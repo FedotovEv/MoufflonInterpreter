@@ -117,6 +117,8 @@ public:
      * to_number_error() - код ошибки, которая могла возникнуть при последнем вызове to_number().
      * to_string(arg_number, base_value, double_precision) - преобразование в строку числового аргумента arg_number. Возможное назначение системы счисления (base_value
                                                              для целых чисел), а также формы представления и точности для чисел дробных (base_value и double_precision).
+     * not_found() - метод без аргументов, всегда возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске (найти
+     *               искомый образец не удалось).
      */
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
@@ -160,6 +162,7 @@ private:
     ObjectHolder MethodStartsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodEndsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodNotFound(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     //
     ObjectHolder MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
