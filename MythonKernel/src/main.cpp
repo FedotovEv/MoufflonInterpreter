@@ -805,17 +805,17 @@ def free_func_coro(arg_a):
     summator = summator + arg_a
 
 summ_coro = free_func_coro(2)
-# Несколько возобновлений приостановленной сопрограммы.
-summ_result_1 = summ_coro.resume()
-summ_result_2 = summ_coro.resume()
-summ_result_3 = summ_coro.resume()
-summ_result_4 = summ_coro.resume()
+# Несколько возобновлений приостановленной функции-сопрограммы.
+summ_result_1 = summ_coro.resume() # получаем 2 (исходный аргумент сопрограммы).
+summ_result_2 = summ_coro.resume() # получаем 4
+summ_result_3 = summ_coro.resume() # получаем 6
+summ_result_4 = summ_coro.resume() # получаем 8
 # Протокол результатов.
 print summ_result_1, summ_result_2, summ_result_3, summ_result_4
 )--");
             ostringstream ostr;
-            //RunMythonProgram(input, ostr);
-            //ASSERT_EQUAL(ostr.str(), "5 1 4 9\n"s);
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
         }
     }
 

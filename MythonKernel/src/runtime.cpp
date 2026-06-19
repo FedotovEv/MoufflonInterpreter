@@ -317,13 +317,27 @@ namespace runtime
 
         for (size_t param_index = 0; param_index < method_func_.formal_params.size(); ++param_index)
             temp_closure[method_func_.formal_params[param_index]] = actual_args[param_index];
-        // Таблица символов подготовлена, можно исполнить тело функции.
-        return method_func_.body->Execute(temp_closure, context);
+        // Таблица символов подготовлена, можно обработать тело функции.
+        if (method_func_.is_coroutine)
+            // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
+            return ObjectHolder::Own(move(CoroutineInstance(this, temp_closure)));
+        else // Немедленное исполнение обычной функции.
+            return method_func_.body->Execute(temp_closure, context);
+    }
+
+    ObjectHolder FreeFunction::ExecuteBody(Closure& closure, Context& context)
+    {
+        return method_func_.body->Execute(closure, context);
     }
 
     std::string FreeFunction::GetName() const
     {
         return method_func_.name;
+    }
+
+    bool FreeFunction::IsCoroutine() const
+    {
+        return method_func_.is_coroutine;
     }
 
     void ClassInstance::Print(std::ostream& os, Context& context)

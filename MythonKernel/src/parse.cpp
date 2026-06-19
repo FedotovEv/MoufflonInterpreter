@@ -255,48 +255,22 @@ namespace
         {
             vector<runtime::Method> result;
             while (lexer_.CurrentToken().Is<ITokenType::Def>())
-            {
                 result.push_back(ParseMethodDef());
-                /*
-                // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
-                runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
-                runtime::Method m;
-                exec_factory_.SetCurrentMethod(&m);
 
-                m.name = lexer_.ExpectNext<ITokenType::Id>().value;
-                lexer_.ExpectNext<ITokenType::Char>('(');
-
-                if (lexer_.NextToken().Is<ITokenType::Id>())
-                {
-                    m.formal_params.push_back(lexer_.Expect<ITokenType::Id>().value);
-                    while (lexer_.NextToken() == ',')
-                        m.formal_params.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
-                }
-
-                lexer_.Expect<ITokenType::Char>(')');
-                lexer_.ExpectNext<ITokenType::Char>(':');
-                lexer_.NextToken();
-
-                m.body = exec_factory_.Create(ast::MethodBody(ParseSuite()), def_desc);
-
-                exec_factory_.SetCurrentMethod();
-                result.push_back(std::move(m));
-                */
-            }
             return result;
         }
 
         // Функция выделяет и разбирает описание метода или свободной функции.
         runtime::Method ParseMethodDef()
         {
-            // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def)
+            // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def).
             runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
             runtime::Method parsed_method;
             exec_factory_.SetCurrentMethod(&parsed_method);
 
-            // Пропускаем лексему "def" и ожидаем далее имя определяемого метода.
+            // Пропускаем лексему "def" и ожидаем далее имя определяемого метода или функции.
             parsed_method.name = lexer_.ExpectNext<ITokenType::Id>().value;
-            lexer_.ExpectNext<ITokenType::Char>('(');   // Открывающая скобка, начинающая список формальных параметров метода.
+            lexer_.ExpectNext<ITokenType::Char>('(');  // Открывающая скобка, начинающая список формальных параметров метода (функции).
 
             if (lexer_.NextToken().Is<ITokenType::Id>())
             {
@@ -410,7 +384,6 @@ namespace
                 // Свободная функция с требуемым именем last_name ранее не определялась.
                 exec_factory_.ThrowParseError
                     (ThrowMessages::ConstructThrowText("%1 - "s + last_name + "()"s, {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND}));
-                // exec_factory_.ThrowParseError(ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_NOT_SUPPORT_FREE_FUNCTION) + last_name);
             }
 
             // Выявим возможное наличие имени класса-уточнителя в терме, указывающем на вызываемый метод.

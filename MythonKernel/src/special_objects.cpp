@@ -196,7 +196,9 @@ namespace runtime
         {"set_awaitable"sv, &CoroutineInstance::MethodSetAwaitable},
         {"SetAwaitable"sv, &CoroutineInstance::MethodSetAwaitable},
         {"suspend_type"sv, &CoroutineInstance::MethodSuspendType},
-        {"SuspendType"sv, &CoroutineInstance::MethodSuspendType}
+        {"SuspendType"sv, &CoroutineInstance::MethodSuspendType},
+        {"is_free_function"sv, &CoroutineInstance::MethodIsFreeFunction},
+        {"IsFreeFunction"sv, &CoroutineInstance::MethodIsFreeFunction}
     };
 
     const unordered_map<string_view, pair<size_t, size_t>> CoroutineInstance::coroutine_method_argument_count_
@@ -214,7 +216,9 @@ namespace runtime
         {"set_awaitable"sv, {1, 1}},
         {"SetAwaitbale"sv, {1, 1}},
         {"suspend_type"sv, {0, 0}},
-        {"SuspendType"sv, {0, 0}}
+        {"SuspendType"sv, {0, 0}},
+        {"is_free_function"sv, {0, 0}},
+        {"IsFreeFunction"sv, {0, 0}}
     };
 
     int MapInstance::last_iterator_pack_serial_ = 0;
@@ -755,12 +759,30 @@ namespace runtime
         coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
     }
     
+    CoroutineInstance::CoroutineInstance(FreeFunction* free_function, Closure& closure) :
+        free_function_(free_function), coro_closure_(closure), is_started_(false), is_awaiting_(true)
+    {
+        if (!free_function_->IsCoroutine())
+        {
+            assert(false);
+            throw runtime_error("Функция " + free_function_->GetName() + " не сопрограмма");
+        }
+        // Подготовим к работе символьную таблицу coro_closure_ сопрограммы, добавив в нее ссылку (слабую, невладеющую) на
+        // объект-дескриптор сопрограммы (то есть, на этот объект).
+        coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
+    }
+
     void CoroutineInstance::Print(std::ostream& os, Context& context)
     {
         if (class_instance_ &&  method_)
         {
-            os << "Coroutine:" << class_instance_->GetClassName() << " - Method:" << method_->name
+            os << "Coroutine - Class:" << class_instance_->GetClassName() << " - Method:" << method_->name
                << " - Coroutine:" << std::boolalpha << method_->is_coroutine;
+        }
+        else if (free_function_)
+        {
+            os << "Coroutine - Function:" << free_function_->GetName()
+               << " - Coroutine:" << std::boolalpha << free_function_->IsCoroutine();
         }
         else
         {
@@ -805,7 +827,10 @@ namespace runtime
         workflow_.SetIndex(-1);  // -1 - положение "перед началом" стека кадров положения потока управления.
         try
         {
-            ret_value_ = method_->body->Execute(coro_closure_, context);
+            if (class_instance_)
+                ret_value_ = method_->body->Execute(coro_closure_, context);
+            else if (free_function_)
+                ret_value_ = free_function_->ExecuteBody(coro_closure_, context);
         }
         catch (...)
         { // Любое исключение, распространившееся за пределы сопрограммы, окончательно её завершает.
@@ -864,6 +889,12 @@ namespace runtime
     ObjectHolder CoroutineInstance::MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         return ObjectHolder::Own(Number(static_cast<int>(suspend_type_)));
+    }
+
+    // Предикат, возвращающий "ИСТИНУ", если сопрограмма построена на основе свободной функции.
+    ObjectHolder CoroutineInstance::MethodIsFreeFunction(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        return ObjectHolder::Own(Bool(free_function_));
     }
 
     // Определения статических полей класса TypeTraitsInstance.

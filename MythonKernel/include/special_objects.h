@@ -198,6 +198,7 @@ public:
     using CoroutineCallMethod = ObjectHolder(CoroutineInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
                                                                    Context&);
     CoroutineInstance(ClassInstance* class_instance, const runtime::Method* method, Closure& closure);
+    CoroutineInstance(FreeFunction* free_function, Closure& closure);
     CoroutineInstance(const CoroutineInstance&) = delete;
     CoroutineInstance(CoroutineInstance&&) = default;
     CoroutineInstance& operator=(const CoroutineInstance&) = delete;
@@ -287,6 +288,9 @@ private:
     static const std::unordered_map<std::string_view, CoroutineCallMethod> coroutine_method_table_;
     static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> coroutine_method_argument_count_;
 
+    // Указатель free_function_ заполняется, если сопрограмма является свободной функцией. В этом случае class_instance_ == nullptr.
+    // Если же она построена на основе метода класса, то free_function_ == nullptr, а class_instance_ != nullptr.
+    FreeFunction* free_function_ = nullptr;
     // Указатель на экземпляр класса, которому принадлежит (ему или его предкам) метод-сопрограмма.
     ClassInstance* class_instance_ = nullptr;
     const Method* method_ = nullptr;    // Указатель на сам метод-сопрограмму (его дескриптор).
@@ -318,6 +322,7 @@ private:
     ObjectHolder MethodGetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodSetAwaitable(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodIsFreeFunction(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
 };
 
 class TypeTraitsInstance : public CommonClassInstance

@@ -508,6 +508,9 @@ namespace runtime
     // во вместилище ObjectHolder.
     class FreeFunction : public Object
     {
+        friend class CoroutineInstance;
+        friend class TypeTraitsInstance;
+
     public:
         explicit FreeFunction(Method method_func);
 
@@ -522,8 +525,14 @@ namespace runtime
         }
 
         void Print(std::ostream& os, Context& context);
+
+        // Функции-члены класса, исполняющие хранимую функцию.
         ObjectHolder Call(const std::vector<ObjectHolder>& actual_args, Context& context);
+        ObjectHolder ExecuteBody(Closure& closure, Context& context);
+
+        // Информирующие функции-члены.
         std::string GetName() const;
+        bool IsCoroutine() const;
 
     private:
         Method method_func_;
