@@ -228,14 +228,16 @@ private:
 };
 
 void RunMythonProgramFromFile(const string& input_filename, ostream& output,
-                              const runtime::LinkageFunction& link_function = {})
+    const runtime::LinkageFunction& link_function = {})
 {
+    parse::TrivialParseContext parse_context;
     LexerFileInputExImpl input_ex(input_filename);
-    CplxParsedProgram cplx_program;
-    cplx_program.SetContext(runtime::SimpleContext(output, link_function))
-                .SetLexer(parse::Lexer(input_ex));
-    ParseProgram(cplx_program);
-    ExecuteProgram(cplx_program);
+    parse::Lexer lexer(input_ex);
+    runtime::SimpleContext context(output, link_function);
+    runtime::Closure closure;
+
+    auto program = ParseProgram(lexer, parse_context);
+    program->Execute(closure, context);
 }
 
 int main(int argc, char* argv[])

@@ -8,14 +8,11 @@ using namespace std;
 
 namespace parse
 {
-    CplxParsedProgram ParseProgramFromString(const string& program)
+    unique_ptr<ast::Statement> ParseProgramFromString(const string& program)
     {
         istringstream is(program);
-        CplxParsedProgram cplx_program;
-        cplx_program.SetLexer(parse::Lexer(is));
-        ParseProgram(cplx_program);
-
-        return cplx_program;
+        parse::Lexer lexer(is);
+        return ParseProgram(lexer);
     }
 
     void TestSimpleProgram()
@@ -27,12 +24,14 @@ z = "hello, "
 n = "world"
 print x + y, z + n
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "9 hello, world\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "9 hello, world\n"s);
     }
 
     void TestProgramWithClasses()
@@ -64,12 +63,14 @@ far_far_away = Point(10000, 50000)
 
 print program_name, origin, far_far_away, origin.SetX(1)
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "Classes test (0; 0) (10000; 50000) None\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "Classes test (0; 0) (10000; 50000) None\n"s);
     }
 
     void TestProgramWithIf()
@@ -89,12 +90,14 @@ if x > 0:
 else:
   print 'x <= 0'
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "x <= y\ny >= 0\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "x <= y\ny >= 0\n"s);
     }
 
     void TestReturnFromIf()
@@ -110,12 +113,14 @@ class Abs:
 x = Abs()
 print x.calc(2)
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
-        
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "2\n"s);
+
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "2\n"s);
     }
 
     // Проверка работы многовариантного оператора if ... elif ... else ... .
@@ -147,12 +152,14 @@ x = ValClassify()
 print x.calc(0), x.calc(1), x.calc(11), x.calc(111), x.calc(1111), x.calc(500), x.calc(50), x.calc(5), x.calc(0)
 print x.calc(0), x.calc(-1), x.calc(-11), x.calc(-111), x.calc(-1111), x.calc(-500), x.calc(-50), x.calc(-5), x.calc(0)
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "0 1 2 3 4 3 2 1 0\n0 -1 -2 -3 -4 -3 -2 -1 0\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "0 1 2 3 4 3 2 1 0\n0 -1 -2 -3 -4 -3 -2 -1 0\n"s);
     }
 
     void TestRecursion()
@@ -173,12 +180,14 @@ x = ArithmeticProgression()
 x.calc(10)
 print x.result
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "55\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "55\n"s);
     }
 
     void TestRecursion2()
@@ -201,12 +210,14 @@ print x.calc(510510, 18629977)
 print x.calc(22, 17)
 print x.call_count
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "17\n1\n115\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "17\n1\n115\n"s);
     }
 
     void TestComplexLogicalExpression()
@@ -218,12 +229,14 @@ c = 3
 ok = a + b > c and a + c > b and b + c > a
 print ok
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(), "False\n"s);
+        runtime::DummyContext context;
+
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(), "False\n"s);
     }
 
     void TestClassicalPolymorphism()
@@ -269,12 +282,14 @@ t2 = Triangle(125, 1, 2)
 
 print r, c, t1, t2
 )"s;
-        CplxParsedProgram cplx_program = ParseProgramFromString(program);
-        cplx_program.SetContext(runtime::DummyContext());
-        ExecuteProgram(cplx_program);
+        
+        runtime::DummyContext context;
 
-        runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
-        ASSERT_EQUAL(context->output.str(),
+        runtime::Closure closure;
+        auto tree = ParseProgramFromString(program);
+        tree->Execute(closure, context);
+
+        ASSERT_EQUAL(context.output.str(),
                      "Rect(10x20) Circle(52) Triangle(3, 4, 5) Wrong triangle\n"s);
     }
 
@@ -319,11 +334,13 @@ square_instance_0 = Square()
 square_instance_1 = Square(50)
 square_instance_0 = Square("Super_Square", 100)
 )--"s;
-            CplxParsedProgram cplx_program = ParseProgramFromString(program);
-            cplx_program.SetContext(runtime::DummyContext());
-            ExecuteProgram(cplx_program);
 
-            runtime::DummyContext* context = dynamic_cast<runtime::DummyContext*>(cplx_program.context.get());
+            runtime::DummyContext context;
+
+            runtime::Closure closure;
+            auto tree = ParseProgramFromString(program);
+            tree->Execute(closure, context);
+
             std::string etalon_string =
                 // Исполняется shape_instance = Shape("Unknown_Shape") - происходит прямой вызов единственного конструктора
                 // Shape.__init__(shape_name) класса Shape.
@@ -350,7 +367,8 @@ square_instance_0 = Square("Super_Square", 100)
                 "Shape_Init - Shape_Name = Super_Square\n" +        // Печать из Shape.__init__(shape_name).
                 "Rect_Init_3\n" +                                   // Печать из Rect.__init__(shape_name, width, height).
                 "Square_Init_2\n";                                  // Печать из Square.__init__(shape_name, size)
-            ASSERT_EQUAL(context->output.str(), etalon_string);
+
+            ASSERT_EQUAL(context.output.str(), etalon_string);
         }
     }
 }  // namespace parse

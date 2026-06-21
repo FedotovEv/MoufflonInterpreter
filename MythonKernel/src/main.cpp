@@ -238,25 +238,24 @@ namespace
 {
     void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        CplxParsedProgram cplx_program;
-        cplx_program.SetContext(runtime::SimpleContext(output, link_function))
-                    .SetParseContext(parse::TrivialParseContext(true))
-                    .SetLexer(parse::Lexer(input));
-        ParseProgram(cplx_program);
-        ExecuteProgram(cplx_program);
+        parse::TrivialParseContext parse_context;
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
+
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        program->Execute(closure, context);
     }
 
     void RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
-        parse::TrivialParseContext parse_context(true);
+        parse::TrivialParseContext parse_context;
         runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
 
-        CplxParsedProgram cplx_program;
-        cplx_program.SetContext(runtime::SimpleContext(output, link_function))
-                    .SetParseContext(parse::TrivialParseContext(true))
-                    .SetLexer(parse::Lexer(input));
-        ParseProgram(cplx_program);
-        ExecuteProgram(cplx_program);
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        program->Execute(closure, context);
     }
 
     void TestSimplePrints()
@@ -352,15 +351,16 @@ xh = XHolder()
 x = X(xh)
 )--");
 
-        CplxParsedProgram cplx_program;
-        cplx_program.SetLexer(parse::Lexer(input));
-        cplx_program.SetContext(runtime::DummyContext());
-        ParseProgram(cplx_program);
-        ExecuteProgram(cplx_program);
+        parse::Lexer lexer(input);
+        parse::TrivialParseContext parse_context;
+        auto program = ParseProgram(lexer, parse_context);
+        runtime::DummyContext context;
+        runtime::Closure closure;
+        program->Execute(closure, context);
 
-        const auto* xh = cplx_program.closure->at("xh"s).TryAs<runtime::ClassInstance>();
+        const auto* xh = closure.at("xh"s).TryAs<runtime::ClassInstance>();
         ASSERT(xh != nullptr);
-        ASSERT_EQUAL(xh->Fields().at("x"s).Get(), cplx_program.closure->at("x"s).Get());
+        ASSERT_EQUAL(xh->Fields().at("x"s).Get(), closure.at("x"s).Get());
     }
     
     void TestExternalObject()
@@ -1746,7 +1746,7 @@ int main(int argc, char* argv[])
         TestAll();
         if (ScanArgvForString(argc, argv, "--console"))
         { // Если в командной строке есть параметр "--console", переходим к консольному режиму - исполнению программы,
-          // вводимой пользоавателем со стандартного входа cin.
+          // вводимой пользователем со стандартного входа cin.
             RunMythonProgram(cin, cout);
             string white_line;
             getline(cin, white_line);

@@ -63,46 +63,8 @@ namespace parse
     class ParseContext
     {
     public:
-        ParseContext() : is_auto_deallocate_(false)
-        {}
-        ParseContext(bool is_auto_deallocate) : is_auto_deallocate_(is_auto_deallocate)
-        {}
-        virtual ~ParseContext();
+        virtual ~ParseContext() = default;
         virtual LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const = 0;
-        #if defined (_WIN64) || defined(_WIN32)
-            void AddDLLEntry(HMODULE hAddonDll)
-            {
-                dll_list_.push_back(hAddonDll);
-            }
-        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-            void AddDLLEntry(void* hAddonDll)
-            {
-                dll_list_.push_back(hAddonDll);
-            }
-        #endif
-        void DeallocateGlobalResources();
-
-        std::unordered_map<std::string, ast::PluginDescData>& GetPlugines()
-        {
-            return plugines_;
-        }
-
-        static int GetNewTypeId()
-        {
-            return current_type_id++;
-        }
-
-    private:
-        static int current_type_id;     // Поле для отслеживания текущего выделяемого идента для вновь создаваемого класса.
-
-        bool is_auto_deallocate_ = false;
-        #if defined (_WIN64) || defined(_WIN32)
-            std::vector<HMODULE> dll_list_;
-        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-            std::vector<void*> dll_list_;
-        #endif
-        // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
-        std::unordered_map<std::string, ast::PluginDescData> plugines_;
     };
 
     class TrivialParseContext : public ParseContext
@@ -110,9 +72,21 @@ namespace parse
     public:
         TrivialParseContext() : ParseContext()
         {}
-        TrivialParseContext(bool is_auto_deallocate) : ParseContext(is_auto_deallocate)
-        {}        
         LoadLibraryDefine GetLoadLibraryDesc(const std::string& library_name) const override;
+    };
+
+    // Класс для ведения идентификации создаваемых типов (классов различного вида), а также выделения им уникальных числовых
+    // идентификаторов.
+    class TypeIdentificator
+    {
+    public:
+        static int GetNewTypeId()
+        {
+            return current_type_id++;
+        }
+
+    private:
+        static int current_type_id;     // Поле для отслеживания текущего выделяемого идента для вновь создаваемого класса.
     };
 }
 
@@ -126,10 +100,14 @@ struct ParseError : std::runtime_error
 using FuncInternalObjectCreator = std::unique_ptr<runtime::Executable>(std::vector<std::unique_ptr<runtime::Executable>>);
 struct InternalObjectCreator
 {
-    int my_id = parse::ParseContext::GetNewTypeId();
+    int my_id = parse::TypeIdentificator::GetNewTypeId();
     std::function<FuncInternalObjectCreator> creator;
 };
 
+std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer);
+std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context);
+
+/*
 // Структура для компактного хранения всех активов, необходимых для разбора, анализа и последующего исполнения МУФЛОН-программы.
 // Структура принимает в единоличное владение все назначенные ей объекты.
 struct CplxParsedProgram
@@ -177,3 +155,5 @@ struct CplxParsedProgram
 void ParseProgram(CplxParsedProgram& cplx_program);
 // Функция исполнения разобранной и проанализированной программы, для которой построено АСД.
 runtime::ObjectHolder ExecuteProgram(CplxParsedProgram& program);
+*/
+

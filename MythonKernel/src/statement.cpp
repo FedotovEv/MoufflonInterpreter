@@ -723,10 +723,21 @@ namespace ast
     void Compound::AddStatement(std::unique_ptr<Statement> stmt)
     { // Добавляет очередную инструкцию в конец составной инструкции.
         if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(stmt.get()))
-            last_body_command_desc_ =  compound_stmt_ptr->GetLastCommandDesc();           
+            last_body_command_desc_ = compound_stmt_ptr->GetLastCommandDesc();           
         else
-            last_body_command_desc_ =  stmt->GetCommandDesc();
+            last_body_command_desc_ = stmt->GetCommandDesc();
         comp_body_.push_back(std::move(stmt));
+    }
+
+    ProgramCompound::~ProgramCompound()
+    {
+        // Далее самостоятельно разрушим все операторы, составляющие нашу сплотку, не дожидаясь их естественного уничтожения
+        // при вызове деструктора массива comp_body_. Это требуется для того, чтобы ресурсы, хранящиеся как дополнительные
+        // элементы данного объекта, просуществовали дольше, чем все исполняемые инструкции (соответствующие им узлы АСД)
+        // программы.
+        comp_body_.clear();
+        // После разрушения программы можно освободить все её захваченные глобальные ресурсы.
+        DeallocateGlobalResources();
     }
 
     runtime::ObjectHolder ProgramCompound::Execute(runtime::Closure& closure, runtime::Context& context)
@@ -736,7 +747,22 @@ namespace ast
         // closure - если нужно, взываем для каждого из них внутренний деструктор.
         for (auto& closure_pair : closure)
             CallDestroyIfNeed(closure_pair.second, context);
+
         return ret_value;
+    }
+
+    void ProgramCompound::DeallocateGlobalResources()
+    {
+        #if defined (_WIN64) || defined(_WIN32)
+            for (HMODULE hmodule : dll_list_)
+                FreeLibrary(hmodule);
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            for (void* hmodule : dll_list_)
+                dlclose(hmodule);
+        #else
+
+        #endif
+        dll_list_.clear();
     }
 
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)

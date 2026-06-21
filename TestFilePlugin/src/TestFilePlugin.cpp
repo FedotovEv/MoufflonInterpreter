@@ -15,12 +15,13 @@ using namespace std;
 
 void RunMythonProgram(istream& input, ostream& output)
 {
-    CplxParsedProgram cplx_program;
-    cplx_program.SetContext(runtime::SimpleContext(output))
-                .SetParseContext(parse::TrivialParseContext(true))
-                .SetLexer(parse::Lexer(input));
-    ParseProgram(cplx_program);
-    ExecuteProgram(cplx_program);
+    parse::TrivialParseContext parse_context;
+    runtime::SimpleContext context(output);
+    runtime::Closure closure;
+
+    parse::Lexer lexer(input);
+    auto program = ParseProgram(lexer, parse_context);
+    program->Execute(closure, context);
 }
 
 void TestCreateFile()

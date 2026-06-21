@@ -400,7 +400,7 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
 
-        ObjectHolder plugin_holder = ObjectHolder::Own(std::move(PluginInstance(class_name_, plugin_desc_, context)));
+        ObjectHolder plugin_holder = ObjectHolder::Own(std::move(PluginInstance(class_name_, plugin_desc_)));
         PluginInstance* plugin_object = plugin_holder.TryAs<PluginInstance>();
         // Вычислим фактические значения аргументов, которые требуется передать конструктору.
         std::vector<ObjectHolder> actual_args;
@@ -426,8 +426,6 @@ namespace ast
 
 namespace runtime
 {
-    static const std::string USE_DESTROY_METHOD_NAME(PLUGIN_DESTROY_METHOD);
-
     std::string GenMethodNotFoundErrMess(const std::string& method_name)
     {
         return method_name + " - " + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
@@ -578,22 +576,14 @@ namespace runtime
         return {check_result.first, check_result.second};
     }
 
-    PluginInstance::PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc, Context& context) :
-        class_name_(class_name), plugin_desc_(plugin_desc), context_(context)
+    PluginInstance::PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc) :
+        class_name_(class_name), plugin_desc_(plugin_desc)
     {}
 
     PluginInstance::PluginInstance(PluginInstance&& other) noexcept :
-        class_name_(std::move(other.class_name_)), plugin_desc_(other.plugin_desc_), context_(other.context_)
+        class_name_(std::move(other.class_name_)), plugin_desc_(other.plugin_desc_)
     {
         other.class_name_.clear();
-    }
-
-    PluginInstance::~PluginInstance()
-    {
-        // Если втыкала опеределяет специальный метод PLUGIN_DESTROY_METHOD, то он будет использоваться как внутренний её деструктор (будет вызываться
-        // при разрушении объекта).
-        if (!class_name_.empty() && HasMethod(USE_DESTROY_METHOD_NAME, 0))
-            Call(USE_DESTROY_METHOD_NAME, {}, context_);
     }
 
     void PluginInstance::Print(std::ostream& os, Context& context)

@@ -202,6 +202,7 @@ namespace
         unique_ptr<ast::Statement> ParseProgram()
         {
             auto result = exec_factory_.Create(ast::ProgramCompound());
+            program_compound_ = result.get();
             // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
             result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
             // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
@@ -646,7 +647,7 @@ namespace
                         return internal_class_ptr;
                     }
 
-                    if (auto plug_it = parse_context_.GetPlugines().find(method_name); plug_it != parse_context_.GetPlugines().end())
+                    if (auto plug_it = program_compound_->GetPlugines().find(method_name); plug_it != program_compound_->GetPlugines().end())
                     { // А тут выполним проверку имени вызываемой свободной функции на принадлежность к множеству имён классов втыкал,
                       // подключённых к данному моменту к интерпретатору. Если имя принадлежит этому множеству, то происходит операция
                       // создания класса соответствующей втыкалы.
@@ -1133,10 +1134,10 @@ namespace
             new_plugin_desc.call_func = plugins_call_func;
             new_plugin_desc.methods = std::move(plugin_method_definers);
             // Описатель класса, предоставляемого текущей обрабатываемой втыкалой, полностью сформирован.
-            parse_context_.GetPlugines().emplace(library_alias + "_"s + plugin_name, new_plugin_desc);
+            program_compound_->GetPlugines().emplace(library_alias + "_"s + plugin_name, new_plugin_desc);
             // Обеспечим также возможность обращения к первому классу втыкала без суффикса имени класса.
-            if (parse_context_.GetPlugines().count(library_alias) == 0 && internal_classes_.count(library_alias) == 0)
-                parse_context_.GetPlugines().emplace(library_alias, new_plugin_desc);
+            if (program_compound_->GetPlugines().count(library_alias) == 0 && internal_classes_.count(library_alias) == 0)
+                program_compound_->GetPlugines().emplace(library_alias, new_plugin_desc);
         }
 
         // Пробуем загружать втыкало из разделяемой (динамической) библиотеки.
@@ -1262,7 +1263,7 @@ namespace
             }
 
             AddonDllDeleter.release();
-            parse_context_.AddDLLEntry(hAddonDll);
+            program_compound_->AddDLLEntry(hAddonDll);
         }
 
         // Подключение втыкалы, модуль которой находится в ОЗУ.
@@ -1523,40 +1524,23 @@ namespace
             return result;
         }
 
-        parse::Lexer& lexer_;
-        StatementFactory exec_factory_;
+        // Ссылки, указатели и экземпляры прочих связанных с нами объектов интерпретатора, которые используются синтаксическим
+        // анализатором в процессе работы.
+        parse::Lexer& lexer_;                               // Ссылка на лексический разборщик, являющийся поставщиком потока лексем входной программы.
+        StatementFactory exec_factory_;                     // Экземпляр фабрики-изготовителя инструкций программы - узлов её АСД.
+        parse::ParseContext& parse_context_;                // Ссылка на контекст разбора - вспомогательный объект, определяющий правила исполнения
+                                                            // некоторых директив исходной МУФЛОН-программы (команд времени анализа).
+        ast::ProgramCompound* program_compound_ = nullptr;  // Указатель на головной узел АСД разбираемой программы.
+        //
         runtime::Closure declared_classes_;             // Словарь для хранения определённых в программе классов общего типа.
         runtime::Closure declared_free_functions_;      // Словарь для хранения определённых в программе свободных функций.
-        std::unordered_map<string, InternalObjectCreator> internal_classes_;
-        parse::ParseContext& parse_context_;
+        std::unordered_map<string, InternalObjectCreator> internal_classes_;    // Словарь с указателями на производящий функции встроенных классов МУФЛОНА.
     }; // class Parser
 }  // namespace
-
-int parse::ParseContext::current_type_id = CLASS_AREA_IDENTS;
 
 ParseError::ParseError(ThrowMessageNumber throw_message_number) :
     runtime_error(ThrowMessages::GetThrowText(throw_message_number))
 {}
-
-parse::ParseContext::~ParseContext()
-{
-    if (is_auto_deallocate_)
-        DeallocateGlobalResources();
-}
-
-void parse::ParseContext::DeallocateGlobalResources()
-{
-    #if defined (_WIN64) || defined(_WIN32)
-        for (HMODULE hmodule : dll_list_)
-            FreeLibrary(hmodule);
-    #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
-        for (void* hmodule : dll_list_)
-            dlclose(hmodule);
-    #else
-
-    #endif
-    dll_list_.clear();
-}
 
 LoadLibraryDefine parse::TrivialParseContext::GetLoadLibraryDesc(const string& library_name) const
 {
@@ -1577,59 +1561,16 @@ LoadLibraryDefine parse::TrivialParseContext::GetLoadLibraryDesc(const string& l
         return library_name + standart_lib_extension;
 }
 
-CplxParsedProgram::CplxParsedProgram() :
-    parse_context(std::make_unique<parse::TrivialParseContext>()), closure(std::make_unique<runtime::Closure>())
-{}
+int parse::TypeIdentificator::current_type_id = CLASS_AREA_IDENTS;
 
-CplxParsedProgram::~CplxParsedProgram()
+// Определение перегрузок функции синтаксического анализа исходного текста МУФЛОН-программы.
+unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)
 {
-    // Порядок уничтожения активов (компонент) программы имеет значение. Поэтому данный деструктор освободит их
-    // в безопасном порядке.
-    // Сначала уничтожаем само дерево программы. На момент его уничтожения все контексты (разборочный и
-    // исполнительский) должны ещё существовать.
-    program.reset();
-    // Затем можно разрушить лексический разборщик.
-    lexer.reset();
-    // Затем - таблицу символов.
-    closure.reset();
-    // После - исполнительский контекст.
-    context.reset();
-    // И, наконец, разборочный контекст. Он уничтожается последним, так как содержит метаданные, который могут
-    // использовать все иные активы комплекса программы.
-    try
-    {
-        if (parse_context)
-            parse_context->DeallocateGlobalResources();
-    }
-    catch (...)
-    {}
-    parse_context.reset();
+    parse::TrivialParseContext parse_context;
+    return Parser(lexer, parse_context).ParseProgram();
 }
 
-CplxParsedProgram& CplxParsedProgram::SetLexer(parse::Lexer&& p_lexer)
+unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context)
 {
-    lexer = std::make_unique<parse::Lexer>(std::move(p_lexer));
-    return *this;
-}
-
-CplxParsedProgram& CplxParsedProgram::SetClosure(runtime::Closure&& p_closure)
-{
-    closure = std::make_unique<runtime::Closure>(std::move(p_closure));
-    return *this;
-}
-
-// Определение функции синтаксического анализа исходного текста МУФЛОН-программы.
-void ParseProgram(CplxParsedProgram& cplx_program)
-{
-    cplx_program.program = Parser(*cplx_program.lexer, *cplx_program.parse_context).ParseProgram();
-}
-
-// Определения функции исполнения 
-runtime::ObjectHolder ExecuteProgram(CplxParsedProgram& cplx_program)
-{
-    // Аргумент program->parse_context ДОЛЖЕН совпадать с тем, который использовался при разборе исполняемой программы
-    // cplx_program.program какой-либо функцией ParseProgram().
-    if (!cplx_program.IsParsed())
-        return runtime::ObjectHolder::None();
-    return cplx_program.program->Execute(*cplx_program.closure, *cplx_program.context);
+    return Parser(lexer, parse_context).ParseProgram();
 }

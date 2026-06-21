@@ -70,12 +70,10 @@ namespace runtime
     { // Экземпляр "двоичного дополнения МУФЛОНа" - специального загружаемого объекта с предопределенным набором методов.
     public:
 
-        PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc, Context& context);
+        PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc);
         // Класс некопируемый, но перемещаемый.
         PluginInstance(const PluginInstance& other) = delete;
         PluginInstance(PluginInstance&& other) noexcept;
-
-        ~PluginInstance() override;
 
         void Print(std::ostream& os, Context& context) override;
 
@@ -96,6 +94,6 @@ namespace runtime
         // (при его вызове) требованиям к составу его формальных аргументов. При нарушении этих требований вызов метода не выполняется, а сразу
         // выбрасывается соответствующее исключение.
         const ast::PluginDescData& plugin_desc_;
-        Context& context_;
+        //Context& context_;
     };
 } // namespace runtime

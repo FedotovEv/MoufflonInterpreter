@@ -212,7 +212,7 @@ namespace ast
         // context.GetOutputStream().
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
-    private:    
+    private:
         std::vector<std::unique_ptr<Statement>> args_;
         std::string name_;
     };
@@ -592,6 +592,7 @@ namespace ast
             if constexpr (sizeof...(args) != 0)
                 // Распакуем переданные нам пакеты параметров с помощью свёрточного выражения над двуместным оператором ",".
                 (... , comp_body_.push_back(std::move(std::forward<Args>(args))));
+                //(..., comp_body_.push_back(std::move(args)));
         }
 
         runtime::ProgramCommandDescriptor GetLastCommandDesc()
@@ -620,8 +621,41 @@ namespace ast
     {
     public:
         explicit ProgramCompound() = default;
+        ProgramCompound(ProgramCompound&& other) = default;
+        ProgramCompound& operator=(ProgramCompound&& other) = default;
+        ~ProgramCompound();
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+        #if defined (_WIN64) || defined(_WIN32)
+            void AddDLLEntry(HMODULE hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            void AddDLLEntry(void* hAddonDll)
+            {
+                dll_list_.push_back(hAddonDll);
+            }
+        #endif
+
+        void DeallocateGlobalResources();
+
+        std::unordered_map<std::string, ast::PluginDescData>& GetPlugines()
+        {
+            return plugines_;
+        }
+
+    private:
+        // Метаданные, связанные с программой, которую содержит эта сплотка (составная инструкция) в своём поле comp_body_.
+        // Список системно-зависимых обработчиков динамических библиотек, загруженных при импорте файлово-организованных втыкал.
+        #if defined (_WIN64) || defined(_WIN32)
+            std::vector<HMODULE> dll_list_;
+        #elif defined(__unix__) || defined(__linux__) || defined(__USE_POSIX)
+            std::vector<void*> dll_list_;
+        #endif
+        // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
+        std::unordered_map<std::string, ast::PluginDescData> plugines_;
     };
 
     // Тело метода. Как правило, содержит составную инструкцию

@@ -418,7 +418,7 @@ namespace runtime
     }
 
     Class::Class(std::string name, std::vector<Method> methods, const Class* parent) :
-        my_name_(move(name)), parent_(*parent), my_id_(parse::ParseContext::GetNewTypeId())
+        my_name_(move(name)), parent_(*parent), my_id_(parse::TypeIdentificator::GetNewTypeId())
     {
         for (Method& method : methods)
         {
