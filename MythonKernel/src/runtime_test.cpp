@@ -140,7 +140,7 @@ namespace runtime
             base_methods.push_back
                 ({"test"s, {"arg1"s, "arg2"s}, make_unique<TestMethodBody>(base_method_1)});
             base_methods.push_back({"test_2"s, {"arg1"s}, make_unique<TestMethodBody>(base_method_2)});
-            Class base_class{"Base"s, std::move(base_methods), nullptr};
+            Class base_class{"Base"s, std::move(base_methods), {}};
             ClassInstance base_inst{base_class};
             base_inst.Fields()["base_field"s] = ObjectHolder::Own(String{"hello"s});
             ASSERT(base_inst.HasMethod("test"s, 2U));
@@ -167,7 +167,7 @@ namespace runtime
             vector<Method> child_methods;
             child_methods.push_back
                 ({"test"s, {"arg1_child"s, "arg2_child"s}, make_unique<TestMethodBody>(child_method_1)});
-            Class child_class{"Child"s, std::move(child_methods), &base_class};
+            Class child_class{"Child"s, std::move(child_methods), {&base_class}};
             ClassInstance child_inst{child_class};
             ASSERT(child_inst.HasMethod("test"s, 2U));
             base_closure.clear();
@@ -298,7 +298,7 @@ namespace runtime
 
             // Классы и их экземпляры рассматриваются как "ЛОЖЬ".
             {
-                Class cls{"Test"s, {}, nullptr};
+                Class cls{"Test"s, {}, {}};
                 ASSERT(!IsTrue(ObjectHolder::Share(cls)));
                 ASSERT(!IsTrue(ObjectHolder::Own(ClassInstance{cls})));
             }
@@ -390,7 +390,7 @@ namespace runtime
                 test_greater(ObjectHolder::Own(String{"abc"s}), ObjectHolder::Own(String{"abc"s}), false);
                 test_greater(ObjectHolder::Own(String{"abb"s}), ObjectHolder::Own(String{"abc"s}), false);
 
-                // Strings can not be compared to other types
+                // Строки также не могут сравниваться со значениями иных типов.
                 test_eq_uncomparable(ObjectHolder::Own(String{"123"s}), ObjectHolder::Own(Number{123}));
                 test_eq_uncomparable(ObjectHolder::Own(String{"True"s}), ObjectHolder::Own(Bool{true}));
 
@@ -463,10 +463,10 @@ namespace runtime
                 std::vector<Method> cls1_methods;
                 cls1_methods.push_back({"__eq__"s, {"rhs"s}, std::make_unique<TestMethodBody>(eq_body)});
                 cls1_methods.push_back({"__lt__"s, {"rhs"s}, std::make_unique<TestMethodBody>(lt_body)});
-                Class cls1{"Class1"s, std::move(cls1_methods), nullptr};
+                Class cls1{"Class1"s, std::move(cls1_methods), {}};
                 ClassInstance lhs{cls1};
 
-                Class cls2{"Class2"s, {}, nullptr};
+                Class cls2{"Class2"s, {}, {}};
                 ClassInstance rhs{cls2};
 
                 // Далее проверим, как они будут работать.
@@ -520,7 +520,7 @@ namespace runtime
                     return ObjectHolder::Own(Number{42});
                 };
             methods.push_back({"method"s, {"arg1"s, "arg2"s}, make_unique<TestMethodBody>(body)});
-            Class cls{"Test"s, move(methods), nullptr};
+            Class cls{"Test"s, move(methods), {}};
             ASSERT_EQUAL(cls.GetName(), "Test"s);
             ASSERT_EQUAL(cls.GetMethod("missing_method"s), nullptr);
 
@@ -553,7 +553,7 @@ namespace runtime
 
             methods.push_back({"__str__", {}, make_unique<TestMethodBody>(str_body)});
 
-            Class cls{"Test"s, move(methods), nullptr};
+            Class cls{"Test"s, move(methods), {}};
             ClassInstance instance{cls};
 
             ASSERT_EQUAL(&instance.Fields(), &const_cast<const ClassInstance&>(instance).Fields());

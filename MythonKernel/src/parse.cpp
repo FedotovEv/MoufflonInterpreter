@@ -194,7 +194,7 @@ namespace
                  .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})
                 }
             );
-            declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), nullptr));
+            declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), {}));
         }
 
         // Program -> eps
@@ -317,34 +317,20 @@ namespace
             if (lexer_.CurrentToken() == '(')
             { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
                 std::vector<std::string> parent_list_name = ParseIdList();
-                //auto name = lexer_.ExpectNext<ITokenType::Id>().value;
-
-                //lexer_.ExpectNext<ITokenType::Char>(')');
                 lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
-                if (parent_list_name.size() == 1)
-                { // Класс с одним предком.
-                    auto it = declared_classes_.find(parent_list_name[0]);
+                // Класс с неколькими предками (использует множественное наследование).
+                for (const std::string& next_parent_name : parent_list_name)
+                {
+                    auto it = declared_classes_.find(next_parent_name);
                     if (it == declared_classes_.end())
-                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + parent_list_name[0] + "%2"s + class_name,
+                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + next_parent_name + "%2"s + class_name,
                             {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
-
-                    base_class = static_cast<const runtime::Class*>(it->second.Get());
-                }
-                else
-                { // Класс с неколькими предками (использует множественное наследование).
-                    for (const std::string& next_parent_name : parent_list_name)
-                    {
-                        auto it = declared_classes_.find(next_parent_name);
-                        if (it == declared_classes_.end())
-                            exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + next_parent_name + "%2"s + class_name,
-                                {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
                         
-                        base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
-                    }
-                    is_one_parent = false;
+                    base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
                 }
+                is_one_parent = false;
             }
 
             lexer_.Expect<ITokenType::Char>(':');
@@ -357,9 +343,9 @@ namespace
             lexer_.NextToken();
 
             runtime::ObjectHolder class_object_holder;
-            if (is_one_parent)
-                class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class));
-            else
+            //if (is_one_parent)
+                //class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class));
+            //else
                 class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
 
             auto [it, inserted] = declared_classes_.insert({class_name, move(class_object_holder)});
@@ -527,17 +513,11 @@ namespace
                 lexer_.NextToken();
 
                 if (op == '*')
-                {
                     result = exec_factory_.Create(ast::Mult(std::move(result), ParseMult()));
-                }
                 else if (op == '/')
-                {
                     result = exec_factory_.Create(ast::Div(std::move(result), ParseMult()));
-                }
                 else
-                {
                     result = exec_factory_.Create(ast::ModuloDiv(std::move(result), ParseMult()));
-                }
             }
             return result;
         }

@@ -414,7 +414,7 @@ namespace runtime
     public:
         // Создаёт класс с именем name и набором методов methods, унаследованный от класса parent
         // Если parent равен nullptr, то создаётся базовый класс
-        explicit Class(std::string name, std::vector<Method> methods, const Class* parent);
+        // explicit Class(std::string name, std::vector<Method> methods, const Class* parent);
         explicit Class(std::string name, std::vector<Method> methods, std::vector<const Class*> parents);
 
         //   Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует.
@@ -501,7 +501,7 @@ namespace runtime
     private:
         int my_id_;
         std::string my_name_;
-        const Class& parent_;
+        // const Class& parent_;
         //
         using ParentRefType = std::reference_wrapper<const Class>;
         std::vector<ParentRefType> parents_;

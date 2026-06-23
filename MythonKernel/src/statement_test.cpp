@@ -116,7 +116,7 @@ namespace ast
         {
             runtime::DummyContext context;
 
-            runtime::Class empty("Empty"s, {}, nullptr);
+            runtime::Class empty("Empty"s, {}, {});
             runtime::ClassInstance object{empty};
 
             FieldAssignment assign_x(VariableValue{"self"s}, "x"s,
@@ -201,14 +201,14 @@ namespace ast
                 vector<runtime::Method> methods;
                 methods.push_back({"__str__"s, {}, make_unique<NumericConst>(842)});
 
-                runtime::Class cls("BoxedValue"s, std::move(methods), nullptr);
+                runtime::Class cls("BoxedValue"s, std::move(methods), {});
 
                 auto result = Stringify(make_unique<NewInstance>(cls)).Execute(empty, context);
                 ASSERT_OBJECT_VALUE_EQUAL(result, "842"s);
                 ASSERT(result.TryAs<runtime::String>());
             }
             {
-                runtime::Class cls("BoxedValue"s, {}, nullptr);
+                runtime::Class cls("BoxedValue"s, {}, {});
                 runtime::Closure closure{{"x"s, ObjectHolder::Own(runtime::ClassInstance{cls})}};
 
                 std::ostringstream expected_output;
@@ -279,7 +279,7 @@ namespace ast
                                make_unique<Add>(make_unique<StringConst>("hello, "s),
                                                 make_unique<VariableValue>("value_"s))});
 
-            runtime::Class cls("BoxedValue"s, std::move(methods), nullptr);
+            runtime::Class cls("BoxedValue"s, std::move(methods), {});
 
             Closure empty;
             auto result = Add(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s))
@@ -293,7 +293,7 @@ namespace ast
         {
             runtime::DummyContext context;
 
-            runtime::Class cls("BoxedValue"s, {}, nullptr);
+            runtime::Class cls("BoxedValue"s, {}, {});
 
             Closure empty;
             Add addition(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s));
@@ -344,7 +344,7 @@ namespace ast
                      make_unique<Add>(make_unique<VariableValue>(vector<string>{"self"s, "value"s}),
                                       make_unique<VariableValue>("x"s)))}});
 
-            runtime::Class cls("BoxedValue"s, std::move(methods), nullptr);
+            runtime::Class cls("BoxedValue"s, std::move(methods), {});
             runtime::ClassInstance inst(cls);
 
             inst.Call("__init__"s, {}, context);
@@ -371,7 +371,7 @@ namespace ast
                                make_unique<FieldAssignment>(VariableValue{"self"s}, "value"s,
                                                             make_unique<ast::VariableValue>("x"s))});
 
-            runtime::Class cls("BoxedValue"s, move(methods), nullptr);
+            runtime::Class cls("BoxedValue"s, move(methods), {});
 
             ASSERT_EQUAL(cls.GetName(), "BoxedValue"s);
             {
@@ -398,13 +398,13 @@ namespace ast
                                make_unique<FieldAssignment>(VariableValue{"self"s}, "value"s,
                                                             make_unique<VariableValue>("x"s))});
 
-            runtime::Class base("BoxedValue"s, std::move(methods), nullptr);
+            runtime::Class base("BoxedValue"s, std::move(methods), {});
 
             methods.clear();
             methods.push_back({"GetValue"s, {"z"s}, make_unique<VariableValue>("z"s)});
             methods.push_back({"AsString"s, {}, make_unique<StringConst>("value"s)});
 
-            runtime::Class cls("StringableValue"s, std::move(methods), &base);
+            runtime::Class cls("StringableValue"s, std::move(methods), {&base});
 
             ASSERT_EQUAL(cls.GetName(), "StringableValue"s);
             {
@@ -439,7 +439,7 @@ namespace ast
                                                             make_unique<VariableValue>("x"s))});
             methods.push_back({"GetSecondValue"s, {"x"s, "y"s}, make_unique<VariableValue>("x"s)});
 
-            runtime::Class base_boxed("BoxedValue"s, std::move(methods), nullptr);
+            runtime::Class base_boxed("BoxedValue"s, std::move(methods), {});
 
             // Второй базовый класс - base_stringable.
             methods.clear();
@@ -447,7 +447,7 @@ namespace ast
             methods.push_back({"AsString"s, {}, make_unique<StringConst>("value"s)});
             methods.push_back({"GetSecondValue"s, {"x"s}, make_unique<VariableValue>("x"s)});
 
-            runtime::Class base_stringable("StringableValue"s, std::move(methods), nullptr);
+            runtime::Class base_stringable("StringableValue"s, std::move(methods), {});
             
             // Производный класс, имеющий два родителя.
             methods.clear();
