@@ -403,6 +403,7 @@ namespace ast
             methods.clear();
             methods.push_back({"GetValue"s, {"z"s}, make_unique<VariableValue>("z"s)});
             methods.push_back({"AsString"s, {}, make_unique<StringConst>("value"s)});
+
             runtime::Class cls("StringableValue"s, std::move(methods), &base);
 
             ASSERT_EQUAL(cls.GetName(), "StringableValue"s);
@@ -425,6 +426,72 @@ namespace ast
                 ASSERT(m->formal_params.empty());
             }
             ASSERT(!cls.GetMethod("AsStringValue"s));
+        }
+
+        void TestMultipleInheritance()
+        { // Испытание существующего в МУФЛОНЕ механизма множественного наследования.
+            vector<runtime::Method> methods;
+            // Первый базовый класс - base_boxed.
+            methods.push_back({"GetValue"s, {"x"s}, make_unique<VariableValue>("x"s)});
+            methods.push_back({"SetValue"s,
+                               {"x"s},
+                               make_unique<FieldAssignment>(VariableValue{"self"s}, "value"s,
+                                                            make_unique<VariableValue>("x"s))});
+            methods.push_back({"GetSecondValue"s, {"x"s, "y"s}, make_unique<VariableValue>("x"s)});
+
+            runtime::Class base_boxed("BoxedValue"s, std::move(methods), nullptr);
+
+            // Второй базовый класс - base_stringable.
+            methods.clear();
+            methods.push_back({"GetValue"s, {"x"s, "y"s}, make_unique<VariableValue>("y"s)});
+            methods.push_back({"AsString"s, {}, make_unique<StringConst>("value"s)});
+            methods.push_back({"GetSecondValue"s, {"x"s}, make_unique<VariableValue>("x"s)});
+
+            runtime::Class base_stringable("StringableValue"s, std::move(methods), nullptr);
+            
+            // Производный класс, имеющий два родителя.
+            methods.clear();
+            methods.push_back({"GetValue"s, {}, make_unique<VariableValue>(vector{"self"s, "value"s})});
+            methods.push_back({"AsBool"s, {}, make_unique<BoolConst>(true)});
+
+            runtime::Class two_parents_child("ChildWithTwoParents"s, std::move(methods), {&base_boxed, &base_stringable});
+
+            ASSERT_EQUAL(two_parents_child.GetName(), "ChildWithTwoParents"s);
+            {
+                auto m = two_parents_child.GetMethod("GetValue"s);  // Этот метод определён прямо в классе-потомке two_parents_child.
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "GetValue"s);
+                ASSERT(m->formal_params.empty());
+            }
+            {
+                auto m = two_parents_child.GetMethod("AsBool"s); // Аналогично, определение такого метода есть прямо в классе-потомке two_parents_child.
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "AsBool"s);
+                ASSERT(m->formal_params.empty());
+            }
+            // Далее проверим наследование методов из классов-предков.
+            {
+                auto m = two_parents_child.GetMethod("SetValue"s);
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "SetValue"s);
+                ASSERT_EQUAL(m->formal_params.size(), 1U);
+            }
+            {
+                auto m = two_parents_child.GetMethod("AsString"s);
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "AsString"s);
+                ASSERT(m->formal_params.empty());
+            }
+            // Переопределение метода, имеющегося сразу в обоих предках производного класса. В этом случае преимущество имеет метод класса,
+            // упомянутого раньше в списке родителей.
+            {
+                auto m = two_parents_child.GetMethod("GetSecondValue"s);
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "GetSecondValue"s);
+                // Метод GetSecondValue класса base_boxed("BoxedValue") будет приоритетным и имеет два параметра.
+                ASSERT_EQUAL(m->formal_params.size(), 2U);
+            }
+            ASSERT(!two_parents_child.GetMethod("AsStringValue"s));
         }
 
         void TestOr()
@@ -535,6 +602,7 @@ namespace ast
         RUN_TEST(tr, ast::TestFields);
         RUN_TEST(tr, ast::TestBaseClass);
         RUN_TEST(tr, ast::TestInheritance);
+        RUN_TEST(tr, ast::TestMultipleInheritance);
         RUN_TEST(tr, ast::TestOr);
         RUN_TEST(tr, ast::TestAnd);
         RUN_TEST(tr, ast::TestNot);

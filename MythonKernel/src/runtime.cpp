@@ -6,6 +6,7 @@
 #include <cassert>
 #include <optional>
 #include <sstream>
+#include <queue>
 
 using namespace std;
 
@@ -430,59 +431,139 @@ namespace runtime
             }
 
             virtual_method_table_.insert({method.name, move(method)});
-            //virtual_method_table_[method.name] = move(method);
+        }
+    }
+
+    Class::Class(std::string name, std::vector<Method> methods, std::vector<const Class*> parents) :
+        my_name_(move(name)), parent_(parents.empty() ? *reinterpret_cast<const Class*>(nullptr) : *parents[0]),
+        my_id_(parse::TypeIdentificator::GetNewTypeId())
+    {
+        // Заполняем вектор ссылок на предков.
+        for (const Class* scan_parent : parents)
+            parents_.push_back(*scan_parent);
+        // Заполняем таблицу виртуальных методов образуемого класса, выполняя при этом некоторую проверку корректности переданных нам методов.
+        for (Method& method : methods)
+        {
+            auto eq_name_pair = virtual_method_table_.equal_range(method.name);
+            for (auto scan_method_it = eq_name_pair.first; scan_method_it != eq_name_pair.second; ++scan_method_it)
+            { // Проверка на отсутствие в составе класса метода с аналогичной сигнатурой (именем и количеством параметров).
+                if (scan_method_it->second.formal_params.size() == method.formal_params.size())
+                    throw ParseError(ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD);
+            }
+
+            virtual_method_table_.insert({method.name, move(method)});
         }
     }
 
     Class::GetMethodRet Class::GetMethod(const std::string& name, int args_count, const std::string& parent_name) const
     {
-        const Class* current_class = this;
-        if (!parent_name.empty())
-        { // Если parent_name не пуст, ищем среди наших предков класс с таким именем.
-            while (current_class)
-            {
-                if (current_class->GetName() == parent_name)
-                    break;
-                current_class = &current_class->parent_;
-            }
-        }
-        if (!current_class)
-            return ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR;
-
-        while (current_class)
-        {
-            if (current_class->virtual_method_table_.count(name))
-            {
-                auto name_range_pair = current_class->virtual_method_table_.equal_range(name);
-                for (auto test_method_it = name_range_pair.first; test_method_it != name_range_pair.second; ++test_method_it)
+        if (parents_.empty())
+        { // Старый вариант хранения единственного предка.
+            const Class* current_class = this;
+            if (!parent_name.empty())
+            { // Если parent_name не пуст, ищем среди наших предков класс с таким именем.
+                while (current_class)
                 {
-                    const runtime::Method& test_method = test_method_it->second;
-                    if (args_count < 0)
-                        return &test_method; // Проверка на соответствие количеству формальных параметров в данном случае не проводится.
-                    if (args_count == test_method.formal_params.size())
-                        return &test_method; // Метод test_method имеет точно затребованное количество параметров.
+                    if (current_class->GetName() == parent_name)
+                        break;
+                    current_class = &current_class->parent_;
                 }
             }
-            // В данном звене цепи наследования затребованного метода не найдено. Попробуем отыскать нужный метод среди вышестоящих предков.
-            current_class = &current_class->parent_;    // Переходим к следующему предку иерархии наследования.
+            if (!current_class)
+                return ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR;
+
+            while (current_class)
+            {
+                if (current_class->virtual_method_table_.count(name))
+                {
+                    auto name_range_pair = current_class->virtual_method_table_.equal_range(name);
+                    for (auto test_method_it = name_range_pair.first; test_method_it != name_range_pair.second; ++test_method_it)
+                    {
+                        const runtime::Method& test_method = test_method_it->second;
+                        // Если args_count < 0, проверка на соответствие количеству формальных параметров не проводится.
+                        if (args_count < 0 || args_count == static_cast<int>(test_method.formal_params.size()))
+                            return &test_method; // Метод test_method имеет подходящее количество параметров.
+                    }
+                }
+                // В данном звене цепи наследования затребованного метода не найдено. Попробуем отыскать нужный метод среди вышестоящих предков.
+                current_class = &current_class->parent_;    // Переходим к следующему предку иерархии наследования.
+            }
+            return ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
         }
-        return ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
+        else
+        { // Новый вариант с поддержкой множественного наследования.
+            GetMethodRet found_method;
+            bool is_parent_class_found = false;
+            bool is_method_found = TraverseParents([&](const Class& scan_parent) -> bool
+                {
+                    if (!parent_name.empty())
+                    {
+                        if (scan_parent.GetName() == parent_name)
+                            is_parent_class_found = true;
+                        else
+                            return false; // Если parent_name не пуст, то нас удовлетворят только методы именно этого класса.
+                    }
+
+                    auto name_range_pair = scan_parent.virtual_method_table_.equal_range(name);
+                    for (auto test_method_it = name_range_pair.first; test_method_it != name_range_pair.second; ++test_method_it)
+                    {
+                        const runtime::Method& test_method = test_method_it->second;
+                        // Если args_count < 0, проверка на соответствие количеству формальных параметров не проводится.
+                        if (args_count < 0 || args_count == static_cast<int>(test_method.formal_params.size()))
+                        { // Нужный нам метод успешно найден - он имеет нужное имя, требуемое число параметров и, если указано,
+                          // принадлежит указанному классу.
+                            found_method = &test_method;
+                            return true;
+                        }
+                    }
+                    // В этом предке требуемого метода нет, переходим к обследованию других классов - либо "братских" классов (классов на
+                    // том же уровне родственной иерархии), либо его собственных предков.
+                    return false;
+                });
+            // Возвращаем результат поиска либо в виде дескриптора найденного метода, либо в виде кода ошибки.
+            if (!parent_name.empty() && !is_parent_class_found)
+                return ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR;
+            else if (is_method_found)
+                return found_method;
+            else
+                return ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
+        }
     }
 
     std::vector<std::pair<std::string, size_t>> Class::GetMethodsDesc() const
     {
-        std::unordered_map<std::string, size_t> intermediate_result;
-        const Class* current_class = this;
-        while (current_class)
-        {
-            for (auto& method_table_pair : current_class->virtual_method_table_)
-                intermediate_result[method_table_pair.second.name] = method_table_pair.second.formal_params.size();
-            current_class = &current_class->parent_;
-        }
-
+        // Так как обход родственного дерева производится от потомков к предкам, то методы потомков перекрывают соответствующие им методы
+        // предков (с совпадающими сигнатурами).
         std::vector<std::pair<std::string, size_t>> result;
-        for (auto& current_method_pair : intermediate_result)
-            result.emplace_back(current_method_pair.first, current_method_pair.second);
+        if (parents_.empty())
+        { // Старый вариант хранения единственного предка.
+            const Class* current_class = this;
+            while (current_class)
+            {
+                for (auto& method_table_pair : current_class->virtual_method_table_)
+                {
+                    std::pair<std::string, size_t> method_def_pair{method_table_pair.second.name, method_table_pair.second.formal_params.size()};
+                    if (std::find(result.begin(), result.end(), method_def_pair) == result.end())
+                        // Ранее метода с такой сигнатурой ещё не встречалось.
+                        result.emplace_back(move(method_def_pair));
+                }
+                current_class = &current_class->parent_;
+            }
+        }
+        else
+        { // Новый вариант с поддержкой множественного наследования.
+            TraverseParents([&result](const Class& scan_parent) -> bool
+                {
+                    for (auto& method_table_pair : scan_parent.virtual_method_table_)
+                    {
+                        std::pair<std::string, size_t> method_def_pair{method_table_pair.second.name, method_table_pair.second.formal_params.size()};
+                        if (std::find(result.begin(), result.end(), method_def_pair) == result.end())
+                            // Ранее метода с такой сигнатурой ещё не встречалось.
+                            result.emplace_back(move(method_def_pair));
+                    }
+                    return false;   // Здесь мы всегда обходим полное дерево родства данного класса.
+                });
+        }
         return result;
     }
 
@@ -498,27 +579,69 @@ namespace runtime
 
     bool Class::IsSuccessorOf(const std::string& test_my_parent) const
     {
-        const Class* test_class = this;
-        while (test_class)
-        {
-            if (test_class->GetName() == test_my_parent)
-                return true;
-            test_class = &parent_;
-        }
+        if (parents_.empty())
+        { // Старый вариант хранения единственного предка.
+            const Class* test_class = this;
+            while (test_class)
+            {
+                if (test_class->GetName() == test_my_parent)
+                    return true;
+                test_class = &parent_;
+            }
 
-        return false;
+            return false;
+        }
+        else
+        { // Новый вариант с поддержкой множественного наследования.
+            return TraverseParents([&test_my_parent](const Class& scan_parent) -> bool
+                {
+                    return scan_parent.GetName() == test_my_parent;
+                });
+        }
     }
 
     bool Class::IsSuccessorOf(const Class& test_my_parent) const
     {
-        const Class* test_class = this;
-        while (test_class)
-        {
-            if (test_class == &test_my_parent)
-                return true;
-            test_class = &parent_;
-        }
+        if (parents_.empty())
+        { // Старый вариант хранения единственного предка.
+            const Class* test_class = this;
+            while (test_class)
+            {
+                if (test_class == &test_my_parent)
+                    return true;
+                test_class = &parent_;
+            }
 
+            return false;
+        }
+        else
+        { // Новый вариант с поддержкой множественного наследования.
+            return TraverseParents([&test_my_parent](const Class& scan_parent) -> bool
+                {
+                    return &scan_parent == &test_my_parent;
+                });
+        }
+    }
+
+    bool Class::TraverseParents(std::function<bool(const Class&)> handle_parent_func) const
+    { // Фунция выполняет обход дерева предков "в ширину". При этом "верхние" узлы (соответствующие потомкам) обходятся ранее,
+      // чем узлы "нижние" (соответствующие предкам). Таким образом, потомки имеют приоритет перед предками и посещаются первыми
+      // (ранее своих предков). На одном уровне родства обход производится в порядке следования в массиве parents_.
+        std::queue<ParentRefType> nodes_queue;
+        // Начинаем обход дерева с нас самих. Собственный объект будет корнем дерева предков.
+        nodes_queue.push(std::cref(*this));
+
+        while (!nodes_queue.empty())
+        {
+            ParentRefType current_parent_ref = nodes_queue.front(); // Текущий анализируемый (просматриваемый) класс.
+            nodes_queue.pop();
+            if (handle_parent_func(current_parent_ref))
+                return true; // Если обработчик вернул "ИСТИНУ", то он всем уже удовлетворён и обход предков прекращаем.
+            
+            // Ставим в конец очереди просмотра всех предков текущего просматриваемого класса, хранящихся в его поле parents_.
+            for (ParentRefType up_parent_ref : current_parent_ref.get().parents_)
+                nodes_queue.push(up_parent_ref);
+        }
         return false;
     }
 

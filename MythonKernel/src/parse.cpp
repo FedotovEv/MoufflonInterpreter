@@ -290,6 +290,20 @@ namespace
             return parsed_method;
         }
 
+        // Функция-член разбора списка идентификаторов, в котором они разделены запятыми.
+        std::vector<std::string> ParseIdList()
+        {
+            std::vector<std::string> result_id_list;
+            do
+            {
+                result_id_list.push_back(lexer_.ExpectNext<ITokenType::Id>().value); // Это имя очередного идентификатора.
+                // Следующей лексема может быть либо запятой (в этом случае список продолжается), либо чем-то ещё
+                // (в этом случае список закончен).
+            }
+            while (lexer_.NextToken() == ',');
+            return result_id_list;
+        }
+
         // ClassDefinition -> Id ['(' Id ')'] : new_line indent MethodList dedent
         unique_ptr<ast::Statement> ParseClassDefinition()
         {
@@ -298,20 +312,39 @@ namespace
             lexer_.NextToken();
 
             const runtime::Class* base_class = nullptr;
+            std::vector<const runtime::Class*> base_classes;
+            bool is_one_parent = true;
             if (lexer_.CurrentToken() == '(')
-            {
-                auto name = lexer_.ExpectNext<ITokenType::Id>().value;
-                lexer_.ExpectNext<ITokenType::Char>(')');
+            { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
+                std::vector<std::string> parent_list_name = ParseIdList();
+                //auto name = lexer_.ExpectNext<ITokenType::Id>().value;
+
+                //lexer_.ExpectNext<ITokenType::Char>(')');
+                lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
-                auto it = declared_classes_.find(name);
-                if (it == declared_classes_.end())
-                    exec_factory_.ThrowParseError(
-                        ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_BASE_CLASS) +
-                        name + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS)
-                        + class_name);
+                if (parent_list_name.size() == 1)
+                { // Класс с одним предком.
+                    auto it = declared_classes_.find(parent_list_name[0]);
+                    if (it == declared_classes_.end())
+                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + parent_list_name[0] + "%2"s + class_name,
+                            {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
 
-                base_class = static_cast<const runtime::Class*>(it->second.Get());
+                    base_class = static_cast<const runtime::Class*>(it->second.Get());
+                }
+                else
+                { // Класс с неколькими предками (использует множественное наследование).
+                    for (const std::string& next_parent_name : parent_list_name)
+                    {
+                        auto it = declared_classes_.find(next_parent_name);
+                        if (it == declared_classes_.end())
+                            exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + next_parent_name + "%2"s + class_name,
+                                {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
+                        
+                        base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
+                    }
+                    is_one_parent = false;
+                }
             }
 
             lexer_.Expect<ITokenType::Char>(':');
@@ -323,16 +356,16 @@ namespace
             lexer_.Expect<ITokenType::Dedent>();
             lexer_.NextToken();
 
-            auto [it, inserted] = declared_classes_.insert
-                ({
-                    class_name,
-                    runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class)),
-                });
+            runtime::ObjectHolder class_object_holder;
+            if (is_one_parent)
+                class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class));
+            else
+                class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
 
+            auto [it, inserted] = declared_classes_.insert({class_name, move(class_object_holder)});
             if (!inserted)
-                exec_factory_.ThrowParseError(
-                    ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_CLASS) + class_name
-                    + ThrowMessages::GetThrowText(ThrowMessageNumber::THRM_ALREADY_EXISTS));
+                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + class_name + "%2"s,
+                    {ThrowMessageNumber::THRM_CLASS, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
 
             return exec_factory_.Create(ast::ClassDefinition(it->second));
         }
@@ -698,6 +731,7 @@ namespace
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
         }
 
+        // Функция-член разбора списка МУФЛОН-выражений (отдельных МУФЛОН-выражений, разделённых запятыми).
         vector<unique_ptr<ast::Statement>> ParseTestList()
         {
             vector<unique_ptr<ast::Statement>> result;

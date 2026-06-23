@@ -415,6 +415,7 @@ namespace runtime
         // Создаёт класс с именем name и набором методов methods, унаследованный от класса parent
         // Если parent равен nullptr, то создаётся базовый класс
         explicit Class(std::string name, std::vector<Method> methods, const Class* parent);
+        explicit Class(std::string name, std::vector<Method> methods, std::vector<const Class*> parents);
 
         //   Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует.
         // args_count - требуемое количество формальных параметров у искомого метода. Если этот аргумент < 0,
@@ -501,7 +502,15 @@ namespace runtime
         int my_id_;
         std::string my_name_;
         const Class& parent_;
+        //
+        using ParentRefType = std::reference_wrapper<const Class>;
+        std::vector<ParentRefType> parents_;
+        //
         std::unordered_multimap<std::string, Method> virtual_method_table_;
+
+        // Функция-член, выполняющая обход дерева предков данного класса, вызывая для каждого узла такого дерева обработчик
+        // handle_parent_func (вариант внутреннего итератора для такого дерева).
+        bool TraverseParents(std::function<bool(const Class&)> handle_parent_func) const;
     };
 
     // Объект, хранящий описание свободной функции, определённой в программе, в таком виде, в котором его можно упаковать
