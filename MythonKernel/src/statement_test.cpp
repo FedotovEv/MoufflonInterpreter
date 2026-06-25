@@ -492,6 +492,18 @@ namespace ast
                 ASSERT_EQUAL(m->formal_params.size(), 2U);
             }
             ASSERT(!two_parents_child.GetMethod("AsStringValue"s));
+
+            // Создадим ещё один аналогичный производный класс с двумя родителями, имеющий отличия от предыдущео только в порядке их
+            // следования в списке. Теперь приоритет в при выборе метода GetSecondValue() должен измениться.
+            methods.clear();
+            runtime::Class two_parents_child_rev("ChildWithTwoParents"s, std::move(methods), {&base_stringable, &base_boxed});
+            {
+                auto m = two_parents_child_rev.GetMethod("GetSecondValue"s);
+                ASSERT(m);
+                ASSERT_EQUAL(m->name, "GetSecondValue"s);
+                // Метод GetSecondValue класса base_stringable("StringableValue") будет приоритетным, а он имеет один параметр.
+                ASSERT_EQUAL(m->formal_params.size(), 1U);
+            }
         }
 
         void TestOr()

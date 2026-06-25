@@ -291,12 +291,21 @@ namespace
         }
 
         // Функция-член разбора списка идентификаторов, в котором они разделены запятыми.
-        std::vector<std::string> ParseIdList()
+        // Установка флага is_unique требует уникальности каждого элемента списка. В противном случае выбрасывается исключение 
+
+        // При сброшенном флаге-аргументе is_unique дубликаты в выходном списке допускаются.
+        std::vector<std::string> ParseIdList(bool is_unique)
         {
             std::vector<std::string> result_id_list;
             do
             {
-                result_id_list.push_back(lexer_.ExpectNext<ITokenType::Id>().value); // Это имя очередного идентификатора.
+                std::string new_value_name = lexer_.ExpectNext<ITokenType::Id>().value;
+                if (is_unique && std::find(result_id_list.begin(), result_id_list.end(), new_value_name) != result_id_list.end())
+                    // Требование уникальности имён в списке нарушено.
+                    exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + new_value_name + "%2"s,
+                        {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_USE_MULTIPLE_TIMES}));
+
+                result_id_list.push_back(move(new_value_name)); // Это имя очередного идентификатора.
                 // Следующей лексема может быть либо запятой (в этом случае список продолжается), либо чем-то ещё
                 // (в этом случае список закончен).
             }
@@ -316,7 +325,7 @@ namespace
             bool is_one_parent = true;
             if (lexer_.CurrentToken() == '(')
             { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
-                std::vector<std::string> parent_list_name = ParseIdList();
+                std::vector<std::string> parent_list_name = ParseIdList(true);
                 lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
