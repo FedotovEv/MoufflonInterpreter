@@ -4,6 +4,14 @@
 #include <vector>
 #include <functional>
 #include <variant>
+#include <iostream>
+
+// ВНИМАНИЕ: Для блокировки механизмов потокобезопасности некоторых структур комплекса (скажем, в случае, если потоки и
+// связанная с ними инфраструктура не поддерживаются используемым компилятором), следует определить макрос MYTHON_UNITHREAD.
+
+#ifdef MYTHON_UNITHREAD
+    #warning "Используется однопоточный вариант интерпретатора МУФЛОНА"
+#endif
 
 #if defined (_WIN64) || defined(_WIN32)
     #define WIN32_LEAN_AND_MEAN
@@ -26,6 +34,7 @@ const std::string LESS_CMP_METHOD = "__lt__";
 const std::string STR_FUNCTION_METHOD = "__str__";
 const std::string COROUTINE_STATUS_VAR = "__coro__";
 const std::string SELF_FIELD_NAME = "self";
+const std::string BREAKPOINT_INFO_FIELD_NAME = "__breakpoint__";
 // Имена стандартных встроенных фиксированнных (неизменяемых и ненаследуемых) классов.
 const std::string ARRAY_CLASS_NAME = "array";
 const std::string MAP_CLASS_NAME = "map";
@@ -91,6 +100,8 @@ namespace runtime
                    module_string_number != other.module_string_number;
         }
     };
+
+    std::ostream& operator<<(std::ostream& ostr, const ProgramCommandDescriptor& command_desc);
 
     enum class CoroutineSuspendType
     {

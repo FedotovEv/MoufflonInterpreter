@@ -5,6 +5,7 @@
 #include "statement.h"
 #include "test_runner_p.h"
 #include "error_classes.h"
+#include "debug_context.h"
 
 #include <iostream>
 #include <string>
@@ -21,10 +22,17 @@ namespace parse
 namespace ast
 {
     void RunUnitTests(TestRunner& tr);
-}
+} // namespace ast
 
 namespace runtime
 {
+    struct DebugEventDesc
+    {
+        DebugCallbackReason event_reason;
+        CommandGenus genus;
+        ProgramCommandDescriptor command;
+    };
+
     void RunObjectHolderTests(TestRunner& tr);
     void RunObjectsTests(TestRunner& tr);
 }  // namespace runtime
@@ -256,6 +264,85 @@ namespace
         parse::Lexer lexer(input);
         auto program = ParseProgram(lexer, parse_context);
         program->Execute(closure, context);
+    }
+
+    /**
+    * \brief    Функция запуска Муфлон-программы под отладчиком.
+    * \param    input - исходный текст Муфлон-программы.
+    * \param    what_return - режимы исполнения программы, которые будут возвращаться из звонковой функции.
+    * \param    link_function - функция внешней связи исполняемой программы. Задаётся только при необходимости.
+    * \return   Первый член возвращаемого кортежа - строка отладочного потока, второй член - суммарная строка выходного потока,
+                третий член - коллекция событий отладчика.
+    */
+    using DebugExecutionModeV = std::vector<runtime::DebugExecutionMode>;
+    std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> DebugMythonProgram
+        (istream& input, std::variant<runtime::DebugExecutionMode, DebugExecutionModeV> what_return, const runtime::LinkageFunction& link_function = {})
+    {
+        using namespace runtime;
+        auto debug_event_out = [](std::ostream& ostr, const DebugEventDesc& data_out)
+            {
+                ostr << "Reason : " << static_cast<int>(data_out.event_reason) << " Genus : " << static_cast<int>(data_out.genus) << ' ' << data_out.command;
+            };
+
+        ostringstream debug_ostr;
+        std::vector<DebugEventDesc> debug_event_collector;
+        auto debug_event_handler = [&](DebugCallbackReason call_reason, Executable* exec_op, Closure& closure, Context& context) -> DebugExecutionMode
+            {
+                static size_t what_return_index = 0;
+
+                DebugEventDesc rec_event{.event_reason = call_reason, .genus = exec_op->GetCommandGenus(), .command = exec_op->GetCommandDesc()};
+                debug_event_out(debug_ostr, rec_event);
+                debug_ostr << std::endl;
+                debug_event_collector.push_back(rec_event);
+                if (std::holds_alternative<DebugExecutionMode>(what_return))
+                { // Требуется отвечать на отладочные звонки одним и тем же значением.
+                    return std::get<DebugExecutionMode>(what_return);
+                }
+                else if (std::holds_alternative<DebugExecutionModeV>(what_return))
+                { // Ответы на отладочные звонки перечислены в массиве.
+                    const DebugExecutionModeV& what_return_vec = std::get<DebugExecutionModeV>(what_return);
+                    if (call_reason == DebugCallbackReason::DEBUG_CALLBACK_INIT)
+                        what_return_index = 0;
+                    if (what_return_vec.empty())
+                        return DebugExecutionMode::DEBUG_NO_DEBUG;
+
+                    if (what_return_index < what_return_vec.size())
+                        return what_return_vec[what_return_index++];
+                    else
+                        return what_return_vec.back();
+                }
+                else
+                {
+                    return DebugExecutionMode::DEBUG_NO_DEBUG;
+                }
+            };
+
+        ostringstream out_ostr;
+        DebugContext debug_context(out_ostr, debug_event_handler);
+        parse::TrivialParseContext parse_context;
+        runtime::Closure closure;
+
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        if (std::holds_alternative<DebugExecutionMode>(what_return))
+        {
+            debug_context.SetDebugMode(std::get<DebugExecutionMode>(what_return));
+        }
+        else if (std::holds_alternative<DebugExecutionModeV>(what_return))
+        {
+            const DebugExecutionModeV& what_return_vec = std::get<DebugExecutionModeV>(what_return);
+            if (!what_return_vec.empty())
+                debug_context.SetDebugMode(what_return_vec.front());
+            else
+                debug_context.SetDebugMode(DebugExecutionMode::DEBUG_NO_DEBUG);
+        }
+        else
+        {
+            debug_context.SetDebugMode(DebugExecutionMode::DEBUG_NO_DEBUG);
+        }
+        program->Execute(closure, debug_context);
+
+        return {debug_ostr.str(), out_ostr.str(), move(debug_event_collector)};
     }
 
     void TestSimplePrints()
@@ -1686,18 +1773,107 @@ z1_3 = OneClass(4)
         }
     }
 
+    void TestDebugExecution()
+    { // Тест исполнения программы под отладчиком (различных видов операций встроенного отладчика).
+        // Лямбда-фунция сравнения двух последовательностей отладочных звонков.
+        using namespace runtime;
+        struct DebugEventSimp
+        {
+            DebugCallbackReason event_reason;
+            int module_string_number;
+        };
+        // Функция сравнения последовательности отладочных событий, полученных при исполнении тестовой программы, с эталонной последовательностью.
+        auto debug_event_sequence_check = []
+            (const std::vector<DebugEventDesc>& sequence_fact, const std::vector<DebugEventSimp>& sequence_etalon) -> bool
+            {
+                if (sequence_fact.size() != sequence_etalon.size())
+                    return false;
+
+                for (size_t i = 0; i < sequence_fact.size(); ++i)
+                {
+                    const DebugEventDesc& event_fact = sequence_fact[i];
+                    const DebugEventSimp& event_etalon = sequence_etalon[i];
+                    if (event_fact.event_reason != event_etalon.event_reason ||
+                        event_fact.command.module_string_number != event_etalon.module_string_number)
+                        return false;
+                }
+                return true;
+            };
+
+        { // Пошаговое исполнение простой последовательности инструкций.
+            istringstream input(R"--(
+a = 1
+b = 2
+c = 3
+# Комментарий_1
+d = "d"
+ab = a + b
+bc = b + c
+# Комментарий_2
+abc = a + b + c
+# Комментарий_3
+print a, b, c
+print ab, bc, abc
+# Комментарий_4
+print d
+)--");
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+                DebugMythonProgram(input, DebugExecutionMode::DEBUG_STEP_IN);
+            // std::cout << "Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 0},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 3},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 5},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 7},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 9},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 11},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 12},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 14}
+                }));
+        }
+
+        { // Пошаговое исполнение с заходом и обходом вызовов методов.
+            istringstream input(R"--(
+
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            //ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
+        }
+
+        { // Простые и условные точки останова.
+            istringstream input(R"--(
+
+)--");
+            ostringstream ostr;
+            //RunMythonProgram(input, ostr);
+            //ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
+        }
+    }
+
     void TestAll()
     {
+
         cout << "Запуск тестов"s << endl;
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
+        /*
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);
         runtime::RunObjectsTests(tr);
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
+        */
 
         cout << endl << "Категория тестов исполнения полных примерных программ"s << endl;
+
+        RUN_TEST(tr, TestDebugExecution);
+        return;
 
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);

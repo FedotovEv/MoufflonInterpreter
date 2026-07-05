@@ -53,7 +53,8 @@ namespace runtime
         }
 
         // Классы ошибок имеют двухуровневую иерархию - родоначальник класс CommonError (с именем COMMON_ERROR_CLASS_NAME)
-        // и один уровень производных от него классов. Поэтому среди наших предков могуит быть либо класс CommonError, 
+        // и один уровень производных от него классов. Поэтому среди наших предков могут быть либо класс CommonError, либо сам данный
+        // класс ошибки, как тривиальный, свой собственный предок.
         [[nodiscard]] bool IsSuccessorOf(const std::string& test_my_parent) const override
         {
             return COMMON_ERROR_CLASS_NAME == test_my_parent || GetClassName() == test_my_parent;

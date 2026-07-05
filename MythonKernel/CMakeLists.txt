@@ -45,6 +45,7 @@ set(LOC_KERNEL_MODULES_FILES
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/runtime.cpp
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/special_objects.cpp
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/statement.cpp
+    ${LOC_KERNEL_MODULEs_SOURCE_DIR}/debug_context.cpp
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/throw_messages.cpp)
 
 set(TEST_MODULES_FILES

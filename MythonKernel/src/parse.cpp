@@ -205,6 +205,7 @@ namespace
             program_compound_ = result.get();
             // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
             result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
+            result->SetCommandDesc({.module_string_number = -1});   // Головной узел не имеет определённого положения в исходнике.
             // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
             // в словаре declared_classes_. Каждый такой класс будет доступен с самого начала исполнения программы для всего её последующего кода.
             for (const auto& declared_classes_pair : declared_classes_)

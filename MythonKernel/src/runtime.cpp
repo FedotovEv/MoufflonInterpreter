@@ -735,4 +735,51 @@ namespace runtime
     {
         return !Less(lhs, rhs, context);
     }
+
+    SimpleContext::SimpleContext(ostream& output, LinkageFunction external_link)
+        : output_(output), external_link_(move(external_link))
+    {
+        // Формируем стартовый набор опций контекста по умолчанию.
+        opt_data_.emplace(OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH, true);
+    }
+
+    #ifndef MYTHON_UNITHREAD
+        // Вариант с синхронизацией при параллельном доступе.
+        SimpleContext::SimpleContext(SimpleContext&& other) noexcept :
+            output_(other.output_), external_link_(move(other.external_link_)),
+            is_terminate_{ other.is_terminate_.exchange(true) },
+            opt_data_(move(other.opt_data_))
+        {}
+    #else
+        // Вариант без применения механизмов многопоточности.
+        SimpleContext::SimpleContext(SimpleContext&& other) noexcept :
+            output_(other.output_), external_link_(move(other.external_link_)),
+            is_terminate_{other.is_terminate_}, opt_data_(move(other.opt_data_))
+        {
+            other.is_terminate_ = true;
+        }
+    #endif
+
+    LinkageValue SimpleContext::GetOption(OptionType ask_option)
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(opt_mutex_);
+        #endif
+
+        if (opt_data_.contains(ask_option))
+            return opt_data_.at(ask_option);
+        else
+            return {};
+    }
+
+    bool SimpleContext::SetOption(OptionType set_option, const LinkageValue& option_value)
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(opt_mutex_);
+        #endif
+
+        bool result = opt_data_.contains(set_option);
+        opt_data_.emplace(set_option, option_value);
+        return result;
+    }
 }  // namespace runtime

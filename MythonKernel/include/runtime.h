@@ -14,6 +14,7 @@
 #include <map>
 #include <variant>
 #include <atomic>
+#include <mutex>
 
 namespace ast
 {
@@ -32,10 +33,20 @@ namespace runtime
         CMD_GENUS_INITIALIZE
     };
 
-    // Контекст исполнения инструкций Mython
+    // Контекст исполнения инструкций Mython.
     class Context
     {
     public:
+        enum class OptionType
+        { // Тип опции, запрашиваемой у функции-члена GetOption().
+            CONTEXT_OPT_UNKNOWN = 0,
+            CONTEXT_OPT_DESTRUCT_AT_FINISH   // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
+        };
+
+        Context()
+        {
+            last_command_desc_ = {.module_id  = -1, .module_string_number  = -1};
+        }
         virtual ~Context() = default;
         // Возвращает поток вывода для команд print.
         virtual std::ostream& GetOutputStream() = 0;
@@ -43,19 +54,25 @@ namespace runtime
         virtual bool IsTerminated() = 0;
         virtual void SetTerminate() = 0;
         virtual void Clear() = 0;
+        virtual LinkageValue GetOption(OptionType ask_option) = 0;
 
-        ProgramCommandDescriptor GetLastCommandDesc()
+        ProgramCommandDescriptor GetLastCommandDesc() const
         {
             return last_command_desc_;
         }
 
-        void SetLastCommandDesc(ProgramCommandDescriptor last_command_desc)
+        void SetLastCommandDesc(const ProgramCommandDescriptor& last_command_desc)
         {
             last_command_desc_ = last_command_desc;
         }
 
     private:
-        ProgramCommandDescriptor last_command_desc_;
+        // Дескриптор последней корректной исполненной команды.
+        #ifdef MYTHON_UNITHREAD
+            ProgramCommandDescriptor last_command_desc_;
+        #else
+            std::atomic<ProgramCommandDescriptor> last_command_desc_;
+        #endif
     };
 
     // Базовый класс для всех объектов языка Mython.
@@ -223,16 +240,6 @@ namespace runtime
     // Таблица символов, связывающая имя объекта с его значением
     using Closure = std::unordered_map<std::string, ObjectHolder>;
 
-    struct CallStackEntry
-    {
-        ProgramCommandDescriptor call_command; // Строка исходника, в которой находится
-                                               // точка вызова метода, создавшего данный стековый кадр.
-        ProgramCommandDescriptor first_command; // Строка первой исполняемой команды данного стекового кадра
-        Closure* closure_ptr = nullptr; // Указатель на таблицу символов стекового кадра (таблицу символов
-                                        // его головного метода).
-        std::string info_data; // Имя стекового кадра (например, имя метода, которому этот кадр принадлежит)
-    };
-
     // Проверяет, содержится ли в object значение, приводимое к True.
     // Для отличных от нуля чисел, True и непустых строк возвращается true. В остальных случаях - false.
     bool IsTrue(const ObjectHolder& object);
@@ -252,7 +259,7 @@ namespace runtime
             return command_desc_;
         }
 
-        void SetCommandDesc(ProgramCommandDescriptor command_desc)
+        void SetCommandDesc(const ProgramCommandDescriptor& command_desc)
         {
             command_desc_ = command_desc;
         }
@@ -820,6 +827,11 @@ namespace runtime
         void Clear() override
         {}
 
+        LinkageValue GetOption(OptionType ask_option) override
+        {
+            return {};
+        }
+
         std::ostringstream output;
         LinkageFunction external_link_;
     };
@@ -832,14 +844,9 @@ namespace runtime
     class SimpleContext : public Context
     {
     public:
-        explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction())
-            : output_(output), external_link_(std::move(external_link))
-        {}
+        explicit SimpleContext(std::ostream& output, LinkageFunction external_link = LinkageFunction());
         SimpleContext(const SimpleContext& other) = delete;
-        SimpleContext(SimpleContext&& other) noexcept :
-            output_(other.output_), external_link_(std::move(other.external_link_)),
-            is_terminate_{other.is_terminate_.exchange(true)}
-        {}
+        SimpleContext(SimpleContext&& other) noexcept;
 
         std::ostream& GetOutputStream() override
         {
@@ -866,10 +873,21 @@ namespace runtime
             is_terminate_ = false;
         }
 
+        LinkageValue GetOption(OptionType ask_option) override;
+        bool SetOption(OptionType set_option, const LinkageValue& option_value);
+
     private:
         std::ostream& output_;
         LinkageFunction external_link_;
-        std::atomic_bool is_terminate_{false};
+        #ifndef MYTHON_UNITHREAD
+            // Поддержка потокобезопасности при синхронном доступе.
+            std::atomic_bool is_terminate_{false};
+            mutable std::mutex opt_mutex_;
+        #else
+            // В этом варианте примитивы многопоточности не используются.
+            bool is_terminate_{false};
+        #endif
+        std::unordered_map<OptionType, LinkageValue> opt_data_;
     };
 }  // namespace runtime
 
