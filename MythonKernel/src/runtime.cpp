@@ -7,6 +7,8 @@
 #include <optional>
 #include <sstream>
 #include <queue>
+#include <codecvt>
+#include <locale>
 
 using namespace std;
 
@@ -293,7 +295,9 @@ namespace runtime
     }
 
     FreeFunction::FreeFunction(Method method_func) : method_func_(move(method_func))
-    {}
+    {
+        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
+    }
 
     void FreeFunction::Print(std::ostream& os, Context& context)
     {
@@ -320,10 +324,18 @@ namespace runtime
             temp_closure[method_func_.formal_params[param_index]] = actual_args[param_index];
         // Таблица символов подготовлена, можно обработать тело функции.
         if (method_func_.is_coroutine)
-            // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
+        { // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
             return ObjectHolder::Own(move(CoroutineInstance(this, temp_closure)));
-        else // Немедленное исполнение обычной функции.
+        }
+        else
+        { // Немедленное исполнение обычной функции.
+            // Уведомим отладчик о начале исполнения новой функции для возможности отслеживания им этого момента и создания нового
+            // кадра в стеке вызовов).
+            dummy_statement_->info_data_ptr = &method_func_.name;
+            PrepareExecute(dummy_statement_.get(), temp_closure, context);
+            // Непосредственное исполнение и последующее возвращение результата его работы.
             return method_func_.body->Execute(temp_closure, context);
+        }
     }
 
     ObjectHolder FreeFunction::ExecuteBody(Closure& closure, Context& context)
@@ -392,15 +404,20 @@ namespace runtime
         auto actual_args_it = actual_args.begin();
         for (const string& formal_param_name : get_method.method->formal_params)
             method_closure[formal_param_name] = *actual_args_it++;
-    
-        dummy_statement_->info_data_ptr = &method_name;
-        PrepareExecute(dummy_statement_.get(), method_closure, context);
 
         if (get_method.method->is_coroutine)
-            // Запуск сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
+        { // Запуск сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
             return ObjectHolder::Own(move(CoroutineInstance(this, get_method.method, method_closure)));
-        else // Исполнение обычного метода.
+        }
+        else
+        { // Исполнение обычного метода.
+            // Уведомим отладчик о начале исполнения нового метода (для возможности отслеживания им этого момента и создания нового
+            // кадра в стеке вызовов).
+            dummy_statement_->info_data_ptr = &method_name;
+            PrepareExecute(dummy_statement_.get(), method_closure, context);
+            // Непосредственное исполнение и последующее возвращение результата его работы.
             return get_method.method->body->Execute(method_closure, context);
+        }
     }
 
     [[nodiscard]] std::string ClassInstance::GetClassName() const
@@ -741,6 +758,7 @@ namespace runtime
     {
         // Формируем стартовый набор опций контекста по умолчанию.
         opt_data_.emplace(OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_DECLARATIVE, true);
     }
 
     #ifndef MYTHON_UNITHREAD
@@ -781,5 +799,40 @@ namespace runtime
         bool result = opt_data_.contains(set_option);
         opt_data_.emplace(set_option, option_value);
         return result;
+    }
+
+    std::string CommandGenusToString(CommandGenus cmd_genus)
+    {
+        switch (cmd_genus)
+        {
+        case CommandGenus::CMD_GENUS_CALL_METHOD:
+            return "Вызов метода";
+        case CommandGenus::CMD_GENUS_RETURN_FROM_METHOD:
+            return "Возврат из метода";
+        case CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT:
+            return "Конец метода";  // То есть псевдоинструкция, размещённая в его конце (за последней его действительной командой).
+        case CommandGenus::CMD_GENUS_INITIALIZE:
+            return "Инициализация";
+        default:
+            return "Другое";
+        };
+    }
+
+    std::ostream& operator<<(std::ostream& ostr, CommandGenus cmd_genus)
+    {
+        static constexpr int COMMAND_GENUS_WIDTH = 20;
+
+        std::string cmd_genus_str = CommandGenusToString(cmd_genus);
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        std::wstring wide_cmd_genus_str = converter.from_bytes(cmd_genus_str);
+
+        int symb_delta = COMMAND_GENUS_WIDTH - static_cast<int>(wide_cmd_genus_str.size());
+        if (symb_delta > 0)
+            wide_cmd_genus_str += std::wstring(symb_delta, ' ');
+        else if (symb_delta < 0)
+            wide_cmd_genus_str = wide_cmd_genus_str.substr(0, COMMAND_GENUS_WIDTH);
+
+        ostr << converter.to_bytes(wide_cmd_genus_str);
+        return ostr;
     }
 }  // namespace runtime

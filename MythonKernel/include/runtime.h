@@ -27,10 +27,11 @@ namespace runtime
     enum class CommandGenus
     {
         CMD_GENUS_UNKNOWN = 0,
-        CMD_GENUS_CALL_METHOD,              // Это команда вызова метода класса
-        CMD_GENUS_RETURN_FROM_METHOD,
-        CMD_GENUS_AFTER_LAST_METHOD_STMT,
-        CMD_GENUS_INITIALIZE
+        CMD_GENUS_CALL_METHOD,              // Это команда вызова метода класса или свободной функции.
+        CMD_GENUS_RETURN_FROM_METHOD,       // Инструкция выхода из метода (return, return_ref, co_yield, и.т.д.).
+        CMD_GENUS_AFTER_LAST_METHOD_STMT,   // Псевдоинструкция, отмечающая последнюю команду метода или функции.
+        CMD_GENUS_DECLARATIVE,              // Узел АСД декларативной природы, не являющийся непосредственной исполняемой инструкцией.
+        CMD_GENUS_INITIALIZE                // (Псевдо)инструкция общей инициализации программы (ProgramCompound).
     };
 
     // Контекст исполнения инструкций Mython.
@@ -40,7 +41,8 @@ namespace runtime
         enum class OptionType
         { // Тип опции, запрашиваемой у функции-члена GetOption().
             CONTEXT_OPT_UNKNOWN = 0,
-            CONTEXT_OPT_DESTRUCT_AT_FINISH   // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
+            CONTEXT_OPT_DESTRUCT_AT_FINISH,  // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
+            CONTEXT_OPT_SKIP_DECLARATIVE     // Пропускать при отладке (не совершать отладочных звонков) для декларативных узлов АСД.
         };
 
         Context()
@@ -552,6 +554,7 @@ namespace runtime
 
     private:
         Method method_func_;
+        std::unique_ptr<PsevdoExecutable> dummy_statement_ = std::make_unique<PsevdoExecutable>();
     };
 
     // Абстрактный чисто виртуальный класс, выражающий сущность экземпляра "обобщённого" класса, как программно определённого (структура
@@ -889,6 +892,9 @@ namespace runtime
         #endif
         std::unordered_map<OptionType, LinkageValue> opt_data_;
     };
+    
+    std::string CommandGenusToString(CommandGenus cmd_genus);
+    std::ostream& operator<<(std::ostream& ostr, CommandGenus cmd_genus);
 }  // namespace runtime
 
 void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context);

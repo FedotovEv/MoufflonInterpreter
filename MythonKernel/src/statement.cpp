@@ -91,9 +91,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
         runtime::DebugCallbackReason debug_callback_reason = runtime::DebugCallbackReason::DEBUG_CALLBACK_UNKNOWN;
         if (context.GetLastCommandDesc() != current_command)
         { // Исполнение перешло к следующей строке исходного текста.
-            context.SetLastCommandDesc(current_command);
-            if (!dbg_context->IsCallStackEntryValid() && current_genus != runtime::CommandGenus::CMD_GENUS_CALL_METHOD &&
-                current_command.module_string_number >= 0)
+            if (!dbg_context->IsCallStackEntryValid() && current_command.module_string_number >= 0)
             { // Сохраняем информацию о положении первой исполняемой строки очередного стекового кадра.
               // Сама запись о кадре была создана ранее при выполнении функции ClassInstance::Call, вызывающей
               // какой-либо метод класса. Эта функция посылает уведомление о своём исполнении в виде псевдокоманды
@@ -103,16 +101,29 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                 new_stack_rec.closure_ptr = &closure;
                 dbg_context->UpdateCallStackEntry(new_stack_rec);
             }
+
+            if (current_genus == runtime::CommandGenus::CMD_GENUS_DECLARATIVE)
+            { // Это организующая (декларативная или группирующая) команда, не выполняющая прямых непосредственных действий.
+                runtime::LinkageValue skip_decl_opt = dbg_context->GetOption(runtime::Context::OptionType::CONTEXT_OPT_SKIP_DECLARATIVE);
+                if (std::holds_alternative<bool>(skip_decl_opt) ? std::get<bool>(skip_decl_opt) : false)
+                    // Включён режим пропуска отладочных событий для чисто декларативных инструкций.
+                    return;
+            }
+
+            context.SetLastCommandDesc(current_command);
             // Сначала проверим наличие здесь (на этой новой строке) точек останова.
-            for (size_t triggered_breakpoint : dbg_context->FindBreakpoints(current_command, exec_obj_ptr, closure))
-            {
-                if (dbg_context->IsBreakpointEnabled(triggered_breakpoint))
-                { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
-                    // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
-                    closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
-                    dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
-                        (runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, exec_obj_ptr, closure, context));
-                    closure.erase(BREAKPOINT_INFO_FIELD_NAME);
+            if (dbg_context->GetDebugCallback())
+            { // Если обработчик звонков не назначен, исследовать возможные бряки бессмысленно.
+                for (size_t triggered_breakpoint : dbg_context->FindBreakpoints(current_command, exec_obj_ptr, closure))
+                {
+                    if (dbg_context->IsBreakpointEnabled(triggered_breakpoint))
+                    { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
+                        // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
+                        closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
+                        dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
+                            (runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, exec_obj_ptr, closure, context));
+                        closure.erase(BREAKPOINT_INFO_FIELD_NAME);
+                    }
                 }
             }
 
@@ -991,7 +1002,10 @@ namespace ast
     }
 
     ClassDefinition::ClassDefinition(ObjectHolder cls) : cls_(move(cls))
-    {}
+    {
+        // Инструкция является декларативной и не содержит фактически исполняемых команд.
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
+    }
 
     ObjectHolder ClassDefinition::Execute(Closure& closure, [[maybe_unused]] Context& context)
     {
@@ -1017,7 +1031,10 @@ namespace ast
 
     FreeFunctionDefinition::FreeFunctionDefinition(runtime::ObjectHolder free_function) :
         free_function_(move(free_function))
-    {}
+    {
+        // Инструкция является декларативной и не содержит фактически исполняемых команд.
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
+    }
     
     runtime::ObjectHolder FreeFunctionDefinition::Execute(runtime::Closure& closure, runtime::Context& context)
     {
@@ -1686,6 +1703,9 @@ namespace ast
 
     MethodBody::MethodBody(std::unique_ptr<Statement>&& body) : body_(move(body))
     {
+        // Инструкция является декларативной - контейнером для фактически исполняемых инструкций body_.
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
+
         dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
         runtime::ProgramCommandDescriptor after_body_command_desc;
         if (Compound* compound_body_ptr = dynamic_cast<Compound*>(body_.get()))

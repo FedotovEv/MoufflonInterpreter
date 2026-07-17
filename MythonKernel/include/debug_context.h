@@ -44,7 +44,7 @@ namespace runtime
         DEBUG_CALLBACK_USER = 1024          // Минимальная величина пользовательской области значений.
     };
 
-    // Перечисление, кодирующее режим дпльнейшего исполнения программы при её возобновлении после отладочной приостановки.
+    // Перечисление, кодирующее режим дальнейшего исполнения программы при её возобновлении после отладочной приостановки.
     enum class DebugExecutionMode
     {
         DEBUG_NO_DEBUG = 0,     // Режим без отладки.
@@ -157,7 +157,7 @@ namespace runtime
             // Многопоточный вариант отладочного контекста, предназначенный для одновременного доступа из нескольких параллельных
             // потоков (исполняющего и отлаживающего). Этот вариант класса DebugContext содержит некоторые элементы потокобезопасности, так как
             // предназначен для одновременного доступа как из потока исполнения программы, так и из параллельно выполняющегося потока стороннего отладчика.
-            DebugCallback debug_callback_; // Экзмепляр функтора-обработчика отладочных звонков.
+            DebugCallback debug_callback_; // Экземпляр функтора-обработчика отладочных звонков.
             // Текущий режим исполнения программы.
             std::atomic<DebugExecutionMode> debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};
             // Список существующих точек останова.
@@ -172,7 +172,7 @@ namespace runtime
         #else
             // Однопоточный вариант отладочного контекста. Доступ к его методам может выполняться только последовательно, с применением
             // способов внешней синхронизации.
-            DebugCallback debug_callback_; // Экзмепляр функтора-обработчика отладочных звонков.
+            DebugCallback debug_callback_; // Экземпляр функтора-обработчика отладочных звонков.
             // Текущий режим исполнения программы.
             DebugExecutionMode debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};
             // Список существующих точек останова.
@@ -184,4 +184,10 @@ namespace runtime
             size_t debug_exec_stack_counter_ = 0;
         #endif
     };
+    
+    std::string CallbackReasonToString(DebugCallbackReason debug_callback_reason);
+    std::string ExecutionModeToString(DebugExecutionMode debug_execution_mode);
+    //
+    std::ostream& operator<<(std::ostream& ostr, DebugCallbackReason debug_callback_reason);
+    std::ostream& operator<<(std::ostream& ostr, DebugExecutionMode debug_execution_mode);
 } // namespace runtime

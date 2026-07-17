@@ -6,6 +6,7 @@ project(MythonKernel)
 set(CMAKE_CXX_STANDARD 20)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  add_definitions(-D_USE_MATH_DEFINES -D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS -D_CRT_SECURE_NO_WARNINGS)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /JMC")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror -Wno-unused-parameter -Wno-implicit-fallthrough")

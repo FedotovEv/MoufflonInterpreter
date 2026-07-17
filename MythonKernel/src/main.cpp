@@ -270,18 +270,32 @@ namespace
     * \brief    Функция запуска Муфлон-программы под отладчиком.
     * \param    input - исходный текст Муфлон-программы.
     * \param    what_return - режимы исполнения программы, которые будут возвращаться из звонковой функции.
+    * \param    breaks - список желаемых точек останова, которые будут установлены в отладочный контекст после его создания.
     * \param    link_function - функция внешней связи исполняемой программы. Задаётся только при необходимости.
     * \return   Первый член возвращаемого кортежа - строка отладочного потока, второй член - суммарная строка выходного потока,
                 третий член - коллекция событий отладчика.
     */
     using DebugExecutionModeV = std::vector<runtime::DebugExecutionMode>;
+    using OneBreakpointDef = std::variant<runtime::ProgramCommandDescriptor, runtime::BreakpointDesc>;
+    using BreakpointsList = std::vector<OneBreakpointDef>;
+
     std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> DebugMythonProgram
-        (istream& input, std::variant<runtime::DebugExecutionMode, DebugExecutionModeV> what_return, const runtime::LinkageFunction& link_function = {})
+        (istream& input, std::variant<runtime::DebugExecutionMode, DebugExecutionModeV> what_return, const BreakpointsList& breaks = {},
+         const runtime::DebugCallback& cond_break_req = {}, const runtime::LinkageFunction& link_function = {})
     {
         using namespace runtime;
-        auto debug_event_out = [](std::ostream& ostr, const DebugEventDesc& data_out)
+        auto debug_event_out = [](std::ostream& ostr, DebugCallbackReason call_reason, Executable* exec_op, Closure& closure, Context& context)
             {
-                ostr << "Reason : " << static_cast<int>(data_out.event_reason) << " Genus : " << static_cast<int>(data_out.genus) << ' ' << data_out.command;
+                static constexpr size_t MAX_TYPIID_LENGTH = 30;
+
+                std::string typid_name = typeid(*exec_op).name();
+                if (typid_name.size() > MAX_TYPIID_LENGTH)
+                    typid_name = typid_name.substr(0, MAX_TYPIID_LENGTH);
+                else
+                    typid_name += std::string(MAX_TYPIID_LENGTH - typid_name.size(), ' ');
+
+                ostr << "Reason : " << call_reason << " Genus : " << exec_op->GetCommandGenus() << " Type : "
+                     << typid_name << ' ' << exec_op->GetCommandDesc();
             };
 
         ostringstream debug_ostr;
@@ -290,10 +304,15 @@ namespace
             {
                 static size_t what_return_index = 0;
 
+                debug_event_out(debug_ostr, call_reason, exec_op, closure, context);
                 DebugEventDesc rec_event{.event_reason = call_reason, .genus = exec_op->GetCommandGenus(), .command = exec_op->GetCommandDesc()};
-                debug_event_out(debug_ostr, rec_event);
                 debug_ostr << std::endl;
                 debug_event_collector.push_back(rec_event);
+
+                if (call_reason == DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION && cond_break_req)
+                    // Запрошена проверка условия, присоединённого к точке останова, и для таких запросов назначен обработчик. Вызовем его.
+                    return cond_break_req(call_reason, exec_op, closure, context);
+
                 if (std::holds_alternative<DebugExecutionMode>(what_return))
                 { // Требуется отвечать на отладочные звонки одним и тем же значением.
                     return std::get<DebugExecutionMode>(what_return);
@@ -318,7 +337,18 @@ namespace
             };
 
         ostringstream out_ostr;
-        DebugContext debug_context(out_ostr, debug_event_handler);
+        DebugContext debug_context(out_ostr, debug_event_handler, link_function);
+        if (!breaks.empty())
+        {
+            for (const OneBreakpointDef& one_break : breaks)
+            {
+                if (std::holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
+                    debug_context.AddBreakpoint(std::get<runtime::ProgramCommandDescriptor>(one_break));
+                else if (std::holds_alternative<runtime::BreakpointDesc>(one_break))
+                    debug_context.AddBreakpoint(std::get<runtime::BreakpointDesc>(one_break));
+            }
+        }
+
         parse::TrivialParseContext parse_context;
         runtime::Closure closure;
 
@@ -1799,31 +1829,60 @@ z1_3 = OneClass(4)
                 }
                 return true;
             };
+        // Определения методов и свободных функций, которые будут использоваться в дальнейших тестах.
+        std::string methods_def(R"--( 
+class TestClass:                # Строка 1
+  def __init__(a):              # Строка 2
+    self.aa = a                 # Строка 3
+                                # Строка 4
+  def ClassMethod_1(a):         # Строка 5
+    b = a * 2 + self.aa         # Строка 6
+    print a, b                  # Строка 7
+    c = b + 3                   # Строка 8
+    return b + c                # Строка 9
+                                # Строка 10
+  def ClassMethod_2(b):         # Строка 11
+    d = b * 3 / 11 + self.aa    # Строка 12
+    e = d + 9.9                 # Строка 13
+    print d, e                  # Строка 14
+    return d + e                # Строка 15
+                                # Строка 16
+def FreeFunction_1(g, h):       # Строка 17
+  print g, h                    # Строка 18
+  gh = g * h + g - h            # Строка 19
+  print gh                      # Строка 20
+  return gh + (gh / 2.0)        # Строка 21
+                                # Строка 22
+def FreeFunction_2(j, k):       # Строка 23
+  jk = j / k - j + k            # Строка 24
+  print j, k                    # Строка 25
+  print jk                      # Строка 26
+  return jk - (jk / 3.0)        # Строка 27
+)--");
 
         { // Пошаговое исполнение простой последовательности инструкций.
-            istringstream input(R"--(
-a = 1
-b = 2
-c = 3
-# Комментарий_1
-d = "d"
-ab = a + b
-bc = b + c
-# Комментарий_2
-abc = a + b + c
-# Комментарий_3
-print a, b, c
-print ab, bc, abc
-# Комментарий_4
-print d
+            istringstream input(R"--( # Строка 0
+a = 1               # Строка 1
+b = 2               # Строка 2
+c = 3               # Строка 3
+# Комментарий_1     # Строка 4
+d = "d"             # Строка 5
+ab = a + b          # Строка 6
+bc = b + c          # Строка 7
+# Комментарий_2     # Строка 8
+abc = a + b + c     # Строка 9
+# Комментарий_3     # Строка 10
+print a, b, c       # Строка 11
+print ab, bc, abc   # Строка 12
+# Комментарий_4     # Строка 13
+print d             # Строка 14
 )--");
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_STEP_IN);
-            // std::cout << "Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            // std::cout << "1. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
             ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 0},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 3},
@@ -1837,22 +1896,138 @@ print d
                 }));
         }
 
-        { // Пошаговое исполнение с заходом и обходом вызовов методов.
+        { // Пошаговый проход через составные и блочные инструкции.
             istringstream input(R"--(
-
+a = 1                                           # Строка 1
+if a == 1:                                      # Строка 2
+  # Заходим сюда.                               # Строка 3
+  a = a + 2                                     # Строка 4
+# В этой точке a будет равно 3.                 # Строка 5
+if a == 10:                                     # Строка 6
+  a = a * 2                                     # Строка 7
+elif a == 3:                                    # Строка 8
+  # Исполняется эта ветвь условного оператора.  # Строка 9
+  a = a * 3                                     # Строка 10
+  a = a + 2                                     # Строка 11
+else:                                           # Строка 12
+  a = 1                                         # Строка 13
+                                                # Строка 14
+# Здесь a окажется равным 11.                   # Строка 15
+while a < 33:                                   # Строка 16
+  a = a + 11                                    # Строка 17
+  print a                                       # Строка 18
+                                                # Строка 19
+print a * 2, a * 3                              # Строка 20
 )--");
-            ostringstream ostr;
-            RunMythonProgram(input, ostr);
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+                DebugMythonProgram(input, DebugExecutionMode::DEBUG_STEP_IN);
+            // std::cout << "2. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 4},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 8},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 10},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 11},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 20}
+                }));
+        }
+
+        // Тело испытательной программы, которое будет применяться в двух следующих тестах.
+        std::string main_body(R"--(
+lc_1 = 5                                            # Строка 29
+lc_2 = 11                                           # Строка 30
+print lc_1, lc_2                                    # Строка 31
+# Вызов свободной функции FreeFunction_1.           # Строка 32
+ff_1 = FreeFunction_1(1, 2)                         # Строка 33
+lc_2 = lc_2 + ff_1 + 2 * ff_1                       # Строка 34
+print lc_2                                          # Строка 35
+# Создание объекта класса и вызов его методов.      # Строка 36
+tst_class = TestClass(6)                            # Строка 37
+print tst_class.aa                                  # Строка 38
+cls_1_ret = tst_class.ClassMethod_1(11)             # Строка 39
+print cls_1_ret                                     # Строка 40
+cls_2_ret = tst_class.ClassMethod_2(lc_1 + lc_2)    # Строка 41
+print cls_2_ret                                     # Строка 42
+cls_3 = cls_1_ret + cls_2_ret                       # Строка 43
+print cls_3                                         # Строка 44
+)--");
+
+        { // Пошаговое исполнение с заходом и обходом вызовов методов.
+            istringstream input;
+            input.str(methods_def + main_body);
+
+            DebugExecutionModeV what_return_arr
+            {
+                DebugExecutionMode::DEBUG_STEP_IN,
+                DebugExecutionMode::DEBUG_STEP_IN,
+                DebugExecutionMode::DEBUG_STEP_IN,
+                DebugExecutionMode::DEBUG_STEP_OUT
+            };
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            std::cout << "3. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
             //ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
         }
 
-        { // Простые и условные точки останова.
-            istringstream input(R"--(
+        { // Заход и ускоренный выход из методов и свободных функций.
 
-)--");
-            ostringstream ostr;
-            //RunMythonProgram(input, ostr);
-            //ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
+        }
+
+        { // Простые и условные точки останова.
+            istringstream input;
+            input.str(methods_def + main_body);
+            BreakpointsList break_list =
+            {
+                runtime::ProgramCommandDescriptor{.module_string_number = -1},    // Ординарная точка останова на строку -1 (останов при инициализации программы).
+                runtime::ProgramCommandDescriptor{.module_string_number = 29},    // Ординарная точка останова на строку 29 (первая действительно исполняемая строка).
+                runtime::ProgramCommandDescriptor{.module_string_number = 31},    // Ординарная точка останова на строку 31.
+                runtime::ProgramCommandDescriptor{.module_string_number = 31},    // Дублирующая ординарная точка останова на строку 31.
+                runtime::ProgramCommandDescriptor{.module_string_number = 19},    // Ординарная точка останова на строку 19 (внутри свободной функции FreeFunction_1).
+                runtime::ProgramCommandDescriptor{.module_string_number = 37},    // Ординарная точка останова на строку 37.
+                runtime::BreakpointDesc{.position{.module_string_number = 7},     // Отключённый останов на строку 7 (внутри метода TestClass::ClassMethod_1). Срабатывать не должен.
+                                        .is_enabled = false},
+                runtime::BreakpointDesc{.position{.module_string_number = 8}},    // Обычный останов на строку 8 (внутри метода TestClass::ClassMethod_1), но созданный с помощью BreakpointDesc{}.
+                runtime::BreakpointDesc{.position{.module_string_number = 40},    // Условный бряк на строку 40.
+                                        .is_conditional = true},
+                runtime::BreakpointDesc{.position{.module_string_number = 14},    // Условный бряк на строку 14 (внутри метода TestClass::ClassMethod_2).
+                                        .is_conditional = true},
+                runtime::ProgramCommandDescriptor{.module_string_number = 44}     // Обыкновенная точка останова на строку 44.
+            };
+
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+                DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
+            // Выведем в консоль результаты трассировки.
+            // std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 29},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 31},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 31},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 19},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 37},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 8},
+                    {DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION, 40},  // Проверка условия для условного бряка на строке 40.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 40},
+                    {DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION, 14},  // Проверка условия для условного бряка на строке 14.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 14},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 44}
+                }));
+        }
+
+        { // Работа трассировщика внутри сопрограмм.
+
+
         }
     }
 

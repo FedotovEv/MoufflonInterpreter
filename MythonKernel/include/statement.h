@@ -589,14 +589,16 @@ namespace ast
         template <typename... Args>
         explicit Compound(Args&&... args)
         {
+            // Инструкция является декларативной - контейнером для фактически исполняемых инструкций comp_body_.
+            SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
+
             if constexpr (sizeof...(args) != 0)
                 // Распакуем переданные нам пакеты параметров с помощью свёрточного выражения над двуместным оператором ",".
                 (... , comp_body_.push_back(std::move(std::forward<Args>(args))));
-                //(..., comp_body_.push_back(std::move(args)));
         }
 
         runtime::ProgramCommandDescriptor GetLastCommandDesc()
-        { // Возвращает дескриптор последней команды сплотки        
+        { // Возвращает дескриптор последней команды сплотки.
             return last_body_command_desc_;
         }
 
