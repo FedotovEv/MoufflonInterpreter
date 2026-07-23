@@ -2,6 +2,7 @@
 #include "runtime.h"
 #include "parse.h"
 #include "error_classes.h"
+#include "statement.h"
 
 #include <cassert>
 #include <optional>
@@ -295,9 +296,7 @@ namespace runtime
     }
 
     FreeFunction::FreeFunction(Method method_func) : method_func_(move(method_func))
-    {
-        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
-    }
+    {}
 
     void FreeFunction::Print(std::ostream& os, Context& context)
     {
@@ -328,12 +327,7 @@ namespace runtime
             return ObjectHolder::Own(move(CoroutineInstance(this, temp_closure)));
         }
         else
-        { // Немедленное исполнение обычной функции.
-            // Уведомим отладчик о начале исполнения новой функции для возможности отслеживания им этого момента и создания нового
-            // кадра в стеке вызовов).
-            dummy_statement_->info_data_ptr = &method_func_.name;
-            PrepareExecute(dummy_statement_.get(), temp_closure, context);
-            // Непосредственное исполнение и последующее возвращение результата его работы.
+        { // Немедленное исполнение обычной функции - непосредственное исполнение и последующее возвращение результата её работы.
             return method_func_.body->Execute(temp_closure, context);
         }
     }
@@ -361,9 +355,9 @@ namespace runtime
             os << this;
     }
 
-    bool ClassInstance::HasMethod(const std::string& method_name, size_t argument_count) const
+    bool ClassInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
     {
-        if (const Method* method_ptr = my_class_.GetMethod(method_name, static_cast<int>(argument_count)))
+        if (const Method* method_ptr = my_class_.GetMethod(method_name, static_cast<int>(argument_count), parent_name))
             if (method_ptr->formal_params.size() == argument_count)
                 return true;
             else
@@ -383,9 +377,7 @@ namespace runtime
     }
 
     ClassInstance::ClassInstance(const Class& cls) : my_class_(cls)
-    {
-        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
-    }
+    {}
 
     ObjectHolder ClassInstance::Call(const std::string& method_name,
                                      const std::vector<ObjectHolder>& actual_args,
@@ -410,12 +402,7 @@ namespace runtime
             return ObjectHolder::Own(move(CoroutineInstance(this, get_method.method, method_closure)));
         }
         else
-        { // Исполнение обычного метода.
-            // Уведомим отладчик о начале исполнения нового метода (для возможности отслеживания им этого момента и создания нового
-            // кадра в стеке вызовов).
-            dummy_statement_->info_data_ptr = &method_name;
-            PrepareExecute(dummy_statement_.get(), method_closure, context);
-            // Непосредственное исполнение и последующее возвращение результата его работы.
+        { // Исполнение обычного метода - непосредственное исполнение и последующее возвращение результата его работы.
             return get_method.method->body->Execute(method_closure, context);
         }
     }
@@ -593,6 +580,46 @@ namespace runtime
     {
         os << (GetValue() ? "True"sv : "False"sv);
     }
+    
+    Method::Method(std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body, bool p_is_coroutine) :
+        name(move(p_name)),
+        formal_params(move(p_formal_params)),
+        body(move(p_body)),
+        is_coroutine(p_is_coroutine)
+    {
+        TuneBodyReference();
+    }
+
+    Method::Method(Method&& other) noexcept :
+        name(move(other.name)),
+        formal_params(move(other.formal_params)),
+        body(move(other.body)),
+        is_coroutine(other.is_coroutine)
+    {
+        TuneBodyReference();
+    }
+        
+    Method& Method::operator=(Method&& other) noexcept
+    {
+        if (this != &other)
+        {
+            name = move(other.name);
+            formal_params = move(other.formal_params);
+            body = move(other.body);
+            is_coroutine = other.is_coroutine;
+            TuneBodyReference();
+        }
+        return *this;
+    }
+
+    void Method::TuneBodyReference()
+    {
+        if (ast::MethodBody* method_body = dynamic_cast<ast::MethodBody*>(body.get()))
+        {
+            method_body->SetSentinelInfoData(true, &name);
+            method_body->SetSentinelInfoData(false, &name);
+        }
+    }
 
     WorkflowPosition::WorkPosType WorkflowPosition::GetType() const
     {
@@ -759,6 +786,7 @@ namespace runtime
         // Формируем стартовый набор опций контекста по умолчанию.
         opt_data_.emplace(OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH, true);
         opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_DECLARATIVE, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_FUNC_FRAME, true);
     }
 
     #ifndef MYTHON_UNITHREAD
@@ -805,12 +833,14 @@ namespace runtime
     {
         switch (cmd_genus)
         {
-        case CommandGenus::CMD_GENUS_CALL_METHOD:
-            return "Вызов метода";
+        case CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT:
+            // Пседвоинструкция-маркёр начала метода или функции (расположена перед первой их действительной командой).
+            return "Начало метода";
         case CommandGenus::CMD_GENUS_RETURN_FROM_METHOD:
             return "Возврат из метода";
         case CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT:
-            return "Конец метода";  // То есть псевдоинструкция, размещённая в его конце (за последней его действительной командой).
+            // Маркёрная псевдоинструкция, размещённая в его конце (за последней его действительной командой).
+            return "Конец метода";
         case CommandGenus::CMD_GENUS_INITIALIZE:
             return "Инициализация";
         default:

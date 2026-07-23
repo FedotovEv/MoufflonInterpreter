@@ -217,15 +217,26 @@ namespace ast
         std::string name_;
     };
 
-    // Вызывает свободную функцию free_function со списком параметров args.
+    // Реализует один из двух сценариев обработки терма function_name(args...) вызова свободной функции.
+    // 1. Прямо вызывает свободную функцию free_function со списком параметров args. Применяется в том случае, если имя
+    //    function_name заведомо относится к свободной функции, это известно ещё на этапе синтаксического анализа во время
+    //    обработки терма анализатором, и связь между именем функции и соответствующим объектом runtime::FreeFunction может
+    //    быть установлена в тот же самый момент.
+    // 2. Обрабатывает терм прямо в процессе исполнения программы. В этом случае сначала делается попытка найти подходящую
+    //    свободную функцию (среди уже определённых к данному моменту в closure), а затем (в случае неудачи на первом шаге)
+    //    опробуется вариант трактовки имени function_name как имени переменной, содержащей некоторый функциональный объект
+    //    (функтор). Если условие второго шага соблюдается (то есть function_name действительно содержит некий функтор),
+    //    производится исполнение этого функтора.
     class FreeFunctionCall : public Statement
     {
     public:
-        FreeFunctionCall(runtime::FreeFunction& free_function, std::vector<std::unique_ptr<Statement>> args);
+        FreeFunctionCall(runtime::FreeFunction* free_function, std::vector<std::unique_ptr<Statement>> args);
+        FreeFunctionCall(std::string free_function_name, std::vector<std::unique_ptr<Statement>> args);
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
     private:
-        runtime::FreeFunction& free_function_;
+        runtime::FreeFunction* free_function_ = nullptr;
+        std::string free_function_name_;
         std::vector<std::unique_ptr<Statement>> args_;
     };
 
@@ -244,6 +255,7 @@ namespace ast
 
         MethodCall(std::unique_ptr<Statement> object, std::string method,
                    std::vector<std::unique_ptr<Statement>> args, std::string parent_name = {});
+        MethodCall(MethodCallDesc&& method_call_desc);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
 
@@ -667,13 +679,20 @@ namespace ast
         explicit MethodBody(std::unique_ptr<Statement>&& body);
 
         // Вычисляет инструкцию, переданную в качестве body.
-        // Если внутри body была выполнена инструкция return, возвращает результат return
-        // В противном случае возвращает None
+        // Если внутри body была выполнена инструкция return, возвращает результат return.
+        // В противном случае возвращает None.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        
+        // Специальные методы для настройки ограничителей тела метода.
+        void SetSentinelInfoData(bool for_begin, void* sentinel_info_data);
+        void* GetSentinelInfoData(bool for_begin) const;
+        runtime::ProgramCommandDescriptor GetSentinelCommandDesc(bool for_begin) const;
     
     private:
+        // Полное тело состоит из двух ограничителей (начального и конечного) и размещённого между ними действительного исполняемого содержимого.
+        std::unique_ptr<runtime::PsevdoExecutable> method_sentinel_begin_ = std::make_unique<runtime::PsevdoExecutable>();
         std::unique_ptr<Statement> body_;
-        std::unique_ptr<runtime::PsevdoExecutable> dummy_statement_ = std::make_unique<runtime::PsevdoExecutable>();
+        std::unique_ptr<runtime::PsevdoExecutable> method_sentinel_end_ = std::make_unique<runtime::PsevdoExecutable>();
     };
 
     // Объект исполнения инструкции выброса исключения raise с выражением (аргументом) statement.

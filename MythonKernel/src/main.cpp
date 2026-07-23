@@ -1926,24 +1926,24 @@ print a * 2, a * 3                              # Строка 20
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 4},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 8},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 10},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},           // Оператор if - проверка условия главной ветви.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 4},           // Условие выполнено, находимся внутри главной ветви инструкции if.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},           // Оператор if - проверка условия главной ветви.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 8},           // Условие главной ветви не выполняется, проверяем альтернативу.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 10},          // Условие первой альтернативы истинно, выбирается именно она.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 11},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Первая итерация цикла while() - условие цикла удовлетворяется.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Вторая итерация цикла while() - условие цикла удовлетворяется.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Третья итерация цикла while() - условие цикла нарушено, цикл заканчивается.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 20}
                 }));
         }
 
-        // Тело испытательной программы, которое будет применяться в двух следующих тестах.
+        // Тело испытательной программы, которое будет применяться в трёх следующих тестах.
         std::string main_body(R"--(
 lc_1 = 5                                            # Строка 29
 lc_2 = 11                                           # Строка 30
@@ -1969,10 +1969,30 @@ print cls_3                                         # Строка 44
 
             DebugExecutionModeV what_return_arr
             {
-                DebugExecutionMode::DEBUG_STEP_IN,
-                DebugExecutionMode::DEBUG_STEP_IN,
-                DebugExecutionMode::DEBUG_STEP_IN,
-                DebugExecutionMode::DEBUG_STEP_OUT
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов в процессе инициализации программы.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 29.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 30.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 31.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 33 - обход тела функции FreeFunction_1().
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 34.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 35.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 37 - вход в тело конструктора класса TestClass.
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 3 (внутри конструктора __init__() класса TestClass).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед выходом из конструктора __init__() класса TestClass.
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 38.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 39 (обход вызова метода ClassMethod_1() без входа в его тело).
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 40.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 41 - вход в тело метода ClassMethod_2().
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 12 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 13 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 14 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 15 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед возвратом из метода ClassMethod_2().
+                // ----------
+                DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 42. Дальнейшая работа программы происходит без трассировки.
             };
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
             std::cout << "3. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
@@ -1980,6 +2000,43 @@ print cls_3                                         # Строка 44
         }
 
         { // Заход и ускоренный выход из методов и свободных функций.
+            istringstream input;
+            input.str(methods_def + main_body);
+
+            DebugExecutionModeV what_return_arr
+            {
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов в процессе инициализации программы.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 29.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 30.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 31.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 33 - вход в тело функции FreeFunction_1().
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 18 (в теле функции FreeFunction_1()).
+                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 19 (в теле функции FreeFunction_1()).
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед возвратом из функции FreeFunction_1().
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 34.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 35.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 37 (обход функции-конструктора класса TestClass, в его тело не входим).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 38.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 39 (заходим в тело метода ClassMethod_1()).
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 6 (в теле метода ClassMethod_1()).
+                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 7 (в теле метода ClassMethod_1()).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед возвратом из метода ClassMethod_1().
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 40.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 41 (вход в тело метода ClassMethod_2()).
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 6 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 7 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед возвратом из метода ClassMethod_2().
+                // ----------
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 42.
+                DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 43. Дальнейшая работа программы происходит без трассировки.
+            };
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
 
         }
 
@@ -2007,7 +2064,7 @@ print cls_3                                         # Строка 44
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
             // Выведем в консоль результаты трассировки.
-            // std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            // std::cout << "5. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
             ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.

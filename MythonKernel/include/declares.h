@@ -32,6 +32,7 @@ const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
 const std::string EQUAL_CMP_METHOD = "__eq__";
 const std::string LESS_CMP_METHOD = "__lt__";
 const std::string STR_FUNCTION_METHOD = "__str__";
+const std::string FUNCTOR_CALL_METHOD = "__run__";
 const std::string COROUTINE_STATUS_VAR = "__coro__";
 const std::string SELF_FIELD_NAME = "self";
 const std::string BREAKPOINT_INFO_FIELD_NAME = "__breakpoint__";

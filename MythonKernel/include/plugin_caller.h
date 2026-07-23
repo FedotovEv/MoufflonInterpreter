@@ -79,7 +79,7 @@ namespace runtime
 
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
-        bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+        bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
         std::string GetClassName() const override
         {
             return class_name_;

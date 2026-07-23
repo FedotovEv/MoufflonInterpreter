@@ -27,9 +27,9 @@ namespace runtime
     enum class CommandGenus
     {
         CMD_GENUS_UNKNOWN = 0,
-        CMD_GENUS_CALL_METHOD,              // Это команда вызова метода класса или свободной функции.
+        CMD_GENUS_PRE_FIRST_METHOD_STMT,    // Псевдоинструкция, расположенная непосредственно перед первой действительной командой метода или функции.
         CMD_GENUS_RETURN_FROM_METHOD,       // Инструкция выхода из метода (return, return_ref, co_yield, и.т.д.).
-        CMD_GENUS_AFTER_LAST_METHOD_STMT,   // Псевдоинструкция, отмечающая последнюю команду метода или функции.
+        CMD_GENUS_AFTER_LAST_METHOD_STMT,   // Псевдоинструкция, размещённая после последней действительной команды метода или функции.
         CMD_GENUS_DECLARATIVE,              // Узел АСД декларативной природы, не являющийся непосредственной исполняемой инструкцией.
         CMD_GENUS_INITIALIZE                // (Псевдо)инструкция общей инициализации программы (ProgramCompound).
     };
@@ -42,7 +42,8 @@ namespace runtime
         { // Тип опции, запрашиваемой у функции-члена GetOption().
             CONTEXT_OPT_UNKNOWN = 0,
             CONTEXT_OPT_DESTRUCT_AT_FINISH,  // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
-            CONTEXT_OPT_SKIP_DECLARATIVE     // Пропускать при отладке (не совершать отладочных звонков) для декларативных узлов АСД.
+            CONTEXT_OPT_SKIP_DECLARATIVE,    // Пропускать при отладке (не совершать отладочных звонков) декларативные узлы АСД.
+            CONTEXT_OPT_SKIP_FUNC_FRAME      // Пропускать при отладке рамочные (ограничительные) узлы функций и методов.
         };
 
         Context()
@@ -393,17 +394,30 @@ namespace runtime
         void Print(std::ostream& os, Context& context) override;
     };
 
-    // Метод класса
+    // Метод класса или свободная функция.
     struct Method
     {
-        // Имя метода
+        // Система конструкторов и операторов присваивания здесь необходима, так как члену body требуется всегда
+        // актуальная ссылка на саму структуру Method, которой он принадлежит. И эти специальные методы как раз и будут
+        // такую ссылку обновлять.
+        Method() = default;
+        Method(std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body, bool p_is_coroutine = false);
+        Method(const Method& other) = delete;
+        Method(Method&& other) noexcept;
+        // Операторы присваивания.
+        Method& operator=(const Method& other) = delete;
+        Method& operator=(Method&& other) noexcept;
+
+        // Имя метода (функции).
         std::string name;
-        // Имена формальных параметров метода
+        // Имена формальных параметров метода.
         std::vector<std::string> formal_params;
         // Тело метода
         std::unique_ptr<Executable> body;
         // Признак того, что данный метод является сопрограммой (крутиной).
         bool is_coroutine = false;
+
+        void TuneBodyReference();
     };
 
     // Псевдокоманда для служебных целей (посылки уведомлений в ast::PrepareExecute)
@@ -414,7 +428,7 @@ namespace runtime
             return ObjectHolder::None();
         }
 
-        const std::string* info_data_ptr = nullptr;
+        void* info_data_ptr = nullptr;
     };
 
     // Класс
@@ -554,7 +568,6 @@ namespace runtime
 
     private:
         Method method_func_;
-        std::unique_ptr<PsevdoExecutable> dummy_statement_ = std::make_unique<PsevdoExecutable>();
     };
 
     // Абстрактный чисто виртуальный класс, выражающий сущность экземпляра "обобщённого" класса, как программно определённого (структура
@@ -564,7 +577,7 @@ namespace runtime
     {
     public:
         void Print(std::ostream& os, Context& context) override = 0;
-        virtual bool HasMethod(const std::string& method_name, size_t argument_count) const = 0;
+        virtual bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const = 0;
         virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                   Context& context, const std::string& parent_name = {}) = 0;
         virtual std::string GetClassName() const = 0; // Возвращает имя данного класса.
@@ -621,8 +634,8 @@ namespace runtime
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
 
-        // Возвращает true, если объект имеет метод method, принимающий argument_count параметров
-        [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count) const override;
+        // Возвращает true, если объект имеет метод method, принимающий argument_count параметров.
+        [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count, const std::string& parent_name = {}) const override;
 
         // Возвращает ссылку на Closure, содержащий поля объекта
         [[nodiscard]] Closure& Fields();
@@ -639,7 +652,6 @@ namespace runtime
     private:
         const Class& my_class_;
         Closure closure_;
-        std::unique_ptr<PsevdoExecutable> dummy_statement_ = std::make_unique<PsevdoExecutable>();
 
         const Class& GetBaseClass() const
         {

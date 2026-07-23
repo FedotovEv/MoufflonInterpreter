@@ -66,7 +66,7 @@ public:
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
-    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+    bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {
@@ -127,7 +127,7 @@ public:
      */
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
-    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+    bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {
@@ -219,7 +219,7 @@ public:
      */
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
-    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+    bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {
@@ -361,7 +361,7 @@ public:
      */
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
-    bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+    bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {

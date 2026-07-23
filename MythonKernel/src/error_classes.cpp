@@ -214,14 +214,19 @@ namespace runtime
         {"GetStringNumber"sv, &CommonError::MethodGetStringNumber}
     };
 
-    bool CommonError::HasMethod(const std::string& method_name, size_t argument_count) const
+    bool CommonError::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
     { // Все методы класса CommonError не имеют аргументов (имеют 0 аргументов).
+        if (!parent_name.empty())
+            return false;
         return argument_count == 0 && common_error_method_table_.count(method_name) != 0;
     }
 
     ObjectHolder CommonError::Call
         (const std::string& method_name, const std::vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
     {
+        if (!parent_name.empty())
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+
         if (actual_args.size() == 0 && common_error_method_table_.count(method_name) != 0)
             return (this->*common_error_method_table_.at(method_name))(method_name, actual_args, context);
         else

@@ -466,8 +466,10 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool ArrayInstance::HasMethod(const string& method_name, size_t argument_count) const
+    bool ArrayInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
         if (array_method_argument_count_.count(method_name))
         {
             auto argument_org_count = array_method_argument_count_.at(method_name);
@@ -732,8 +734,10 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool MapInstance::HasMethod(const string& method_name, size_t argument_count) const
+    bool MapInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
         if (map_method_argument_count_.count(method_name))
         {
             auto argument_org_count = map_method_argument_count_.at(method_name);
@@ -799,8 +803,10 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool CoroutineInstance::HasMethod(const string& method_name, size_t argument_count) const
+    bool CoroutineInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
         if (coroutine_method_argument_count_.count(method_name))
         {
             auto argument_org_count = coroutine_method_argument_count_.at(method_name);
@@ -1004,8 +1010,10 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
     
-    bool TypeTraitsInstance::HasMethod(const std::string& method_name, size_t argument_count) const
+    bool TypeTraitsInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
         if (type_traits_method_argument_count_.count(method_name))
         {
             auto argument_org_count = type_traits_method_argument_count_.at(method_name);

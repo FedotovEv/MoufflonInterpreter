@@ -74,13 +74,15 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
             return;
         }
 
-        if (current_genus == runtime::CommandGenus::CMD_GENUS_CALL_METHOD)
+        if (current_genus == runtime::CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT)
         { // Это пседокоманда-уведомление от функции ClassInstance::Call, вызывающей какой-либо метод
           // пользовательского (не встроенного) класса. Создаём запись о новом стековом кадре. Она пока будет
           // неполна, но позже будет дополнена при исполнении первой команды тела вызванного метода.
             runtime::CallStackEntry new_stack_rec;
             new_stack_rec.call_command = {-1, -1};
-            new_stack_rec.info_data = *static_cast<runtime::PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr;
+            void* info_data = static_cast<runtime::PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr;
+            if (info_data)
+                new_stack_rec.info_data = *reinterpret_cast<std::string*>(info_data);
             dbg_context->PushCallStackEntry(new_stack_rec);
             // Пока new_stack_rec.is_valid оставляем == false, так как на данный момент структура стекового кадра new_stack_rec всё
             // ещё полностью не определена, и информация о первой исполняемой строке нового кадра будет известна и захвачена только
@@ -95,10 +97,11 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
             { // Сохраняем информацию о положении первой исполняемой строки очередного стекового кадра.
               // Сама запись о кадре была создана ранее при выполнении функции ClassInstance::Call, вызывающей
               // какой-либо метод класса. Эта функция посылает уведомление о своём исполнении в виде псевдокоманды
-              // рода runtime::CommandGenus::CMD_GENUS_CALL_METHOD.
+              // рода runtime::CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT.
                 runtime::CallStackEntry new_stack_rec = dbg_context->GetCallStackEntry().first;
                 new_stack_rec.first_command = current_command;
                 new_stack_rec.closure_ptr = &closure;
+                new_stack_rec.is_valid = true;  // Все поля записи новго стекового кадра заполнены - теперь он вполне валиден.
                 dbg_context->UpdateCallStackEntry(new_stack_rec);
             }
 
@@ -499,8 +502,12 @@ namespace ast
         return result;
     }
 
-    FreeFunctionCall::FreeFunctionCall(runtime::FreeFunction& free_function, std::vector<std::unique_ptr<Statement>> args) :
+    FreeFunctionCall::FreeFunctionCall(runtime::FreeFunction* free_function, std::vector<std::unique_ptr<Statement>> args) :
         free_function_(free_function), args_(move(args))
+    {}
+
+    FreeFunctionCall::FreeFunctionCall(std::string free_function_name, std::vector<std::unique_ptr<Statement>> args) :
+        free_function_name_(move(free_function_name)), args_(move(args))
     {}
 
     runtime::ObjectHolder FreeFunctionCall::Execute(runtime::Closure& closure, runtime::Context& context)
@@ -511,7 +518,27 @@ namespace ast
             // Вычисляем истинные значения аргументов функции.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
 
-        return free_function_.Call(real_args, context);
+        if (free_function_)
+            // Первый базовый сценарий - прямой вызов свободной функции, связь с которой установлена ещё при синтаксическом
+            // анализе МУФЛОН-программы.
+            return free_function_->Call(real_args, context);
+
+        // Второй базовый сценарий: тут возможны два варианта обработки конструкции free_function_name() - как вызов собственно
+        // свободной функции с именем free_function_name или как вызов функционального объекта (функтора), хранящегося в
+        // переменной с таким же именем.
+        ObjectHolder result;
+        runtime::CommonClassInstance* real_object_common = real_object.TryAs<runtime::CommonClassInstance>();
+        // Приоритет у нас будет иметь вызов метода, поэтому проверим его наличие в первую голову.
+        if (real_object_common && real_object_common->HasMethod(method_, static_cast<int>(real_args.size()), parent_name_))
+            // Метод method_ есть у объекта real_object. Просто вызываем его без каких-либо дальнейших проверок.
+            result = real_object_common->Call(method_, real_args, context, parent_name_);
+        else if (runtime::CommonClassInstance* functor_instance = TestFunctorVariable(real_object_common, method_, real_args.size(), closure))
+            // Выражение object_.method_ является объектом функтора. Вызовём его соответствующий исполнительный метод.
+            result = functor_instance->Call(FUNCTOR_CALL_METHOD, real_args, context);
+        else // Оба варианта провалились - вызов метода исполнить невозможно, возвращаем ошибку.
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+
+
     }
 
     MethodCall::MethodCall(unique_ptr<Statement> object, string method,
@@ -522,6 +549,49 @@ namespace ast
                            parent_name_(move(parent_name))
     {}
 
+    MethodCall::MethodCall(MethodCallDesc&& method_call_desc) :
+        object_(move(method_call_desc.call_object)),
+        method_(move(method_call_desc.call_method)),
+        args_(move(method_call_desc.call_args)),
+        parent_name_(move(method_call_desc.parent_name)),
+        is_dereference_result_(method_call_desc.is_dereference_result)
+    {}
+
+    // Функция проверяет, является ли значение test_object_common.field_name функциональным объектом (функтором), подходящим для вызова
+    // c arg_count фактическими аргументами. Если да, то возвращает указатель на объект, хранящийся в поле test_object.field_name и содержащий
+    // соответствующий исполняемый метод функтора.
+    runtime::CommonClassInstance* TestFunctorVariable
+        (runtime::CommonClassInstance* test_object_common, const std::string& field_name, size_t arg_count, Closure& closure)
+    {
+        runtime::ClassInstance* test_object_program;
+        if (test_object_common)
+        { // Проверка наличия требуемого функтора среди полей класса test_object_common.
+            test_object_program = dynamic_cast<runtime::ClassInstance*>(test_object_common);
+        }
+        else
+        { // Проверка наличия требуемого функтора среди переменных в таблице closure.
+            if (!closure.contains(field_name))
+                return nullptr;     // В таблице closure символа с именем field_name нет.
+            test_object_program = closure.at(field_name).TryAs<runtime::ClassInstance>();
+        }
+        if (!test_object_program)
+            return nullptr; // test_object_common не является программно-определяемым объектом и не содержит никаких полей.
+
+        // test_object_common является программно-определяемым объектом и может содержать поле field_name.
+        if (!test_object_program->Fields().contains(field_name))
+            return nullptr; // test_object_program не содержит поля field_name.
+        runtime::CommonClassInstance* functor_instance = test_object_program->Fields().at(field_name).TryAs<runtime::CommonClassInstance>();
+        if (!functor_instance)
+            return nullptr; // поле field_name в test_object есть, но оно не является объектом и не предоставляет никаких методов.
+        // Поле field_name в test_object имеется, оно объект какого-то класса и может быть функтором (предоставлять нужный исполняемый метод).
+        // Проверим, так ли это.
+        if (functor_instance->HasMethod(FUNCTOR_CALL_METHOD, arg_count))
+            // Всё в порядке, метод с именем FUNCTOR_CALL_METHOD и arg_count предоставляется, test_object_common.field_name - функтор.
+            return functor_instance;    
+        else
+            return nullptr; // Подходящего исполняемого метода функтора среди всех публичных методов объекта functor_instance не найдено.
+    }
+
     ObjectHolder MethodCall::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -531,18 +601,27 @@ namespace ast
             // Вычисляем истинные значения аргументов метода.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
 
-        runtime::CommonClassInstance* common_class_ptr = real_object.TryAs<runtime::CommonClassInstance>();
-        if (!common_class_ptr)
+        // Возможны два варианта обработки конструкции object_.method_ - как вызов собственно метода с именем method_ объекта real_object
+        // или как вызов функционального объекта (функтора), хранящегося в переменной object_.method_ (поле method_ объекта real_object).
+        ObjectHolder result;
+        runtime::CommonClassInstance* real_object_common = real_object.TryAs<runtime::CommonClassInstance>();
+        // Приоритет у нас будет иметь вызов метода, поэтому проверим его наличие в первую голову.
+        if (real_object_common && real_object_common->HasMethod(method_, static_cast<int>(real_args.size()), parent_name_))
+            // Метод method_ есть у объекта real_object. Просто вызываем его без каких-либо дальнейших проверок.
+            result = real_object_common->Call(method_, real_args, context, parent_name_);
+        else if (runtime::CommonClassInstance* functor_instance = TestFunctorVariable(real_object_common, method_, real_args.size(), closure))
+            // Выражение object_.method_ является объектом функтора. Вызовём его соответствующий исполнительный метод.
+            result = functor_instance->Call(FUNCTOR_CALL_METHOD, real_args, context);
+        else // Оба варианта провалились - вызов метода исполнить невозможно, возвращаем ошибку.
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
 
-        ObjectHolder result = common_class_ptr->Call(method_, real_args, context, parent_name_);
         if (is_dereference_result_)
             result = DereferencePointerObject(std::move(result));
 
-        runtime::ClassInstance* real_class_ptr = dynamic_cast<runtime::ClassInstance*>(common_class_ptr);
-        if (real_class_ptr)
+        runtime::ClassInstance* real_object_program = dynamic_cast<runtime::ClassInstance*>(real_object_common);
+        if (real_object_program)
         {  // Требуется вызвать метод объекта общего типа (определенного программно).
-            if (real_class_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME && context.GetExternalLinkage())
+            if (real_object_program->GetClassName() == EXTERNAL_LINK_CLASS_NAME && context.GetExternalLinkage())
             {  // Вызов звонковой функции при вызове метода объекта "__external"
                 vector<runtime::LinkageValue> real_args_lv;
                 for (auto& cur_real_arg : real_args)
@@ -1706,28 +1785,63 @@ namespace ast
         // Инструкция является декларативной - контейнером для фактически исполняемых инструкций body_.
         SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
 
-        dummy_statement_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
+        // Ограничители имеют свои особые рода.
+        method_sentinel_begin_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT);
+        method_sentinel_end_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
+
+        // Определим положения ограничителей в исходном тексте исполняемой программы.
+        method_sentinel_begin_->SetCommandDesc(body_->GetCommandDesc());
         runtime::ProgramCommandDescriptor after_body_command_desc;
         if (Compound* compound_body_ptr = dynamic_cast<Compound*>(body_.get()))
             after_body_command_desc = compound_body_ptr->GetLastCommandDesc();
         else
             after_body_command_desc = body_->GetCommandDesc();
         ++after_body_command_desc.module_string_number;
-        dummy_statement_->SetCommandDesc(after_body_command_desc);
+        method_sentinel_end_->SetCommandDesc(after_body_command_desc);
     }
 
     ObjectHolder MethodBody::Execute(Closure& closure, Context& context)
     {
+        PrepareExecute(method_sentinel_begin_.get(), closure, context); // Отправляем уведомление о начале исполнения метода.
+        
+        // Исполняем содержательную часть тела метода или функции, определяя при этом его итоговый возвращаемый результат.
+        ObjectHolder method_return_value;   // Создаётся значение None по умолчанию.
         PrepareExecute(this, closure, context);
         try
         {
             body_->Execute(closure, context);
         }
-        catch (ReturnResult ret_result)
+        catch (ReturnResult& ret_result)
         {
-            return ret_result.ret_result_;
+            method_return_value = move(ret_result.ret_result_);
         }
-        PrepareExecute(dummy_statement_.get(), closure, context);
-        return runtime::ObjectHolder::None();
+
+        PrepareExecute(method_sentinel_end_.get(), closure, context); // Отправляем уведомление о завершении исполнения метода.
+        return method_return_value;
+    }
+
+    // Группа функций-членов для управления настройками ограничителей тела метода (или свободной функции).
+    void MethodBody::SetSentinelInfoData(bool for_begin, void* sentinel_info_data)
+    {
+        if (for_begin)
+            method_sentinel_begin_->info_data_ptr = sentinel_info_data;
+        else
+            method_sentinel_end_->info_data_ptr = sentinel_info_data;
+    }
+    
+    void* MethodBody::GetSentinelInfoData(bool for_begin) const
+    {
+        if (for_begin)
+            return method_sentinel_begin_->info_data_ptr;
+        else
+            return method_sentinel_end_->info_data_ptr;
+    }
+
+    runtime::ProgramCommandDescriptor MethodBody::GetSentinelCommandDesc(bool for_begin) const
+    {
+        if (for_begin)
+            return method_sentinel_begin_->GetCommandDesc();
+        else
+            return method_sentinel_end_->GetCommandDesc();
     }
 }  // namespace ast

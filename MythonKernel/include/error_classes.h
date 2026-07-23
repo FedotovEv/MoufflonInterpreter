@@ -44,7 +44,7 @@ namespace runtime
         CommonError& operator=(const CommonError&) = default;
         CommonError& operator=(CommonError&&) = default;
 
-        bool HasMethod(const std::string& method_name, size_t argument_count) const override;
+        bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
         ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
         [[nodiscard]] std::string GetClassName() const override // Возвращает имя данного класса.

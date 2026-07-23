@@ -182,18 +182,10 @@ namespace
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
             // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
             std::vector<runtime::Method> methods;
-            methods.push_back
-            (
-                {.name = AWAITABLE_SUSPEND_METHOD, .formal_params = {"coro_instance"s},
-                 .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})
-                }
-            );
-            methods.push_back
-            (
-                {.name = AWAITABLE_RESUME_METHOD, .formal_params = {"coro_instance"s, "suspend_value"s},
-                 .body = std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})
-                }
-            );
+            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, {"coro_instance"s},
+                              std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, {"coro_instance"s, "suspend_value"s},
+                              std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
             declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), {}));
         }
 
@@ -1556,9 +1548,9 @@ namespace
                                                             // некоторых директив исходной МУФЛОН-программы (команд времени анализа).
         ast::ProgramCompound* program_compound_ = nullptr;  // Указатель на головной узел АСД разбираемой программы.
         //
-        runtime::Closure declared_classes_;             // Словарь для хранения определённых в программе классов общего типа.
-        runtime::Closure declared_free_functions_;      // Словарь для хранения определённых в программе свободных функций.
-        std::unordered_map<string, InternalObjectCreator> internal_classes_;    // Словарь с указателями на производящий функции встроенных классов МУФЛОНА.
+        runtime::Closure declared_classes_;                 // Словарь для хранения определённых в программе классов общего типа.
+        runtime::Closure declared_free_functions_;          // Словарь для хранения определённых в программе свободных функций.
+        std::unordered_map<string, InternalObjectCreator> internal_classes_;    // Словарь с указателями на производящие функции встроенных классов МУФЛОНА.
     }; // class Parser
 }  // namespace
 

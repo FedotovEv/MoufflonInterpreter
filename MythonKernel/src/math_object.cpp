@@ -261,8 +261,11 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool MathInstance::HasMethod(const string& method_name, size_t argument_count) const
+    bool MathInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;
+
         if (math_method_argument_count_.count(method_name))
         {
             auto argument_org_count = math_method_argument_count_.at(method_name);
@@ -925,8 +928,11 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
     
-    bool StringOpsInstance::HasMethod(const std::string& method_name, size_t argument_count) const
+    bool StringOpsInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;
+
         if (string_ops_method_argument_count_.contains(method_name))
         {
             auto argument_org_count = string_ops_method_argument_count_.at(method_name);

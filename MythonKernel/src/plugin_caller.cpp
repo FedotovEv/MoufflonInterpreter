@@ -649,8 +649,11 @@ namespace runtime
         }
     }
     
-    bool PluginInstance::HasMethod(const std::string& method_name, size_t argument_count) const
+    bool PluginInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
     {
+        if (!parent_name.empty())
+            return false;
+
         return GetMethod(plugin_desc_, method_name, argument_count).method_definer;
     }
 } // namespace runtime
