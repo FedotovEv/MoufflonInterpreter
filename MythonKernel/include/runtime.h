@@ -247,7 +247,7 @@ namespace runtime
     // Для отличных от нуля чисел, True и непустых строк возвращается true. В остальных случаях - false.
     bool IsTrue(const ObjectHolder& object);
 
-    // УНиверсальный интерфейс общего исполняемого объекта языка МУФЛОН. Именно из таких объектов (их различных частных
+    // Универсальный интерфейс общего исполняемого объекта языка МУФЛОН. Именно из таких объектов (их различных частных
     // разновидностей) строится и состоит абстрактное синтаксическое дерево (АСД) разобранной МУФЛОН-программы.
     class Executable
     {
@@ -280,6 +280,24 @@ namespace runtime
     private:
         CommandGenus command_genus_ = CommandGenus::CMD_GENUS_UNKNOWN;
         ProgramCommandDescriptor command_desc_;
+    };
+
+    // Специальный исполняемый объект, применяемый при построении различных тестов, как других исполняемых объектов,
+    // так и объектов периода исполнения.
+    struct TestMethodBody : public Executable
+    {
+        using Fn = std::function<ObjectHolder(Closure& closure, Context& context)>;
+        Fn body;
+
+        explicit TestMethodBody(Fn body) : body(std::move(body))
+        {}
+
+        ObjectHolder Execute(Closure& closure, Context& context) override
+        {
+            if (body)
+                return body(closure, context);
+            return {};
+        }
     };
 
     // Особый тип двухступенчатых исполняемых объектов, имеющих "левую" и "правую" части, которые могут исполняться
@@ -524,11 +542,11 @@ namespace runtime
     private:
         int my_id_;
         std::string my_name_;
-        // const Class& parent_;
-        //
+        // Список ссылок на ближайших предков данного класса (ближайших по восходящей линии в иерархии наследования).
         using ParentRefType = std::reference_wrapper<const Class>;
         std::vector<ParentRefType> parents_;
-        //
+        // Таблица методов ("виртуальных") класса. Допускает множество методов с одинаковым именем (далее они различаются
+        // по количеству аргументов).
         std::unordered_multimap<std::string, Method> virtual_method_table_;
 
         // Функция-член, выполняющая обход дерева предков данного класса, вызывая для каждого узла такого дерева обработчик
@@ -564,6 +582,7 @@ namespace runtime
 
         // Информирующие функции-члены.
         std::string GetName() const;
+        size_t GetArgCount() const;
         bool IsCoroutine() const;
 
     private:

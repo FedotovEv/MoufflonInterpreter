@@ -153,8 +153,8 @@ namespace runtime
 
     const unordered_map<string_view, pair<size_t, size_t>> MapInstance::map_method_argument_count_
     {
-        {"insert"sv, {1, 1}},
-        {"Insert"sv, {1, 1}},
+        {"insert"sv, {2, 2}},
+        {"Insert"sv, {2, 2}},
         {"find"sv, {1, 1}},
         {"Find"sv, {1, 1}},
         {"erase"sv, {1, 1}},

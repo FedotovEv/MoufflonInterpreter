@@ -591,6 +591,69 @@ namespace ast
             compound_statement_2.Execute(closure, context);
             ASSERT_EQUAL(context.output.str(), "z\n42\n24\nz\n24\n42\n");
         }
+
+        void TestFunctorMethodsCall()
+        {  // Проверка возможности вызова функциональных объектов (функторов) и их отдельных методов.
+            runtime::DummyContext context;
+            Closure use_closure;
+            auto test_method_1 = [&context](Closure& closure, runtime::Context& ctx)
+                {
+                    ASSERT_EQUAL(&context, &ctx);
+                    return ObjectHolder::Own(runtime::Number{123});
+                };
+            auto test_method_2 = [&context](Closure& closure, runtime::Context& ctx)
+                {
+                    ASSERT_EQUAL(&context, &ctx);
+                    return ObjectHolder::Own(runtime::Number{456});
+                };
+            auto create_args = []() -> std::vector<std::unique_ptr<Statement>>
+                {
+                    std::vector<std::unique_ptr<Statement>> args;
+                    args.push_back(std::make_unique<NumericConst>(1));
+                    args.push_back(std::make_unique<StringConst>("abc"s));
+                    return args;
+                };
+
+            // Создаём сам функциональный класс и его экземпляр (объект соответствующего типа).
+            vector<runtime::Method> test_methods;
+            static const std::string COMMON_METHOD = "common_method"s,
+                                     FUNC_CLASS_VAR = "func_class_var"s;
+            static const std::vector<std::string> METHOD_ARG_NAMES = {"arg1"s, "arg2"s};
+            test_methods.push_back
+                ({COMMON_METHOD, METHOD_ARG_NAMES, make_unique<runtime::TestMethodBody>(test_method_1)});
+            test_methods.push_back
+                ({FUNCTOR_CALL_METHOD, METHOD_ARG_NAMES, make_unique<runtime::TestMethodBody>(test_method_2)});
+            runtime::Class functor_class{"FunctorClass"s, std::move(test_methods), {}};
+            use_closure[FUNC_CLASS_VAR] = ObjectHolder::Own(runtime::ClassInstance{functor_class});
+            
+            { // Вызовем его обыкновенный метод.
+                MethodCall common_method_call(make_unique<VariableValue>(FUNC_CLASS_VAR), COMMON_METHOD, create_args());
+                ObjectHolder common_method_result = common_method_call.Execute(use_closure, context);
+                ASSERT(runtime::Equal(common_method_result, ObjectHolder::Own(runtime::Number{123}), context));
+            }
+
+            { // Далее пытаемся обратиться к объекту как к функциональному.
+                FreeFunctionCall functor_call(FUNC_CLASS_VAR, create_args());
+                ObjectHolder functor_result = functor_call.Execute(use_closure, context);
+                ASSERT(runtime::Equal(functor_result, ObjectHolder::Own(runtime::Number{456}), context));
+            }
+
+            { // Теперь проверим, как работает вызов функторов через MethodCall.
+                static const std::string FUNC_CONTAINER_INSTANCE = "func_contain_instance"s,
+                                         FUNC_CONTAINER_FIELD = "func_contain_field"s;
+
+                // Создаём класс и его экземпляр, поле которого будет содержать описанный выше функтор functor_class.
+                runtime::Class functor_contain_class{"FunctorContainerClass"s, {}, {}};
+                use_closure[FUNC_CONTAINER_INSTANCE] = ObjectHolder::Own(runtime::ClassInstance{functor_contain_class});
+                runtime::ClassInstance* func_contain_instance = use_closure.at(FUNC_CONTAINER_INSTANCE).TryAs<runtime::ClassInstance>();
+                func_contain_instance->Fields()[FUNC_CONTAINER_FIELD] = ObjectHolder::Own(runtime::ClassInstance{functor_class});
+
+                // Создаём и выполняем объект MethodCall вызова функтора из поля func_contain_field объекта func_contain_class.
+                MethodCall field_functor_call(make_unique<VariableValue>(FUNC_CONTAINER_INSTANCE), FUNC_CONTAINER_FIELD, create_args());
+                ObjectHolder field_functor_result = field_functor_call.Execute(use_closure, context);
+                ASSERT(runtime::Equal(field_functor_result, ObjectHolder::Own(runtime::Number{456}), context));
+            }
+        }
     }  // namespace
 
     void RunUnitTests(TestRunner& tr)
@@ -619,5 +682,6 @@ namespace ast
         RUN_TEST(tr, ast::TestAnd);
         RUN_TEST(tr, ast::TestNot);
         RUN_TEST(tr, ast::TestComplexCompound);
+        RUN_TEST(tr, ast::TestFunctorMethodsCall);
     }
 }  // namespace ast

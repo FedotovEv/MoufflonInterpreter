@@ -51,8 +51,7 @@ namespace ast
     };
     CoroCoords GetCoYieldCoroCoords(runtime::Closure& closure, Statement* this_statement);
 
-    // Выражение, возвращающее значение типа T,
-    // используется как основа для создания констант
+    // Выражение, возвращающее значение типа T, используется как основа для создания констант.
     template <typename T>
     class ValueStatement : public Statement
     {
@@ -911,6 +910,9 @@ namespace ast
         {
             return free_function_.TryAs<runtime::FreeFunction>();
         }
+
+        // Вырабаьывает декорированное (отделанное) имя функции free_function_name с учётом количества её аргументов arg_count.
+        static std::string MangleFreeFunctionName(const std::string& free_function_name, size_t arg_count);
 
     private:
         runtime::ObjectHolder free_function_; // "По построению" будет содержать внутри только объект типа runtime::FreeFunction.

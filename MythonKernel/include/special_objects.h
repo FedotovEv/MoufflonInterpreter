@@ -187,7 +187,7 @@ private:
 
     std::map<std::string, ObjectHolder> map_storage_;
     bool is_in_iterator_mode_ = false;
-    int iterator_pack_serial_;
+    int iterator_pack_serial_ = -1;
 
     static int last_iterator_pack_serial_;
 };

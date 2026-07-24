@@ -104,22 +104,6 @@ namespace runtime
             ASSERT(context.output.str().empty());
         }
 
-        struct TestMethodBody : Executable
-        {
-            using Fn = std::function<ObjectHolder(Closure& closure, Context& context)>;
-            Fn body;
-
-            explicit TestMethodBody(Fn body) : body(std::move(body))
-            {}
-
-            ObjectHolder Execute(Closure& closure, Context& context) override
-            {
-                if (body)
-                    return body(closure, context);
-                return {};
-            }
-        };
-
         void TestMethodInvocation()
         {
             DummyContext context;
@@ -195,22 +179,6 @@ namespace runtime
 
             ASSERT(!child_inst.HasMethod("test"s, 1U));
             ASSERT_THROWS(child_inst.Call("test"s, {ObjectHolder::None()}, context), runtime_error);
-
-            // Проверка возможности вызова функциональных объектов (функторов).
-            base_methods.push_back
-                ({"common_method"s, {"arg1"s, "arg2"s}, make_unique<TestMethodBody>(base_method_1)});
-            base_methods.push_back
-                ({FUNCTOR_CALL_METHOD, {"arg1"s, "arg2"s}, make_unique<TestMethodBody>(base_method_2)});
-            // Создаём сам функциональный класс и его экземпояр (объект соответствующего типа).
-            Class functor_class{"FunctorClass"s, std::move(base_methods), {}};
-            ClassInstance functor_inst{functor_class};
-            // Вызовем его обыкновенный метод.
-            ASSERT(functor_inst.HasMethod("common_method"s, 2U));
-            res = functor_inst.Call(
-                "common_method"s, {ObjectHolder::Own(Number{1}), ObjectHolder::Own(String{"abc"s})}, context);
-            ASSERT(Equal(res, ObjectHolder::Own(Number{123}), context));
-            // Далее пытаемся обратиться к объекту как к функциональному.
-
         }
 
         void TestNonowning()

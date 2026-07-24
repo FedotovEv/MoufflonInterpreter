@@ -1803,6 +1803,33 @@ z1_3 = OneClass(4)
         }
     }
 
+    void TestFunctorClassFunction()
+    { // Вызов функциональных методов различными способами.
+        istringstream functor_and_calls(R"--(
+class FunctorClass:
+  def __init__(a):
+    self.var = a
+
+  def __run__(b):
+    return self.var + b
+
+class FunctorContainClass:
+  def __init__(func_obj):
+    self.func_field = func_obj
+
+# Прямой вызов функтора (по типу свободной функции).
+functor_var = FunctorClass(1)
+print functor_var(10)
+
+# Вызов функтора из поля другого объекта (по типу метода класса).
+functor_contain_var = FunctorContainClass(FunctorClass(2))
+print functor_contain_var.func_field(20)
+)--");
+        ostringstream ostr;
+        RunMythonProgram(functor_and_calls, ostr);
+        ASSERT_EQUAL(ostr.str(), "11\n22\n");
+    }
+
     void TestDebugExecution()
     { // Тест исполнения программы под отладчиком (различных видов операций встроенного отладчика).
         // Лямбда-фунция сравнения двух последовательностей отладочных звонков.
@@ -2090,22 +2117,20 @@ print cls_3                                         # Строка 44
 
     void TestAll()
     {
-
         cout << "Запуск тестов"s << endl;
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
-        /*
+
+        //RUN_TEST(tr, TestDebugExecution);
+        //return;
+
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);
         runtime::RunObjectsTests(tr);
         ast::RunUnitTests(tr);
         TestParseProgram(tr);
-        */
 
         cout << endl << "Категория тестов исполнения полных примерных программ"s << endl;
-
-        RUN_TEST(tr, TestDebugExecution);
-        return;
 
         RUN_TEST(tr, TestSimplePrints);
         RUN_TEST(tr, TestAssignments);
@@ -2133,6 +2158,8 @@ print cls_3                                         # Строка 44
         RUN_TEST(tr, TestDelOperator);
         RUN_TEST(tr, TestClassDestructor);
         RUN_TEST(tr, TestFreeFunction);
+        RUN_TEST(tr, TestFunctorClassFunction);
+        RUN_TEST(tr, TestDebugExecution);
     }
 }  // namespace
 

@@ -401,11 +401,19 @@ namespace
             if (id_list.empty())
             { // Это попытка вызова свободной функции, а не метода класса.
                 if (auto func_it = declared_free_functions_.find(last_name); func_it != declared_free_functions_.end())
-                    // Такая свободная функция программно определяемого типа существует - оформляем её вызов путём создания соответствующего узла АСД.
-                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction&>(*func_it->second), std::move(args)));
-                // Свободная функция с требуемым именем last_name ранее не определялась.
-                exec_factory_.ThrowParseError
-                    (ThrowMessages::ConstructThrowText("%1 - "s + last_name + "()"s, {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND}));
+                { // Такая свободная функция программно определяемого типа однозначно существует - оформляем её вызов путём создания
+                  // соответствующего узла АСД.
+                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction*>(&(*func_it->second)), std::move(args)));
+                }
+                else
+                { // Свободная функция с требуемым именем last_name ранее не определялась. Возможно, это вызов функтора или функции, которая
+                  // будет определена позже.
+                    return exec_factory_.Create(ast::FreeFunctionCall(last_name, std::move(args)));
+                    /*
+                    exec_factory_.ThrowParseError
+                        (ThrowMessages::ConstructThrowText("%1 - "s + last_name + "()"s, {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND}));
+                    */
+                }
             }
 
             // Выявим возможное наличие имени класса-уточнителя в терме, указывающем на вызываемый метод.
@@ -704,11 +712,16 @@ namespace
                 }
 
                 if (auto func_it = declared_free_functions_.find(method_name); func_it != declared_free_functions_.end())
-                    // Наконец, разбираем случай вызова свободной функции общего, т.е. программно определяемого типа.
-                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction&>(*func_it->second), std::move(args)));
+                    // Разбираем случай вызова свободной функции общего, т.е. программно определяемого типа.
+                    return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction*>(&(*func_it->second)), std::move(args)));
 
+                // Наконец, если случай не относится ни к одному из рассмотренных выше, это может быть вызов свободной функции, которая пока не определена
+                // (но может быть определена позже), или вызов объекта функционального класса.
+                return exec_factory_.Create(ast::FreeFunctionCall(method_name, std::move(args)));
+                /*
                 exec_factory_.ThrowParseError
                     (ThrowMessages::ConstructThrowText("%1 - "s + method_name + "()"s, {ThrowMessageNumber::THRM_METHOD_NOT_FOUND}));
+                */
             }
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
         }

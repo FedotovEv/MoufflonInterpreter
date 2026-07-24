@@ -342,6 +342,11 @@ namespace runtime
         return method_func_.name;
     }
 
+    size_t FreeFunction::GetArgCount() const
+    {
+        return method_func_.formal_params.size();
+    }
+
     bool FreeFunction::IsCoroutine() const
     {
         return method_func_.is_coroutine;
