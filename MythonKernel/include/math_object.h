@@ -1,6 +1,8 @@
 
 #pragma once
 
+extern std::vector<SingleByteEncodingDesc> encodings_data;
+
 class MathInstance : public CommonClassInstance
 { // Экземпляр "математического класса" - специального встроенного объекта с предопределенным
   // набором методов - коллекции математических функций.
@@ -119,6 +121,8 @@ public:
                                                              для целых чисел), а также формы представления и точности для чисел дробных (base_value и double_precision).
      * not_found() - метод без аргументов, всегда возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске (найти
      *               искомый образец не удалось).
+     // Работа с кодировками строк (представлениями типографских строк в различных возмоможных кодировках).
+     // Все выше описанные методы рассматривали строки как набор байтов (последовательность "узких", однобайтовых символов) и обрабатывали эти байты "как есть" 
      */
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
@@ -135,10 +139,16 @@ private:
 
     int last_to_number_error_ = 0;      // Ошибка, возникшая при последнем to_number().
     int last_to_number_length_ = 0;     // Длина фрагмента, использованного при последнем to_number().
+    uint32_t last_unicode_ = 0;         // Последний Юникод, полученный при выполнении некоторых операций над многобайтовыми строками.
 
+    // Вспомогательные приватные методы.
     // Функция извлечения пары параметров подстроки - начального её индекса и длины.
     std::pair<size_t, size_t> ExtractPosSize
         (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const std::string& arg_str, Context& context);
+    // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
+    int CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const;
+    // Строит карту расположения UTF-8-кодов в строке parse_str.
+    runtime::String::UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
 
     // Функция обобщённого поиска подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
     // поисковой функцией find_func.
@@ -177,4 +187,25 @@ private:
     ObjectHolder MethodToNumberLength(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodToNumberError(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodToString(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // Методы обработки МУФЛОНОстрок с учётом их кодировки (как различных однобайтовых, так и многобайтовой UTF-8).
+    ObjectHolder MethodGetEncoding(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodSetEncoding(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodCompare(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodEncTranscode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodToIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodFromIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // Методы безусловного возврата некоторых констант, используемых другими методами данного класса. Заменяют собой поля,
+    // для встроенных классов недоступные.
+    ObjectHolder MethodUTF8EncodingID(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodNoneEncodingID(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // Методы установки соответствия между многобайтовыми UTF-8-символами и их однобайтовыми последовательностями в составе МУФЛОНОстроки.
+      // Возврат положения (порядкового индекса) указанного UTF-8 символа в строке UTF-8.
+    ObjectHolder MethodMbSymPos(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+      // Возврат размера в байтах указанного UTF-8 символа в UTF-8-закодированной строке.
+    ObjectHolder MethodMbSymSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+      // Возврат размера в байтах некоторого UTF-8 символа, чьё представление начинается с указанной байтовой позиции (порядкового индекса).
+    ObjectHolder MethodMbSymSizeAtPos(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+      // Возврат Юникода последнего UTF-8 символа, который был обработан некоторыми операциями над многобайтовыми
+      // строками (в частности, методом MethodMbSymSizeAtPos()).
+    ObjectHolder MethodLastMbSymCode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
 };

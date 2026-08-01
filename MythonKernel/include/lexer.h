@@ -13,66 +13,66 @@ namespace parse
     namespace token_type
     {
         struct NumberInt
-        {  // Лексема «целое число»
-            int value;   // число
+        {  // Лексема «целое число».
+            int value;   // Целое число.
         };
 
         struct NumberDouble
-        {  // Лексема «число с плавающей точкой»
-            double value;   // число
+        {  // Лексема «число с плавающей точкой».
+            double value;   // Дробное число.
         };
 
         struct Id
-        {  // Лексема «идентификатор»
-            std::string value;  // Имя идентификатора
+        {  // Лексема «идентификатор».
+            std::string value;  // Имя идентификатора.
         };
 
         struct Char
-        {    // Лексема «символ»
-            char value;  // код символа
+        {    // Лексема «символ».
+            char value;  // Код символа.
         };
 
         struct String
-        {  // Лексема «строковая константа»
-            std::string value;
+        {  // Лексема «строковая константа».
+            std::string value;  // Тело строки.
         };
 
-        struct Class {};     // Лексема «class»
-        struct Return {};    // Лексема «return»
-        struct CoYield {};   // Лексема «co_yield»
-        struct ReturnRef {}; // Лексема «return_ref»
-        struct CoYieldRef {};// Лексема «co_yield_ref»
-        struct CoAwait {};   // Лексема «co_await»
-        struct If {};        // Лексема «if»
-        struct Elif {};      // Лексема «elif»
-        struct Else {};      // Лексема «else»
-        struct While {};     // Лексема "while"
-        struct Break {};     // Лексема "break"
-        struct Continue {};  // Лексема "continue"
-        struct Pass {};      // Лексема "pass"
-        struct Del {};       // Лексема "del"
+        struct Class {};        // Лексема «class»
+        struct Return {};       // Лексема «return»
+        struct CoYield {};      // Лексема «co_yield»
+        struct ReturnRef {};    // Лексема «return_ref»
+        struct CoYieldRef {};   // Лексема «co_yield_ref»
+        struct CoAwait {};      // Лексема «co_await»
+        struct If {};           // Лексема «if»
+        struct Elif {};         // Лексема «elif»
+        struct Else {};         // Лексема «else»
+        struct While {};        // Лексема "while"
+        struct Break {};        // Лексема "break"
+        struct Continue {};     // Лексема "continue"
+        struct Pass {};         // Лексема "pass"
+        struct Del {};          // Лексема "del"
         // Лексемы обслуживания системы обработки исключений.
-        struct Try {};       // Лексема "try"
-        struct Except {};    // Лексема "except"
-        struct Finally {};   // Лексема "finally"
-        struct As {};        // Лексема "as"
-        struct Raise {};     // Лексема "raise"
+        struct Try {};          // Лексема "try"
+        struct Except {};       // Лексема "except"
+        struct Finally {};      // Лексема "finally"
+        struct As {};           // Лексема "as"
+        struct Raise {};        // Лексема "raise"
         //
-        struct Def {};       // Лексема «def»
-        struct Newline {};   // Лексема «конец строки»
-        struct Print {};     // Лексема «print»
-        struct Import {};    // Лексема «import»
-        struct Include {};   // Лексема «include»
-        struct Indent {};    // Лексема «увеличение отступа», соответствует двум пробелам
-        struct Dedent {};    // Лексема «уменьшение отступа»
-        struct Eof {};       // Лексема «конец файла»
-        struct And {};       // Лексема «and»
-        struct Or {};        // Лексема «or»
-        struct Not {};       // Лексема «not»
-        struct Xor {};       // Лексема «xor»
-        struct Eq {};        // Лексема «==»
-        struct NotEq {};     // Лексема «!=»
-        struct LessOrEq {};  // Лексема «<=»
+        struct Def {};          // Лексема «def»
+        struct Newline {};      // Лексема «конец строки»
+        struct Print {};        // Лексема «print»
+        struct Import {};       // Лексема «import»
+        struct Include {};      // Лексема «include»
+        struct Indent {};       // Лексема «увеличение отступа», соответствует двум пробелам
+        struct Dedent {};       // Лексема «уменьшение отступа»
+        struct Eof {};          // Лексема «конец файла»
+        struct And {};          // Лексема «and»
+        struct Or {};           // Лексема «or»
+        struct Not {};          // Лексема «not»
+        struct Xor {};          // Лексема «xor»
+        struct Eq {};           // Лексема «==»
+        struct NotEq {};        // Лексема «!=»
+        struct LessOrEq {};     // Лексема «<=»
         struct GreaterOrEq {};  // Лексема «>=»
         struct ShiftLeft {};    // Лексема «<<»
         struct ShiftRight {};   // Лексема «>>»

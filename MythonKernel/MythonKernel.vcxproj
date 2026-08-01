@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\debug_context.cpp" />
+    <ClCompile Include="src\encodings.cpp" />
     <ClCompile Include="src\error_classes.cpp" />
     <ClCompile Include="src\lexer.cpp" />
     <ClCompile Include="src\lexer_test_open.cpp" />
@@ -37,6 +38,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\declares.h" />
+    <ClInclude Include="include\encodings.h" />
     <ClInclude Include="include\error_classes.h" />
     <ClInclude Include="include\lexer.h" />
     <ClInclude Include="include\math_object.h">

@@ -73,9 +73,30 @@ public:
         return "array";
     }
 
+    // Набор публичных методов для прямого доступа к элементам массива.
+    // Получение количества измерений массива.
+    [[nodiscard]] size_t GetArrayDimensions() const
+    {
+        return elements_count_.size();
+    }
+    // Получение количества элементов в размерности dimension_number (базируется к единице!).
+    [[nodiscard]] size_t GetDimensionCount(size_t dimension_number) const;
+    // Получение полного (абсолютного) количества элементов массива.
+    [[nodiscard]] size_t GetAbsoluteElementsCount() const;
+    // Извлечение элемента массива по набору его индексов.
+    [[nodiscard]] ObjectHolder GetElement(const std::vector<size_t>& indexes) const;
+    // Извлечение элемента массива по его абсолютному индексу (отсчитывается от нуля).
+    [[nodiscard]] ObjectHolder GetElement(size_t absolute_element_index) const;
+    // Установка элемента массива, адресуемого по набору его индексов.
+    ObjectHolder SetElement(const std::vector<size_t>& indexes, ObjectHolder value);
+    // Установка элемента массива по его абсолютному индексу (отсчитывается от нуля).
+    ObjectHolder SetElement(size_t absolute_element_index, ObjectHolder value);
+
 private:
     static const std::unordered_map<std::string_view, ArrayCallMethod> array_method_table_;
     static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> array_method_argument_count_;
+
+    std::optional<size_t> CountAbsoluteElementIndex(const std::vector<size_t>& indexes) const;
 
     // Обработчики методов класса "массив"
     ObjectHolder MethodGet(const std::string& method, const std::vector<ObjectHolder>& actual_args,

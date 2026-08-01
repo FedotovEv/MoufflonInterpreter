@@ -3,6 +3,7 @@
 #include "parse.h"
 #include "throw_messages.h"
 #include "error_classes.h"
+#include "encodings.h"
 
 #include <cassert>
 #include <optional>
@@ -424,12 +425,47 @@ namespace runtime
         return {arg_pos, arg_count};
     }
 
+    // Считывание идента (номера) кодировки из контейнера encoding_holder с последующей проверкой его корректности.
+    int StringOpsInstance::CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const
+    {
+        const runtime::Number* arg_encoding = encoding_holder.TryAs<runtime::Number>(); // Массив-источник данных строки.
+        if (!arg_encoding)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Индекс кодировки должен быть численным");
+        int encoding_id = arg_encoding->GetIntValue();
+        if (encoding_id != NON_INDEXED_ENCODING_ID && encoding_id != NO_ENCODING_ID && encoding_id != UTF_8_ENCODING_ID)
+        {
+            if (encoding_id < 1 || encoding_id > static_cast<int>(encodings_data.size()))
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Индекс кодировки вне допустимого диапазона");
+        }
+        return encoding_id;
+    }
+
+    // Генерация карты размещения многобайтовых UTF-8-кодов в пределах однобайтовой строки (потока байтов) parse_str.
+    runtime::String::UTF8Map StringOpsInstance::BuildUTF8Map(const std::string& parse_str, size_t max_elem_count) const
+    {
+        runtime::String::UTF8Map result_map;
+        size_t symb_pos = 0;
+        while (symb_pos < parse_str.size())
+        {
+            result_map.begin_map.push_back(symb_pos);
+            std::pair<uint32_t, size_t> conv_result = ConvSymbFromUTF8(parse_str, symb_pos);
+            result_map.last_symbol_size = conv_result.second;
+
+            if (!conv_result.second || result_map.begin_map.size() >= max_elem_count)
+                break;  // Ошибка при выделении очередного UTF-8-кода или нужный символ при построении ограниченной карты достигнут.
+
+            symb_pos += conv_result.second;
+        }
+
+        return result_map;
+    }
+
     // Обобщённый поиск подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой поисковой функцией find_func.
     ObjectHolder StringOpsInstance::MethodCommonFind
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos, CommonFindFunc find_func)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, method, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
         if (actual_args.size() > 3) // Допускается от 2 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод " + method + " может принимать 2 или 3 параметра");
@@ -477,8 +513,8 @@ namespace runtime
     // начиная с позиции arg_pos в ней.
     ObjectHolder StringOpsInstance::MethodAppend(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Append"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
         if (actual_args.size() > 4) // Допускается от 2 до 4 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод append может принимать от 2 до 4 параметров");
@@ -495,8 +531,8 @@ namespace runtime
     // начиная с символа с индексом arg_pos.
     ObjectHolder StringOpsInstance::MethodSubstr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Substr"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
@@ -640,8 +676,8 @@ namespace runtime
     // erase(arg_str, arg_pos, arg_length) - удаление arg_length символов из строки arg_str, начиная с положения arg_pos в ней.
     ObjectHolder StringOpsInstance::MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Erase"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
         if (actual_args.size() > 3) // Допускается от 1 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Erase может принимать от 1 до 3 параметров");
@@ -677,8 +713,8 @@ namespace runtime
     // replicate(arg_str, arg_count) - конструирование строки из arg_count копий строки arg_str.
     ObjectHolder StringOpsInstance::MethodReplicate(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Replicate"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
         if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Replicate может принимать 1 или 2 параметра");
@@ -716,8 +752,8 @@ namespace runtime
     // asc(arg_str, arg_pos) - получение ASCII-кода символа строки arg_str, находящегося в позиции arg_pos.
     ObjectHolder StringOpsInstance::MethodAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Asc"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
         if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Asc может принимать 1 или 2 параметра");
@@ -761,8 +797,8 @@ namespace runtime
     // представляющего некоторое число в base_value - ичной системе счисления.
     ObjectHolder StringOpsInstance::MethodToNumber(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
-            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ & MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "ToNumber"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
         if (actual_args.size() > 3) // Допускается от 1 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод ToNumber может принимать от 1 до 3 параметров");
@@ -912,6 +948,355 @@ namespace runtime
                               "ToString : ошибка конверсии - " + std::to_string(static_cast<int>(conv_result.ec)));
         // Преобразование совершилось без ошибок - возвращаем его результат.
         return ObjectHolder::Own(runtime::String(temp_buffer.substr(0, conv_result.ptr - temp_buffer.data())));
+    }
+
+    // Получение кодировки, установленной для текстового (строкового) значения.
+    ObjectHolder StringOpsInstance::MethodGetEncoding(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "GetEncoding"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_STRING, 1, actual_args);  // Единственный аргумент - строка для извлечения кодировки.
+
+        const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        if (arg_input_str->encoding == nullptr)
+            return ObjectHolder::Own(runtime::Number(NO_ENCODING_ID));      // Кодировка не установлена.
+        if (arg_input_str->encoding == UTF_8_ENCODING)
+            return ObjectHolder::Own(runtime::Number(UTF_8_ENCODING_ID));   // Используется UTF-8.
+
+        auto encodings_data_it = std::find_if(encodings_data.begin(), encodings_data.end(),
+            [arg_input_str](const SingleByteEncodingDesc& encoding_desc) -> bool
+            {
+                return arg_input_str->encoding == &encoding_desc;
+            });
+        if (encodings_data_it != encodings_data.end())
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(encodings_data_it - encodings_data.begin() + 1)));
+
+        return ObjectHolder::Own(runtime::Number(NON_INDEXED_ENCODING_ID));  // Установлена сторонняя, неиндексируемая кодировка.
+    }
+    
+    // Назначение кодировки для текстового значения.
+    ObjectHolder StringOpsInstance::MethodSetEncoding(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        // Первый аргумент - строка для назначения кодировки, второй аргумент - собственно, сама желаемая кодировка в виде её условного численного идентификатора.
+        CheckMethodParams(context, "SetEncoding"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод SetEncoding может принимать 1 или 2 параметра");
+
+        runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        int set_encoding_id = NO_ENCODING_ID;
+        if (actual_args.size() > 1)
+            set_encoding_id = CheckEncodingID(actual_args[1], context);
+
+        if (set_encoding_id == NON_INDEXED_ENCODING_ID || set_encoding_id == NO_ENCODING_ID)
+        { // Устанавливается бескодировочный режим.
+            arg_input_str->encoding = nullptr;
+            arg_input_str->utf8_map.Clear();
+            set_encoding_id = NO_ENCODING_ID;
+        }
+        else if (set_encoding_id == UTF_8_ENCODING_ID)
+        { // Включается многобайтовое представление UTF-8.
+            arg_input_str->encoding = UTF_8_ENCODING;
+            arg_input_str->utf8_map = BuildUTF8Map(arg_input_str->GetValue());
+        }
+        else
+        { // Назначается некоторая однобайтовая кодировка.
+            arg_input_str->encoding = &encodings_data[set_encoding_id - 1];
+            arg_input_str->utf8_map.Clear();
+        }
+
+        return ObjectHolder::Own(runtime::Number(set_encoding_id));
+    }
+
+    // Метод сравнения строк с явным указанием кодировки или величин сравнительных весов символов.
+    ObjectHolder StringOpsInstance::MethodCompare(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+
+    }
+
+    // Перекодировка строк из одной кодировки в другую. Целевая кодировка выбирается указанием её условного номера вторым параметром метода.
+    ObjectHolder StringOpsInstance::MethodEncTranscode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+
+    }
+
+    // Метод преобразует строку (свой первый аргумент) в массив целых чисел, каждый элемент которого равен коду соответствующего символа входной строки.
+    // Для однобайтовых строк преобразование осуществляется прямо - "каждый байт в значение очередного элемента".
+    // Для строк в кодировке UTF-8 каждый элемент массива устанавливается равным очередному многобайтовому Юникоду, выделенному из строки-аргумента.
+    // Можно явно указать один из этих двух способов преобразования (независимо от кодировки входной строки) с помощью необязательного второго аргумента
+    // метода. Если он имеется и равен True, то всегда применяется UTF-8-конверсия. Если же он есть и равен False, всегда используется побайтовое
+    // преобразование.
+    ObjectHolder StringOpsInstance::MethodToIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        CheckMethodParams(context, "ToIntArray"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается от 1 до 2 параметров (включительно).
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод ToIntArray может принимать от 1 до 2 параметров");
+
+        const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        bool is_from_utf8 = arg_input_str->encoding == UTF_8_ENCODING;
+        const std::string& arg_input_std = arg_input_str->GetValue();
+
+        if (actual_args.size() > 1) // Есть аргумент, явно указывающий "кодировочный" режим работы метода.
+            is_from_utf8 = runtime::IsTrue(actual_args[1]);
+
+        std::vector<uint32_t> output_codes;
+        size_t input_str_pos = 0;
+        while (input_str_pos < arg_input_std.size())
+        {
+            if (is_from_utf8)
+            { // Входная строка имеет UTF-8-кодировку.
+                std::pair<uint32_t, size_t> from_utf8_result = ConvSymbFromUTF8(arg_input_std, input_str_pos);
+                if (from_utf8_result.second == 0)
+                { // Ошибка извлечения из входной строки очередного UTF-8-юникода.
+                    std::string err_mess =
+                        ThrowMessages::ConstructThrowText("%1"s + std::to_string(input_str_pos), {ThrowMessageNumber::THRM_UTF8_EXTRACT_ERROR});
+                    ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, err_mess);
+                }
+                output_codes.push_back(from_utf8_result.first);
+                input_str_pos += from_utf8_result.second;
+            }
+            else
+            { // Входная строка использует какую-либо однобайтовую кодировку.
+                output_codes.push_back(static_cast<uint32_t>(arg_input_std[input_str_pos++]));
+            }
+        }
+
+        runtime::ArrayInstance output_arr({static_cast<int>(output_codes.size())});
+        for (size_t i = 0; i < output_codes.size(); ++i)
+            output_arr.SetElement(i, ObjectHolder::Own(runtime::Number(static_cast<int>(output_codes[i]))));
+
+        return ObjectHolder::Own(move(output_arr));
+    }
+
+    // Конструирует строку из целочисленного массива. Второй необязательный аргумент - желаемая кодировка. Если он не указан, кодировка определяется
+    // автоматически по следующему принципу: если все значения массива лежат в закрытом диапазоне [0; 255], то создаётся однобайтовая строка без назначенной
+    // кодировки. Если же хоть один элемент массива выходит за этот диапазон, то сконструированная строка будет иметь многобайтовую кодировку типа UTF-8.
+    ObjectHolder StringOpsInstance::MethodFromIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "FromIntArray"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ,
+                          MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается от 1 до 2 параметров (включительно).
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод FromIntArray может принимать от 1 до 2 параметров");
+
+        runtime::ArrayInstance* arg_src_array = actual_args[0].TryAs<runtime::ArrayInstance>(); // Массив-источник данных строки.
+        if (!arg_src_array)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Первый параметр должен быть массивом Array");
+        size_t arg_elems_count = arg_src_array->GetAbsoluteElementsCount();
+
+        int encoding_id = 0;
+        bool to_utf8_enc, enc_auto_select = actual_args.size() == 1;
+        if (!enc_auto_select)
+        { // Кодировка явно специфицирована вторым аргументом метода.
+            encoding_id = CheckEncodingID(actual_args[1], context);
+            if (encoding_id == NON_INDEXED_ENCODING_ID)
+                // Указанный номер кодировки == NON_INDEXED_ENCODING_ID. Это также воспримем как требование выбрать выходную кодировку самостоятельно.
+                enc_auto_select = true;
+            else if (encoding_id == UTF_8_ENCODING_ID)            
+                to_utf8_enc = true; // Явно требуется породить UTF-8-строку.
+            else
+                to_utf8_enc = false;  // Явно указана необходимость использовать однобайтовую кодировку.
+        }
+
+        if (enc_auto_select)
+        { // Требуется выбрать целевую кодировку (UTF-8 или однобайтовую) автоматически.
+            encoding_id = 0;
+            to_utf8_enc = false;
+            for (size_t i = 0; i < arg_elems_count; ++i)
+            {
+                const runtime::Number* arg_elem_i = arg_src_array->GetElement(i).TryAs<runtime::Number>();
+                if (!arg_elem_i)
+                    continue;
+                int arg_elem_value = arg_elem_i->GetIntValue();
+                if (arg_elem_value < 0 || arg_elem_value > 255)
+                    to_utf8_enc = true;
+            }
+        }
+
+        // Итак, целевая кодировка выбрана. Можно перейти к непосредственной генерации строки-результата.
+        std::string result_str;
+        runtime::String::UTF8Map utf8_map;
+        for (size_t i = 0; i < arg_elems_count; ++i)
+        {
+            const runtime::Number* arg_elem_i = arg_src_array->GetElement(i).TryAs<runtime::Number>();
+            if (!arg_elem_i)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Массив должен быть полностью числовым");
+            int arg_elem_value = arg_elem_i->GetIntValue();
+            if (to_utf8_enc)
+            { // Создаём строку из многобайтовых UTF-8-кодов.
+                utf8_map.begin_map.push_back(result_str.size());  // Параллельно с формированием строки ведём также карту расположения в ней UTF-8-кодов.
+                std::string next_utf8_seq = ConvSymbToUTF8(static_cast<uint32_t>(arg_elem_value));
+                utf8_map.last_symbol_size = next_utf8_seq.size();
+                if (next_utf8_seq.size() > MAX_UNICODE_LENGTH)
+                    ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, "Код UTF-8 превышает максимальную длину");
+
+                result_str += next_utf8_seq;
+            }
+            else
+            { // Формируем однобайтовую строку.
+                result_str += static_cast<char>(max(0, min(arg_elem_value, 255)));
+            }
+        }
+
+        runtime::String moufflon_result_str(std::move(result_str));
+        // Установим для возвращаемой строки кодировочную информацию.
+        if (to_utf8_enc)
+        {
+            moufflon_result_str.encoding = UTF_8_ENCODING;
+            moufflon_result_str.utf8_map = std::move(utf8_map);
+        }
+        else if (encoding_id)
+        {
+            moufflon_result_str.encoding = &encodings_data[static_cast<size_t>(encoding_id) - 1];
+        }
+
+        return ObjectHolder::Own(move(moufflon_result_str));
+    }
+    
+    // -------- Методы установки соответствия между многобайтовыми UTF-8-символами и их однобайтовыми последовательностями в составе МУФЛОНОстроки.
+
+    // Два следующих метода служат для получения информации из карты расположения UTF-8-кодов в UTF-8-кодированных строках.
+    // Возврат положения (порядкового индекса) указанного UTF-8 символа в строке UTF-8. Возвращённый индекс - это положение стартового байта
+    // UTF-8-кода запрошенного UTF-8-символа во входной строке, если рассматривать её как простой поток байтов.
+    ObjectHolder StringOpsInstance::MethodMbSymPos(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        CheckMethodParams(context, "MbSymPos"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод MbSymPos может принимать 1 или 2 параметра");
+
+        const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        const std::string& arg_input_std = arg_input_str->GetValue();
+        size_t symbol_index = 0;
+        if (actual_args.size() > 1)
+        {
+            if (const runtime::Number* arg_set_encoding = actual_args[1].TryAs<runtime::Number>())
+                symbol_index = static_cast<size_t>(arg_set_encoding->GetIntValue());
+            else
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
+        }
+
+        runtime::String::UTF8Map unibytes_utf8_map;
+        const std::vector<size_t>* use_utf8_begin_map;
+        if (arg_input_str->encoding == UTF_8_ENCODING)
+        { // Это UTF-8-строка, она имеет готовую карту расположения кодов внутри неё.
+            use_utf8_begin_map = &(arg_input_str->utf8_map.begin_map);
+        }
+        else
+        { // Это однобайтовая строка, она такой карты не имеет и её нужно предварительно построить.
+            unibytes_utf8_map = BuildUTF8Map(arg_input_std, symbol_index + 1);
+            use_utf8_begin_map = &(unibytes_utf8_map.begin_map);
+        }
+
+        if (symbol_index < use_utf8_begin_map->size())
+            return ObjectHolder::Own(runtime::Number(static_cast<int>((*use_utf8_begin_map)[symbol_index])));
+        else
+            return ObjectHolder::Own(runtime::Number(-1));
+    }
+    
+    // Возврат размера в байтах указанного UTF-8 символа (размера его многобайтового UTF-8-кода) в UTF-8-закодированной строке.
+    ObjectHolder StringOpsInstance::MethodMbSymSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        CheckMethodParams(context, "MbSymSize"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод MbSymSize может принимать 1 или 2 параметра");
+
+        const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        const std::string& arg_input_std = arg_input_str->GetValue();
+        size_t symbol_index = 0;
+        if (actual_args.size() > 1)
+        {
+            if (const runtime::Number* arg_set_encoding = actual_args[1].TryAs<runtime::Number>())
+                symbol_index = static_cast<size_t>(arg_set_encoding->GetIntValue());
+            else
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
+        }
+
+        runtime::String::UTF8Map unibytes_utf8_map;
+        const runtime::String::UTF8Map* use_utf8_map;
+        if (arg_input_str->encoding == UTF_8_ENCODING)
+        { // Это UTF-8-строка, она имеет готовую карту расположения кодов внутри неё.
+            use_utf8_map = &(arg_input_str->utf8_map);
+        }
+        else
+        { // Это однобайтовая строка, она такой карты не имеет и её нужно предварительно построить.
+            unibytes_utf8_map = BuildUTF8Map(arg_input_std, symbol_index + 1);
+            use_utf8_map = &unibytes_utf8_map;
+        }
+
+        size_t next_symbol_index = symbol_index + 1;
+        if (symbol_index < use_utf8_map->begin_map.size() && next_symbol_index < use_utf8_map->begin_map.size())
+            // Доступны запрошенный и следующий за ним символ.
+            return ObjectHolder::Own(runtime::Number
+                (static_cast<int>(use_utf8_map->begin_map[next_symbol_index] - use_utf8_map->begin_map[symbol_index])));
+        else if (symbol_index < use_utf8_map->begin_map.size())
+            // Запрошенный символ последний в строке.
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(use_utf8_map->last_symbol_size)));
+        else // Запрошенного символа в строке не существует.
+            return ObjectHolder::Own(runtime::Number(0));            
+    }
+
+    // Возврат размера в байтах некоторого UTF-8 символа, чьё представление начинается с указанной байтовой позиции (порядкового индекса).
+    // Этот индекс есть именно байтовая позиция, то есть при её вычислении строка вне зависимости от её кодировки рассматривается как простая
+    // неструктурированная последовательность байтов.
+    ObjectHolder StringOpsInstance::MethodMbSymSizeAtPos(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
+            (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
+        CheckMethodParams(context, "MbSymSizeAtPos"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
+        if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод MbSymSizeAtPos может принимать 1 или 2 параметра");
+
+        const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
+        const std::string& input_str = arg_input_str->GetValue();
+
+        size_t symbol_pos = 0;
+        if (actual_args.size() > 1)
+        {
+            if (const runtime::Number* arg_set_encoding = actual_args[1].TryAs<runtime::Number>())
+                symbol_pos = static_cast<size_t>(arg_set_encoding->GetIntValue());
+            else
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
+        }
+        if (symbol_pos >= input_str.size())
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Указанное положение находится за пределами строки");
+
+        std::pair<uint32_t, size_t> conv_result_pair = ConvSymbFromUTF8(input_str, symbol_pos);
+        last_unicode_ = conv_result_pair.first;
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(conv_result_pair.second)));
+    }
+
+    // -------- 
+
+    // Возврат Юникода последнего UTF-8 символа, который был обработан некоторыми операциями над многобайтовыми строками (в частности,
+    // методом MethodMbSymSizeAtPos()).
+    ObjectHolder StringOpsInstance::MethodLastMbSymCode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "FromIntArray"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(last_unicode_)));
+    }
+
+    // Возврат константного условного номера кодировки, соответствующего UTF-8-представлению строк.
+    ObjectHolder StringOpsInstance::MethodUTF8EncodingID(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "FromIntArray"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+
+        return ObjectHolder::Own(runtime::Number(UTF_8_ENCODING_ID));
+    }
+
+    // Возврат константного условного номера кодировки, соответствующего её отсутствию (неназначенной кодировке).
+    ObjectHolder StringOpsInstance::MethodNoneEncodingID(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    {
+        CheckMethodParams(context, "FromIntArray"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
+                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
+
+        return ObjectHolder::Own(runtime::Number(NO_ENCODING_ID));
     }
 
     void StringOpsInstance::Print(std::ostream& os, Context& context)

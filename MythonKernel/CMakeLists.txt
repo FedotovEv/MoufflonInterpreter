@@ -47,7 +47,8 @@ set(LOC_KERNEL_MODULES_FILES
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/special_objects.cpp
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/statement.cpp
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/debug_context.cpp
-    ${LOC_KERNEL_MODULEs_SOURCE_DIR}/throw_messages.cpp)
+    ${LOC_KERNEL_MODULEs_SOURCE_DIR}/throw_messages.cpp
+    ${LOC_KERNEL_MODULEs_SOURCE_DIR}/encodings.cpp)
 
 set(TEST_MODULES_FILES
     ${LOC_KERNEL_MODULEs_SOURCE_DIR}/main.cpp

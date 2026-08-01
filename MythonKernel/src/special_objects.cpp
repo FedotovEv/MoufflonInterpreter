@@ -311,6 +311,84 @@ namespace runtime
             os << ':' << elements_count_[i];
     }
 
+    // Получение количества элементов в размерности dimension_number (базируется к единице!).
+    size_t ArrayInstance::GetDimensionCount(size_t dimension_number) const
+    {
+        if (dimension_number >= 1 && dimension_number <= elements_count_.size())
+            return static_cast<size_t>(elements_count_[dimension_number - 1]);
+        else
+            return 0;
+    }
+    
+    // Получение полного (абсолютного) количества элементов массива.
+    size_t ArrayInstance::GetAbsoluteElementsCount() const
+    {
+        if (!elements_count_.size())
+            return 0;   // Массив пуст.
+
+        size_t absolute_element_count = 1;
+        for (size_t current_index_num = 0; current_index_num < elements_count_.size(); ++current_index_num)
+            absolute_element_count *= static_cast<size_t>(elements_count_[current_index_num]);
+        return absolute_element_count;
+    }
+    
+    // Извлечение элемента массива по набору его индексов.
+    ObjectHolder ArrayInstance::GetElement(const std::vector<size_t>& indexes) const
+    {
+        std::optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
+        if (absolute_element_index)
+            return data_storage_[absolute_element_index.value()];
+        else
+            return {};
+    }
+    
+    // Извлечение элемента массива по его абсолютному индексу (отсчитывается от нуля).
+    ObjectHolder ArrayInstance::GetElement(size_t absolute_element_index) const
+    {
+        if (absolute_element_index >= elements_count_.size())
+            return {};   // Массив пуст или абсолютный индекс затребованного элемента превышает допустимый.
+
+        return data_storage_[absolute_element_index];
+    }
+
+    // Установка элемента массива, адресуемого по набору его индексов.
+    ObjectHolder ArrayInstance::SetElement(const std::vector<size_t>& indexes, ObjectHolder value)
+    {
+        std::optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
+        if (absolute_element_index)
+        {
+            data_storage_[absolute_element_index.value()] = move(value);
+            return data_storage_[absolute_element_index.value()];
+        }
+        return {};
+    }
+
+    // Установка элемента массива по его абсолютному индексу (отсчитывается от нуля).
+    ObjectHolder ArrayInstance::SetElement(size_t absolute_element_index, ObjectHolder value)
+    {
+        if (absolute_element_index >= elements_count_.size())
+            return {};   // Массив пуст или абсолютный индекс затребованного элемента превышает допустимый.
+
+        data_storage_[absolute_element_index] = move(value);
+        return data_storage_[absolute_element_index];
+    }
+
+    // Расчёт абсолютного индекса (индекса положения в линейном хранилище ) элемента, адресуемого набором своих разхмерных индексов.
+    std::optional<size_t> ArrayInstance::CountAbsoluteElementIndex(const std::vector<size_t>& indexes) const
+    {
+        size_t absolute_element_index = 0;
+        for (size_t current_index_num = 0; current_index_num < elements_count_.size(); ++current_index_num)
+        {
+            size_t current_index_value = indexes[current_index_num];
+            if (current_index_value >= static_cast<size_t>(elements_count_[current_index_num]))
+                return {};  // Индекс больше величины соответствующего измерения массива.
+            if (current_index_num > 0)
+                absolute_element_index *= static_cast<size_t>(elements_count_[current_index_num - 1]);
+            absolute_element_index += current_index_value;
+        }
+        return absolute_element_index;
+    }
+
     ObjectHolder ArrayInstance::MethodGet(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                           Context& context)
     {
