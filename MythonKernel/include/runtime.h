@@ -86,7 +86,7 @@ namespace runtime
         virtual ~Object() = default;
         virtual size_t SizeOf() const = 0;
         virtual const void* GetPtr() const = 0;
-        // выводит в os своё представление в виде строки
+        // Выводит в os своё представление в виде строки.
         virtual void Print(std::ostream& os, Context& context) = 0;
     };
 
@@ -316,19 +316,13 @@ namespace runtime
     class String : public ValueObject<std::string>
     {
     public:
-        struct UTF8Map
-        {
-            std::vector<size_t> begin_map;   // Положение начал многобайтовых кодов UTF-8-символов в теле однобайтовой строки.
-            size_t last_symbol_size = 0;     // Длина последнего кода в строке.
-
-            void Clear()
-            {
-                begin_map.clear();
-                last_symbol_size = 0;
-            }
-        };
-
         using ValueObject<std::string>::ValueObject;
+
+        String(const String& other) = default;
+        String(String&& other) = default;
+        // Введём также операторы присваивания - в некоторых случаях они также могут быть нам полезны.
+        String& operator=(const String& other) = default;
+        String& operator=(String&& other) = default;
 
         const void* GetPtr() const
         {
@@ -377,8 +371,11 @@ namespace runtime
         Number(double v) : value_(v)
         {}
 
-        Number(const Number&) = default;
-        Number(Number&&) = default;
+        Number(const Number& other) = default;
+        Number(Number&& other) = default;
+        // Для этого класса введём также операторы присваивания - в некоторых случаях они также могут быть нам полезны.
+        Number& operator=(const Number& other) = default;
+        Number& operator=(Number&& other) = default;
 
         void Print(std::ostream& os, [[maybe_unused]] Context& context) override;
 

@@ -9,6 +9,9 @@ static constexpr size_t MAX_BITS_IN_START_BYTE = 5;		// Максимальное
 static constexpr size_t BITS_PER_CONTINUE_BYTE = 6;		// Число значащих бит в "байте продолжения" UTF-8-кода.
 static constexpr char CONTINUE_BYTE_DATAMASK = 0x3f;	// Маска области данных (значащей области) "байта продолжения".
 
+const std::vector<std::pair<char, char>> empty_upcase_table;
+const std::string empty_collate;
+
 // Тривиальная таблица сравнительных весов символов, в которой каждый символ имеет вес, равный его коду.
 const std::string std_collate
 {
@@ -20,6 +23,75 @@ const std::string std_collate
 	"\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\xbf"
 	"\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf\xd0\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf"
 	"\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff"s
+};
+
+// Таблица преобразования в Юникод для стандартной полной 8-битовой таблицы ASCII. Будет использоваться и в том случае, если кодировка
+// строки не определена, но такая таблица необходима.
+const std::vector<uint32_t> std_to_utf8
+{
+	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
+	0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017, 0x0018, 0x0019, 0x001a, 0x001b, 0x001c, 0x001d, 0x001e, 0x001f,
+	0x0020, 0x0021, 0x0022, 0x0023, 0x0024, 0x0025, 0x0026, 0x0027, 0x0028, 0x0029, 0x002a, 0x002b, 0x002c, 0x002d, 0x002e, 0x002f,
+	0x0030, 0x0031, 0x0032, 0x0033, 0x0034, 0x0035, 0x0036, 0x0037, 0x0038, 0x0039, 0x003a, 0x003b, 0x003c, 0x003d, 0x003e, 0x003f,
+	0x0040, 0x0041, 0x0042, 0x0043, 0x0044, 0x0045, 0x0046, 0x0047, 0x0048, 0x0049, 0x004a, 0x004b, 0x004c, 0x004d, 0x004e, 0x004f,
+	0x0050, 0x0051, 0x0052, 0x0053, 0x0054, 0x0055, 0x0056, 0x0057, 0x0058, 0x0059, 0x005a, 0x005b, 0x005c, 0x005d, 0x005e, 0x005f,
+	0x0060, 0x0061, 0x0062, 0x0063, 0x0064, 0x0065, 0x0066, 0x0067, 0x0068, 0x0069, 0x006a, 0x006b, 0x006c, 0x006d, 0x006e, 0x006f,
+	0x0070, 0x0071, 0x0072, 0x0073, 0x0074, 0x0075, 0x0076, 0x0077, 0x0078, 0x0079, 0x007a, 0x007b, 0x007c, 0x007d, 0x007e, 0x007f,
+	0x00c7, 0x00fc, 0x00e9, 0x00e2, 0x00e4, 0x00e0, 0x00e5, 0x00e7, 0x00ea, 0x00eb, 0x00e8, 0x00ef, 0x00ee, 0x00ec, 0x00c4, 0x00c5,
+	0x00c9, 0x00e6, 0x00c6, 0x00f4, 0x00f6, 0x00f2, 0x00fb, 0x00f9, 0x00ff, 0x00d6, 0x00dc, 0x00a2, 0x00a3, 0x00a5, 0x20a7,	0x0192,
+	0x00e1, 0x00ed, 0x00f3, 0x00fa, 0x00f1, 0x00d1, 0x00aa, 0x00ba, 0x00bf, 0x2310, 0x00ac, 0x00bd, 0x00bc, 0x00a1, 0x00ab, 0x00bb,
+	0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, 0x2555, 0x2563, 0x2551, 0x2557, 0x255d, 0x255c, 0x255b,	0x2510,
+	0x2514, 0x2534, 0x252c, 0x251c, 0x2500, 0x253c, 0x255e, 0x255f, 0x255a, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256c, 0x2567,
+	0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256b, 0x256a, 0x2518, 0x250c, 0x2588, 0x2584, 0x258c, 0x2590, 0x2580,
+	0x03b1, 0x00df, 0x0393, 0x03c0, 0x03a3, 0x03c3, 0x00b5, 0x03c4, 0x03a6, 0x0398, 0x03a9, 0x03b4, 0x221e, 0x03c6, 0x03b5, 0x2229,
+	0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, 0x00b0, 0x2219, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x25a0, 0x00a0
+};
+
+const SingleByteEncodingDesc CP437_ENC =
+{
+	.name = "CP437",
+	.upcase_table
+	{
+		// Регистровая парность для латинских букв.
+		{0x41, 0x61},
+		{0x42, 0x62},
+		{0x43, 0x63},
+		{0x44, 0x64},
+		{0x45, 0x65},
+		{0x46, 0x66},
+		{0x47, 0x67},
+		{0x48, 0x68},
+		{0x49, 0x69},
+		{0x4A, 0x6A},
+		{0x4B, 0x6B},
+		{0x4C, 0x6C},
+		{0x4D, 0x6D},
+		{0x4E, 0x6E},
+		{0x4F, 0x6F},
+		{0x50, 0x70},
+		{0x51, 0x71},
+		{0x52, 0x72},
+		{0x53, 0x73},
+		{0x54, 0x74},
+		{0x55, 0x75},
+		{0x56, 0x76},
+		{0x57, 0x77},
+		{0x58, 0x78},
+		{0x59, 0x79},
+		{0x5A, 0x7A},
+		// Регистровые пары для прочих символов второй половины таблицы ASCII.
+		{0x80, 0x87}, // LATIN CAPITAL LETTER C WITH CEDILLA - LATIN SMALL LETTER C WITH CEDILLA
+		{0x9a, 0x81}, // LATIN CAPITAL LETTER U WITH DIAERESIS - LATIN SMALL LETTER U WITH DIAERESIS
+		{0x90, 0x82}, // LATIN CAPITAL LETTER E WITH ACUTE - LATIN SMALL LETTER E WITH ACUTE
+		{0x8e, 0x84}, // LATIN CAPITAL LETTER A WITH DIAERESIS - LATIN SMALL LETTER A WITH DIAERESIS
+		{0x8f, 0x86}, // LATIN CAPITAL LETTER A WITH RING ABOVE - LATIN SMALL LETTER A WITH RING ABOVE
+		{0x92, 0x91}, // LATIN CAPITAL LIGATURE AE - LATIN SMALL LIGATURE AE
+		{0x99, 0x94}, // LATIN CAPITAL LETTER O WITH DIAERESIS - LATIN SMALL LETTER O WITH DIAERESIS
+		{0xa5, 0xa4}, // LATIN CAPITAL LETTER N WITH TILDE - LATIN SMALL LETTER N WITH TILDE
+		{0xe4, 0xe5}, // GREEK CAPITAL LETTER SIGMA - GREEK SMALL LETTER SIGMA
+		{0xe8, 0xed}  // GREEK CAPITAL LETTER PHI - GREEK SMALL LETTER PHI
+	},
+	.to_utf8 = std_to_utf8
 };
 
 const SingleByteEncodingDesc CP866_ENC =
@@ -215,6 +287,7 @@ const SingleByteEncodingDesc CP1251_ENC =
 // Глобальные данные о кодировках, зарегистрированных в данном объекте. Ключ - имя кодировки, значение - её описание.
 std::vector<SingleByteEncodingDesc> encodings_data
 {
+	CP437_ENC,
 	CP866_ENC,
 	CP1251_ENC
 };
@@ -418,14 +491,14 @@ std::pair<uint32_t, size_t> ConvSymbFromUTF8(const std::string& src_utf8_string,
 }
 
 // Перекодирование из однобайтовой кодировки в UTF-8 с попутным составлением карты размещения UTF-8-кодов в пределах сгенерированной UTF-8-строки.
-std::tuple<std::string, std::vector<size_t>, UTF8Error> TranscodeToUTF8Ex(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8)
+std::tuple<std::string, UTF8Map, UTF8Error> TranscodeToUTF8Ex(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8)
 {
 	if (to_utf8.size() < 256)
 		// Некорректная таблица перекодировки. В ней должны быть определены Юникод-коды для всех возможных однобайтовых символов.
 		return {{}, {},  {.code = UTF8ErrorCode::UTF8_TO_UTF_TABLE_TOO_SHORT}};
 
 	std::string result_str;
-	std::vector<size_t> transcode_pos_map;
+	UTF8Map transcode_pos_map;
 	for (size_t unibyte_symb_pos = 0; unibyte_symb_pos < unibyte_source_str.size(); ++unibyte_symb_pos)
 	{
 		std::string next_utf8_symbol = ConvSymbToUTF8(to_utf8[static_cast<size_t>(unibyte_source_str[unibyte_symb_pos])]);
@@ -433,7 +506,8 @@ std::tuple<std::string, std::vector<size_t>, UTF8Error> TranscodeToUTF8Ex(const 
 			// Длина UTF-8 представления для исходного символа в позиции unibyte_symb_pos выше максимально допустимой.
 			return {std::move(result_str), std::move(transcode_pos_map), {.code = UTF8ErrorCode::UTF8_UNICODE_TOO_LONG, .pos = unibyte_symb_pos}};
 
-		transcode_pos_map.push_back(result_str.size());
+		transcode_pos_map.begin_map.push_back(result_str.size());
+		transcode_pos_map.last_symbol_size = next_utf8_symbol.size();
 		result_str += std::move(next_utf8_symbol);
 	}
 
@@ -443,7 +517,7 @@ std::tuple<std::string, std::vector<size_t>, UTF8Error> TranscodeToUTF8Ex(const 
 // Перекодирование из однобайтовой кодировки в UTF-8.
 TranscodeResult TranscodeToUTF8(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8)
 {
-	std::tuple<std::string, std::vector<size_t>, UTF8Error> transcode_ex_result = TranscodeToUTF8Ex(unibyte_source_str, to_utf8);
+	std::tuple<std::string, UTF8Map, UTF8Error> transcode_ex_result = TranscodeToUTF8Ex(unibyte_source_str, to_utf8);
 	return {std::move(std::get<0>(transcode_ex_result)), std::get<2>(transcode_ex_result)};
 }
 
@@ -482,7 +556,7 @@ TranscodeResult TranscodeFromUTF8(const std::string& utf8_source_str, const std:
 TranscodeResult TranscodeBetweenUnibytes
 	(const std::string& unibyte_source_str, const std::vector<uint32_t>& src_to_utf8, const std::vector<uint32_t>& dest_to_utf8)
 {
-	std::tuple<std::string, std::vector<size_t>, UTF8Error> to_utf8_result = TranscodeToUTF8Ex(unibyte_source_str, src_to_utf8);
+	std::tuple<std::string, UTF8Map, UTF8Error> to_utf8_result = TranscodeToUTF8Ex(unibyte_source_str, src_to_utf8);
 	UTF8Error to_utf8_error = std::get<2>(to_utf8_result);
 	if (to_utf8_error.code != UTF8ErrorCode::UTF8_NO_ERROR)
 		return {{}, to_utf8_error};
@@ -494,14 +568,18 @@ TranscodeResult TranscodeBetweenUnibytes
 	// Так как dest_cnv_result.second.pos в данном случае указывает на сбойное положение в промежуточном UTF-8 представлении, то
 	// теперь нужно вычислить соответствующее ему положение в исходной строке unibyte_source_str.
 	size_t original_pos = 0;
-	std::vector<size_t> orig_symb_pos_map = std::move(std::get<1>(to_utf8_result));
-	for (size_t utf8_code_pos_index = 0; utf8_code_pos_index < orig_symb_pos_map.size(); ++utf8_code_pos_index, ++original_pos)
+	const UTF8Map& orig_symb_pos_map = std::get<1>(to_utf8_result);
+	for (size_t utf8_code_pos_index = 0; utf8_code_pos_index < orig_symb_pos_map.begin_map.size();
+		 ++utf8_code_pos_index, ++original_pos)
 	{
-		// Получим начальные положения Юникодов проверяемого исходного символа (символа с индексом original_pos в исходнике unibyte_source_str)
-		// в промежуточной UTF-8-строке, а также исходного символа, следующего за ним (то есть с индексом original_pos + 1 там же).
-		size_t utf8_code_pos_current = orig_symb_pos_map[utf8_code_pos_index];
-		size_t utf8_code_pos_next = utf8_code_pos_index == orig_symb_pos_map.size() - 1 ?
-			unibyte_source_str.size() : orig_symb_pos_map[utf8_code_pos_index + 1];
+		// Получим начальные положения Юникодов проверяемого исходного символа (символа с индексом original_pos в исходнике
+		// unibyte_source_str) в промежуточной UTF-8-строке, а также исходного символа, следующего за ним (то есть с индексом
+		// original_pos + 1 там же).
+		size_t utf8_code_pos_current = orig_symb_pos_map.begin_map[utf8_code_pos_index];
+		size_t utf8_code_pos_next = utf8_code_pos_index == orig_symb_pos_map.begin_map.size() - 1 ?
+			utf8_code_pos_current + orig_symb_pos_map.last_symbol_size : // Текущий проверяемый символ последний в промежуточной UTF-8-строке.
+			orig_symb_pos_map.begin_map[utf8_code_pos_index + 1];		 // Текущий символ original_pos не является последним в ней.
+
 		if (dest_cnv_result.second.pos >= utf8_code_pos_current && dest_cnv_result.second.pos < utf8_code_pos_next)
 			break;
 	}

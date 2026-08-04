@@ -144,12 +144,14 @@ private:
     // Вспомогательные приватные методы.
     // Функция извлечения пары параметров подстроки - начального её индекса и длины.
     std::pair<size_t, size_t> ExtractPosSize
-        (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const std::string& arg_str, Context& context);
+        (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str, Context& context);
     // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
     int CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const;
     // Строит карту расположения UTF-8-кодов в строке parse_str.
-    runtime::String::UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
-
+    UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
+    // Перекодировка МУФЛОН-строки src_string в целевую кодировку dest_encoding.
+    ObjectHolder ConvertTranscodeTo
+        (const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding = nullptr) const;
     // Функция обобщённого поиска подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
     // поисковой функцией find_func.
     using CommonFindFunc = std::string::size_type(std::string::*)(const std::string& str, const std::string::size_type pos) const;
@@ -179,9 +181,11 @@ private:
     ObjectHolder MethodReplace(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodReplicate(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodReverse(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
-    //
+    // "Односимвольные" операции над однобайтовыми или многобайтовыми (UTF-8) кодами символов.
     ObjectHolder MethodAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodChr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodMbAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    ObjectHolder MethodMbChr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     //
     ObjectHolder MethodToNumber(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodToNumberLength(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

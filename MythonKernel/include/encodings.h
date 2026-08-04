@@ -4,9 +4,10 @@
 #include <vector>
 #include <optional>
 
-constexpr size_t MAX_UNICODE_LENGTH = 6;			// Максимально допустимая поддерживаемая длина UTF-8-кода.
-const std::vector<std::pair<char, char>> empty_upcase_table;
-const std::string empty_collate;
+extern const std::vector<std::pair<char, char>> empty_upcase_table;
+extern const std::string empty_collate, std_collate;
+extern const std::vector<uint32_t> std_to_utf8;
+extern std::vector<SingleByteEncodingDesc> encodings_data;
 
 struct CompareCollateMode
 {
@@ -20,9 +21,6 @@ struct CompareCollateMode
     bool is_equal_collate = true;			// Способ применения весов при сравнении строк на точное равенство.
     bool is_case_indep_compare = false;     // Регистронезависимое сравнение.
 };
-
-extern const std::string std_collate;
-extern std::vector<SingleByteEncodingDesc> encodings_data;
 
 enum class UTF8ErrorCode
 {
@@ -57,7 +55,7 @@ std::pair<uint32_t, size_t> ConvSymbFromUTF8(const std::string& src_utf8_string,
 // Две похожие (различающиеся только типом возвращаемого результата) функции перекодирования из однобайтовой кодировки в кодировку UTF-8.
 // Второй вариант этой функции попутно составляет и возвращает карту расположения Юникодов исходника в итоговой UTF-8-строке.
 TranscodeResult TranscodeToUTF8(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8);
-std::tuple<std::string, std::vector<size_t>, UTF8Error> TranscodeToUTF8Ex(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8);
+std::tuple<std::string, UTF8Map, UTF8Error> TranscodeToUTF8Ex(const std::string& unibyte_source_str, const std::vector<uint32_t>& to_utf8);
 // Перекодирование из UTF-8 в некоторую однобайтовую кодировку, определяемую массивом to_utf8.
 TranscodeResult TranscodeFromUTF8(const std::string& utf8_source_str, const std::vector<uint32_t>& to_utf8);
 // Транскодирование между двумя однобайтовыми кодировками, определяемыми массивами src_to_utf8 (исходная) и dest_to_utf8 (целевая).

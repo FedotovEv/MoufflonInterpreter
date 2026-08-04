@@ -83,6 +83,32 @@ struct SingleByteEncodingDesc
     std::vector<uint32_t> to_utf8;
 };
 
+struct UTF8Map
+{
+    std::vector<size_t> begin_map;   // Положение начал многобайтовых кодов UTF-8-символов в теле однобайтовой строки.
+    size_t last_symbol_size = 0;     // Длина последнего кода в строке.
+
+    void Clear()
+    {
+        begin_map.clear();
+        last_symbol_size = 0;
+    }
+
+    bool IsValid() const
+    {
+        return !begin_map.empty();
+    }
+
+    // Функция-член возвращает байтовую позиция сразу за концом корректной UTF-8-строки.
+    size_t BytePosAfterEnd() const
+    {
+        if (begin_map.empty())
+            return 0;
+        else
+            return begin_map.back() + last_symbol_size;
+    }
+};
+
 // Константы, связанные с обработкой кодировки различных строковых констант, встречающихся в МУФЛОН-программе.
 // Константа для указания кодировки, находящейся вне общего хранилища кодировочных данных (массива encodings_data).
 constexpr const int NON_INDEXED_ENCODING_ID = -1;
@@ -100,7 +126,8 @@ const SingleByteEncodingDesc * const UTF_8_ENCODING = reinterpret_cast<const Sin
 constexpr int UTF_8_ENCODING_ID = INT_MAX;
 // Зарезервированное имя для кодировки UTF8.
 const std::string UTF_8_ENCODING_NAME = "UTF-8";
-constexpr size_t COLLATE_SIZE = 256U;   // Длина правильной строки относительных весов символов.
+constexpr size_t MAX_UNICODE_LENGTH = 6;	// Максимально допустимая поддерживаемая длина UTF-8-кода.
+constexpr size_t COLLATE_SIZE = 256U;       // Длина правильной строки относительных весов символов.
 
 namespace runtime
 {
