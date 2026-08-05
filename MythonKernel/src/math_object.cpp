@@ -488,7 +488,7 @@ namespace runtime
         int encoding_id = arg_encoding->GetIntValue();
         if (encoding_id != NON_INDEXED_ENCODING_ID && encoding_id != NO_ENCODING_ID && encoding_id != UTF_8_ENCODING_ID)
         {
-            if (encoding_id < 1 || encoding_id > static_cast<int>(encodings_data.size()))
+            if (encoding_id < 1 || encoding_id > static_cast<int>(::encodings_data.size()))
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Индекс кодировки вне допустимого диапазона");
         }
         return encoding_id;
@@ -1043,7 +1043,8 @@ namespace runtime
         if (actual_args.size() > 3) // Допускается от 1 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод ToNumber может принимать от 1 до 3 параметров");
 
-        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
+        const runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        const std::string& arg_str_std = arg_str->GetValue();
         // Значения фактических аргументов по умолчанию.
         size_t arg_pos = 0;
         int arg_radix = 0;
@@ -1053,13 +1054,16 @@ namespace runtime
             const runtime::Number* arg_pos_ptr = actual_args[1].TryAs<runtime::Number>();
             if (!arg_pos_ptr)
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
-            int arg_pos_int = arg_pos_ptr->GetIntValue();
-
-
-
-            if (arg_pos_int < 0 || arg_pos_int > static_cast<int>(arg_str.size()))
+            arg_pos = static_cast<size_t>(arg_pos_ptr->GetIntValue());
+            if (arg_str->encoding == UTF_8_ENCODING)
+            { // Для кодировки UTF-8 позиция в строке трактуется как номер многобайтового UTF-8-символа.
+                if (arg_pos < arg_str->utf8_map.begin_map.size())
+                    arg_pos = arg_str->utf8_map.begin_map[arg_pos];
+                else
+                    arg_pos = (std::numeric_limits<size_t>::max)();
+            }
+            if (arg_pos > arg_str_std.size())
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Указанная позиция в строке недопустима");
-            arg_pos = static_cast<size_t>(arg_pos_int);
         }
 
         if (actual_args.size() >= 3)
@@ -1072,7 +1076,7 @@ namespace runtime
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Задана недопустимая база преобразуемого числа");
         }
 
-        const char* begin_number_pos = arg_str.c_str() + arg_pos;
+        const char* begin_number_pos = arg_str_std.c_str() + arg_pos;
         char* end_number_pos;
 
         // Попробуем преобразовать строку в целое число.
@@ -1205,13 +1209,13 @@ namespace runtime
         if (arg_input_str->encoding == UTF_8_ENCODING)
             return ObjectHolder::Own(runtime::Number(UTF_8_ENCODING_ID));   // Используется UTF-8.
 
-        auto encodings_data_it = std::find_if(encodings_data.begin(), encodings_data.end(),
+        auto encodings_data_it = std::find_if(::encodings_data.begin(), ::encodings_data.end(),
             [arg_input_str](const SingleByteEncodingDesc& encoding_desc) -> bool
             {
                 return arg_input_str->encoding == &encoding_desc;
             });
-        if (encodings_data_it != encodings_data.end())
-            return ObjectHolder::Own(runtime::Number(static_cast<int>(encodings_data_it - encodings_data.begin() + 1)));
+        if (encodings_data_it != ::encodings_data.end())
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(encodings_data_it - ::encodings_data.begin() + 1)));
 
         return ObjectHolder::Own(runtime::Number(NON_INDEXED_ENCODING_ID));  // Установлена сторонняя, неиндексируемая кодировка.
     }
@@ -1244,14 +1248,14 @@ namespace runtime
         }
         else
         { // Назначается некоторая однобайтовая кодировка.
-            arg_input_str->encoding = &encodings_data[static_cast<size_t>(set_encoding_id - 1)];
+            arg_input_str->encoding = &::encodings_data[static_cast<size_t>(set_encoding_id - 1)];
             arg_input_str->utf8_map.Clear();
         }
 
         return ObjectHolder::Own(runtime::Number(set_encoding_id));
     }
 
-    // Метод сравнения строк с явным указанием кодировки или величин сравнительных весов символов.
+    // Метод сравнения строк с возможностью явного указания кодировки или величин сравнительных весов символов.
     ObjectHolder StringOpsInstance::MethodCompare(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         // Первые два аргумента метода - сравниваемые строки.
@@ -1259,9 +1263,48 @@ namespace runtime
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Compare"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
-        // Необязательный третий аргумент - режим сравнения. 
+        ObjectHolder real_first_arg = actual_args[0];
+        ObjectHolder real_second_arg = actual_args[1];
+        const runtime::String* first_compare_str = real_first_arg.TryAs<runtime::String>();
+        const runtime::String* second_compare_str = real_second_arg.TryAs<runtime::String>();
+        const runtime::String* compare_mode_str = first_compare_str;
 
+        if (actual_args.size() > 2)
+        { // Указан необязательный третий аргумент - режим сравнения. 
+            compare_mode_str = actual_args[2].TryAs<runtime::String>();
+            if (!compare_mode_str)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Аргумент режима должен быть строковым");
+        }
 
+        if (compare_mode_str->encoding != first_compare_str->encoding)
+        { // Если кодировка сравнения задана в явном виде, конвертируем оба сравниваемых аргумента в неё. 
+            real_first_arg = ConvertTranscodeTo(real_first_arg, context, compare_mode_str->encoding);
+            first_compare_str = real_first_arg.TryAs<runtime::String>();
+        }
+        if (second_compare_str->encoding != first_compare_str->encoding)
+        { // При несовпадении кодировок операндов сравнительной операции приводим второй операнд к кодировке первого.
+            real_second_arg = ConvertTranscodeTo(real_second_arg, context, first_compare_str->encoding);
+            second_compare_str = real_second_arg.TryAs<runtime::String>();
+        }
+
+        const std::string& op_str_1_std = first_compare_str->GetValue();
+        const std::string& op_str_2_std = second_compare_str->GetValue();
+        if (first_compare_str->encoding == UTF_8_ENCODING)
+        {  // Строки для сравнения представлены в UTF-8.
+            return ObjectHolder::Own(runtime::Number(CompareUTF8(op_str_1_std, op_str_2_std)));
+        }
+        else
+        {   // Сравниваемые строки имеют однобайтовую кодировку.
+            CompareCollateMode compare_mode
+            {
+                .upcase_table = compare_mode_str->GetUpcaseTable(),
+                .collate = compare_mode_str->GetCollate(),
+                .is_use_collate = compare_mode_str->is_use_collate,
+                .is_equal_collate = compare_mode_str->is_equal_collate,
+                .is_case_indep_compare = compare_mode_str->is_case_indep_compare
+            };
+            return ObjectHolder::Own(runtime::Number(CompareCollate(op_str_1_std, op_str_2_std, compare_mode)));
+        }
     }
 
     // Перекодировка строк из одной кодировки в другую. Целевая кодировка выбирается указанием её условного номера вторым параметром метода.
@@ -1278,7 +1321,7 @@ namespace runtime
         if (const runtime::String* encode_set_str = actual_args[1].TryAs<runtime::String>())
             dest_encoding = encode_set_str->encoding;
         else
-            dest_encoding = &encodings_data[static_cast<size_t>(CheckEncodingID(actual_args[1], context) - 1)];
+            dest_encoding = &::encodings_data[static_cast<size_t>(CheckEncodingID(actual_args[1], context) - 1)];
         // Наконец, сама перекодировочная процедура и возврат результата.
         return ConvertTranscodeTo(actual_args[0], context, dest_encoding);
     }
@@ -1412,7 +1455,7 @@ namespace runtime
         }
         else if (encoding_id)
         {
-            moufflon_result_str.encoding = &encodings_data[static_cast<size_t>(encoding_id) - 1];
+            moufflon_result_str.encoding = &::encodings_data[static_cast<size_t>(encoding_id) - 1];
         }
 
         return ObjectHolder::Own(move(moufflon_result_str));

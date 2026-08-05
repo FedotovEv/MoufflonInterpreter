@@ -66,6 +66,7 @@ constexpr int NUMERIC_IDENT = 2;            // Идент числового т�
 constexpr int STRING_IDENT = 3;             // Идент строкового типа.
 constexpr int CLASS_AREA_IDENTS = 1000;     // Начало области классовых идентов (идентификатор первого класса, определённого в
                                             // программе помимо базовых типов).
+constexpr size_t COLLATE_SIZE = 256U;       // Длина правильной строки относительных весов символов.
 
 // Структура, содержащая информацию о некоторой однобайтовой кодировке, необходимую для выполнения ряда операций над МУФЛОН-строками.
 struct SingleByteEncodingDesc
@@ -81,6 +82,11 @@ struct SingleByteEncodingDesc
     // Массив соответствия однобайтового кода символа в данной кодировке и его многобайтового кода в кодировке UNICODE. Также всегда
     // содержит 256 элементов.
     std::vector<uint32_t> to_utf8;
+
+    bool IsCollateValid() const
+    {
+        return collate.size() == COLLATE_SIZE;
+    }
 };
 
 struct UTF8Map
@@ -127,7 +133,6 @@ constexpr int UTF_8_ENCODING_ID = INT_MAX;
 // Зарезервированное имя для кодировки UTF8.
 const std::string UTF_8_ENCODING_NAME = "UTF-8";
 constexpr size_t MAX_UNICODE_LENGTH = 6;	// Максимально допустимая поддерживаемая длина UTF-8-кода.
-constexpr size_t COLLATE_SIZE = 256U;       // Длина правильной строки относительных весов символов.
 
 namespace runtime
 {

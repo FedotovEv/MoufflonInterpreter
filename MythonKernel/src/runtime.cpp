@@ -13,8 +13,33 @@
 
 using namespace std;
 
+extern const std::vector<std::pair<char, char>> empty_upcase_table;
+extern const std::string empty_collate;
+
 namespace runtime
 {
+    const std::vector<std::pair<char, char>>& String::GetUpcaseTable() const
+    {
+        if (encoding != NO_ENCODING && encoding != UTF_8_ENCODING)
+            return encoding->upcase_table;
+        return empty_upcase_table;
+    }
+
+    const std::string& String::GetCollate() const
+    {
+        // Локальная взвешивающая строка имеет преимущество над кодировочно-специфичной.
+        if (collate.size() == COLLATE_SIZE)
+            return collate;
+
+        if (encoding != NO_ENCODING && encoding != UTF_8_ENCODING)
+        {
+            if (encoding->IsCollateValid())
+                return encoding->collate;
+        }
+        // Приемлемая строка весов отсутствует в обоих возможных источниках.
+        return empty_collate;
+    }
+
     std::string RuntimeError::ExtractMessage(const runtime::ObjectHolder& error_object)
     {
         if (const runtime::CommonClassInstance* error_class_ptr = error_object.TryAs<runtime::CommonClassInstance>())

@@ -11,7 +11,7 @@ extern std::vector<SingleByteEncodingDesc> encodings_data;
 
 struct CompareCollateMode
 {
-	// Параметры кодировки, существенные для сравнения.
+	// Параметры однобайтовой кодировки, существенные для сравнения.
 	// Парность символов верхнего и нижнего регистра. Первый член - символ верхнего регистра, второй - нижнего.
 	const std::vector<std::pair<char, char>>& upcase_table = empty_upcase_table;
 	const std::string& collate = empty_collate;		// Список сравнительных весов символов.
@@ -46,6 +46,8 @@ std::optional<std::pair<char, char>> FindRegisterPair(char scan_c, bool scan_for
 // Многорежимная функция сравнения однобайтовых строк op_str_1 и op_str_2 с возможностью игнорирования регистра символов и
 // применения взвешивающей строки.
 int CompareCollate(const std::string& op_str_1, const std::string& op_str_2, const CompareCollateMode& compare_mode = {});
+// Функция сравнения UTF-8 кодированных строк.
+int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2);
 // Преобразование символа с UNCODE-кодом unicode_symb в набор байт в UTF-8 представлении.
 std::string ConvSymbToUTF8(uint32_t unicode_symb);
 // Извлечение UTF-8 символа, начиная с позиции symb_pos строки src_utf8_string. Его UNICODE-код возвращается в первом члене итоговой пары,

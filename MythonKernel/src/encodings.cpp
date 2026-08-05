@@ -376,6 +376,38 @@ int CompareCollate(const std::string& op_str_1, const std::string& op_str_2, con
 		return static_cast<int>(op_str_2.size() + 1);	// Второй аргумент короче и, следовательно, меньше первого.
 }
 
+// Функция сравнения UTF-8-кодированных строк.
+int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2)
+{
+	size_t op_pos_1 = 0, op_pos_2 = 0;
+	while (op_pos_1 < op_str_1.size() && op_pos_2 < op_str_2.size())
+	{
+		std::pair<uint32_t, size_t> current_symb_1 = ConvSymbFromUTF8(op_str_1, op_pos_1);
+		std::pair<uint32_t, size_t> current_symb_2 = ConvSymbFromUTF8(op_str_2, op_pos_2);
+		if (current_symb_1.second == 0)
+			op_pos_1 = (std::numeric_limits<size_t>::max)();
+		if (current_symb_2.second == 0)
+			op_pos_2 = (std::numeric_limits<size_t>::max)();
+		if (op_pos_1 >= op_str_1.size() || op_pos_2 >= op_str_2.size())
+			break;
+		// Очередные легитимные Юникоды выделены из обоих строк.
+		if (current_symb_1.first < current_symb_2.first) // Первая строка op_str_1 "меньше" второй строки op_str_2.
+			return -static_cast<int>(op_pos_1 + 1);
+		else if (current_symb_1.first > current_symb_2.first) // Первая строка op_str_1 "больше" второй строки op_str_2.
+			return static_cast<int>(op_pos_1 + 1);
+
+		op_pos_1 += current_symb_1.second;
+		op_pos_2 += current_symb_2.second;
+	}
+	// Выясняем и возвращаем результат сравнения для строк с равными префиксами, так как он не был выяснен ранее, внутри цикла.
+	if (op_pos_1 < op_str_1.size())			// Строка op_str_1 длиннее (и, следовательно, будет считаться "больше") строки op_str_2.
+		return static_cast<int>(op_pos_1 + 1);
+	else if (op_pos_2 < op_str_2.size())	// Строка op_str_2 длиннее (и, следовательно, будет считаться "больше") строки op_str_1.
+		return -static_cast<int>(op_str_1.size() + 1);
+	else									// Обе строки одинаковы.
+		return 0;
+}
+
 // Преобразование символа с UNCODE-кодом unicode_symb в набор байт в UTF-8 представлении.
 std::string ConvSymbToUTF8(uint32_t unicode_symb)
 {
