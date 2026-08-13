@@ -1,5 +1,5 @@
 
-#include "../MythonDebugger.h"
+#include "MythonDebugger.h"
 #include "MainDebuggerWindow.h"
 #include "ConfigDialog.h"
 #include "EditModulePropsDialog.h"

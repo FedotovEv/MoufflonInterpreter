@@ -2,7 +2,7 @@
 #define __ConfigDialog__
 
 #include "MythonDebuggerGui.h"
-#include "../MythonDebugger.h"
+#include "MythonDebugger.h"
 
 class ConfigDialogImpl : public ConfigDialog
 {

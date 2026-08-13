@@ -1910,16 +1910,16 @@ print d             # Строка 14
             ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 3},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 5},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 7},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 9},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 11},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 12},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 14}
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 1},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 2},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 3},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 5},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 6},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 7},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 9},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 11},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 12},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 14}
                 }));
         }
 
@@ -1952,21 +1952,21 @@ print a * 2, a * 3                              # Строка 20
             ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 1},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 2},           // Оператор if - проверка условия главной ветви.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 4},           // Условие выполнено, находимся внутри главной ветви инструкции if.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 6},           // Оператор if - проверка условия главной ветви.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 8},           // Условие главной ветви не выполняется, проверяем альтернативу.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 10},          // Условие первой альтернативы истинно, выбирается именно она.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 11},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Первая итерация цикла while() - условие цикла удовлетворяется.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Вторая итерация цикла while() - условие цикла удовлетворяется.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 17},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 18},
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 16},          // Третья итерация цикла while() - условие цикла нарушено, цикл заканчивается.
-                    {DebugCallbackReason::DEBUG_CALLBACK_STEP_IN, 20}
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 1},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 2},           // Оператор if - проверка условия главной ветви.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 4},           // Условие выполнено, находимся внутри главной ветви инструкции if.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 6},           // Оператор if - проверка условия главной ветви.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 8},           // Условие главной ветви не выполняется, проверяем альтернативу.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 10},          // Условие первой альтернативы истинно, выбирается именно она.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 11},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 16},          // Первая итерация цикла while() - условие цикла удовлетворяется.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 17},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 16},          // Вторая итерация цикла while() - условие цикла удовлетворяется.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 17},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 16},          // Третья итерация цикла while() - условие цикла нарушено, цикл заканчивается.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 20}
                 }));
         }
 

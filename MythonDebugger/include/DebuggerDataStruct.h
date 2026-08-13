@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../lexer.h"
-#include "../parse.h"
-#include "../runtime.h"
-#include "../statement.h"
-#include "../debug_context.h"
+#include "lexer.h"
+#include "parse.h"
+#include "runtime.h"
+#include "statement.h"
+#include "debug_context.h"
 
 #include <iostream>
 #include <string>
@@ -255,14 +255,14 @@ public:
     {
         int breakpoint_id;
         runtime::ProgramCommandDescriptor breakpoint_point; // Положение точки останова в программе
-        std::string conditional_expression; // Текстовая запись условия в инфиксной форме
-        int start_counter = 0; // Значение счётчика срабатываний, после которого должен произойти останов
-        int current_counter = 0; // Текущее значение счётчика срабатываний. Поля обслуживания счётчика
-                                 // имеют смысл только для "счётной" точки останова при is_counting == false.
-        bool is_active = false; // Флаг активности точки останова
-        bool is_conditional = false; // Признак условной точки останова
-        bool is_onetime = false; // Признак однократной точки останова
-        bool is_counting = false; // Флаг "счётной" точки
+        std::string conditional_expression;     // Текстовая запись условия в инфиксной форме
+        int start_counter = 0;                  // Значение счётчика срабатываний, после которого должен произойти останов
+        int current_counter = 0;                // Текущее значение счётчика срабатываний. Поля обслуживания счётчика
+                                                // имеют смысл только для "счётной" точки останова при is_counting == false.
+        bool is_active = false;                 // Флаг активности точки останова
+        bool is_conditional = false;            // Признак условной точки останова
+        bool is_onetime = false;                // Признак однократной точки останова
+        bool is_counting = false;               // Флаг "счётной" точки
     };
 
     const BreakpointDescType* GetBreakpointDescriptor(int breakpoint_id) const;

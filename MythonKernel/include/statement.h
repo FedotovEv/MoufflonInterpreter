@@ -7,6 +7,11 @@
 
 #include <functional>
 
+// Функция генерации декорированного имени метода либо функции, содержащего также элемент, кодирующий количество аргументов в нём.
+std::string MangleMethodFunctionName(const std::string& method_func_name, size_t arg_count);
+// Функция разделяет калечное имя метода или функции на его компоненты - само имя и количество аргументов процедуры.
+std::pair<std::string, size_t> DemangleMethodFunctionName(const std::string& mangled_method_func_name);
+
 namespace ast
 {
     struct ReturnResult
@@ -232,6 +237,7 @@ namespace ast
         FreeFunctionCall(runtime::FreeFunction* free_function, std::vector<std::unique_ptr<Statement>> args);
         FreeFunctionCall(std::string free_function_name, std::vector<std::unique_ptr<Statement>> args);
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+        std::string GetInvokedName(bool is_full_signature = false) const;
 
     private:
         runtime::FreeFunction* free_function_ = nullptr;
@@ -275,6 +281,8 @@ namespace ast
         {
             is_dereference_result_ = is_dereference_result;
         }
+
+        std::string GetInvokedName(bool is_full_signature = false) const;
 
     private:
         std::unique_ptr<Statement> object_;
@@ -671,7 +679,7 @@ namespace ast
         std::unordered_map<std::string, ast::PluginDescData> plugines_;
     };
 
-    // Тело метода. Как правило, содержит составную инструкцию
+    // Тело метода. Как правило, содержит составную инструкцию ast::Compound.
     class MethodBody : public Statement
     {
     public:
@@ -910,9 +918,6 @@ namespace ast
         {
             return free_function_.TryAs<runtime::FreeFunction>();
         }
-
-        // Вырабаьывает декорированное (отделанное) имя функции free_function_name с учётом количества её аргументов arg_count.
-        static std::string MangleFreeFunctionName(const std::string& free_function_name, size_t arg_count);
 
     private:
         runtime::ObjectHolder free_function_; // "По построению" будет содержать внутри только объект типа runtime::FreeFunction.

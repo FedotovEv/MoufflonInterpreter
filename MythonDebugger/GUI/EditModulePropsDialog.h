@@ -2,7 +2,7 @@
 #define __EditModulePropsDialog__
 
 #include "MythonDebuggerGui.h"
-#include "../MythonDebugger.h"
+#include "MythonDebugger.h"
 
 class EditModulePropsDialogImpl : public EditModulePropsDialog
 {

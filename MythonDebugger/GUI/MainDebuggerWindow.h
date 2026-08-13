@@ -2,7 +2,7 @@
 #define __MainDebuggerWindow__
 
 #include "MythonDebuggerGui.h"
-#include "../redefine_.h"
+#include "redefine_.h"
 
 class MainDebuggerWindowImpl : public MainDebuggerWindow
 {

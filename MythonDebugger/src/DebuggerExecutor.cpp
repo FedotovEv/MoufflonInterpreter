@@ -17,7 +17,7 @@ void DebugController::operator()(bool is_run_debug)
     debug_context_.Clear();
     SendDebugMessage();
 
-    parse::TrivialParseContext parse_context(true);
+    parse::TrivialParseContext parse_context;
     runtime::Closure closure;
 
     try

@@ -3,6 +3,8 @@
 #include "parse.h"
 #include "error_classes.h"
 #include "statement.h"
+#include "encodings.h"
+#include "math_object.h"
 
 #include <cassert>
 #include <optional>
@@ -751,19 +753,62 @@ namespace runtime
             os << "Поток исполнения не зафиксирован";
     }
 
+    // Функция обобщённого сравнения строк на равенство и "меньше" с учётом их кодировок и представления.
+    static bool StrCompareOp(const ObjectHolder& lhs, const ObjectHolder& rhs, Context& context, bool is_less_op)
+    {
+        const runtime::String* lhs_str = lhs.TryAs<String>();
+        const runtime::String* rhs_str = rhs.TryAs<String>();
+        // Режим сравнения строк выбирается первым аргументом (lhs) сравнения.
+        ObjectHolder cnv_rhs;
+        if (lhs_str->encoding != rhs_str->encoding)
+        { // Если кодировки сравниваемых строк не совпадают, приведём вторую строку к кодировке первой.
+            cnv_rhs = StringOpsInstance::ConvertTranscodeTo(rhs, context, lhs_str->encoding);
+            rhs_str = cnv_rhs.TryAs<String>();
+        }
+
+        int compare_result = 0;
+        if (lhs_str->encoding == UTF_8_ENCODING)
+        { // Сравнение строк в представлении UTF-8 выполняется всегда путём прямого сопоставления индивидуальных
+          // Юникодов входящих в них многобайтовых символов.
+            if (!is_less_op)
+            { // При сравнении UTF-8-строк на точное равенство можно сравнить такие строки ускоренно, без выделения и
+              // анализа отдельных кодов каждого из составляющих их символов.
+                return (lhs_str->utf8_map.begin_map.size() == rhs_str->utf8_map.begin_map.size() &&
+                        lhs_str->GetValue() == rhs_str->GetValue());
+            }
+            compare_result = CompareUTF8(lhs_str->GetValue(), rhs_str->GetValue());
+        }
+        else
+        { // Режим сравнения "узких" однобайтовых строк определяется установками для первого операнда сравнения (lhs).
+            CompareCollateMode compare_mode
+            {
+                .upcase_table = lhs_str->GetUpcaseTable(),
+                .collate = lhs_str->GetCollate(),
+                .is_use_collate = lhs_str->is_use_collate,
+                .is_equal_collate = lhs_str->is_equal_collate,
+                .is_case_indep_compare = lhs_str->is_case_indep_compare
+            };
+            compare_result = CompareCollate(lhs_str->GetValue(), rhs_str->GetValue(), compare_mode);
+        }
+        if (is_less_op) // Это сравнение на "меньше" (на <).
+            return compare_result < 0;
+        else // Это сравнение на равенство (на ==).
+            return compare_result == 0;
+    }
+
     bool Equal(const ObjectHolder& lhs, const ObjectHolder& rhs, [[maybe_unused]] Context& context)
     {
         if (lhs.TryAs<Number>() && rhs.TryAs<Number>())
             return (*lhs.TryAs<Number>()) == (*rhs.TryAs<Number>());
 
         if (lhs.TryAs<String>() && rhs.TryAs<String>())
-            return lhs.TryAs<String>()->GetValue() == rhs.TryAs<String>()->GetValue();
+            return StrCompareOp(lhs, rhs, context, false);
 
         if (lhs.TryAs<Bool>() && rhs.TryAs<Bool>())
             return lhs.TryAs<Bool>()->GetValue() == rhs.TryAs<Bool>()->GetValue();
 
         if (!lhs && !rhs)
-            return true;
+            return true;    // Значения None считаются равными.
 
         if (CommonClassInstance* lhs_inst_ptr = lhs.TryAs<ClassInstance>())
             if (lhs_inst_ptr->HasMethod(EQUAL_CMP_METHOD, 1))
@@ -778,7 +823,7 @@ namespace runtime
             return (*lhs.TryAs<Number>()) < (*rhs.TryAs<Number>());
 
         if (lhs.TryAs<String>() && rhs.TryAs<String>())
-            return lhs.TryAs<String>()->GetValue() < rhs.TryAs<String>()->GetValue();
+            return StrCompareOp(lhs, rhs, context, true);
 
         if (lhs.TryAs<Bool>() && rhs.TryAs<Bool>())
             return lhs.TryAs<Bool>()->GetValue() < rhs.TryAs<Bool>()->GetValue();
@@ -816,7 +861,7 @@ namespace runtime
         // Формируем стартовый набор опций контекста по умолчанию.
         opt_data_.emplace(OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH, true);
         opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_DECLARATIVE, true);
-        opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_FUNC_FRAME, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_CALL_FRAME, true);
     }
 
     #ifndef MYTHON_UNITHREAD

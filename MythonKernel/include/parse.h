@@ -24,7 +24,7 @@ namespace runtime
 // операционной системы (LoadLibraryW для виндовс или dlopen для линукса).
 //   Если же LoadLibraryDefine содержит тип PluginGetInfoFunc (указатель на информирующую функцию) - втыкала
 // подключается, используя данные, которые эта функция предоставляет по соответствующим запросам к ней.
-//   В случае, когда LoadLibraryDefine содержит monostate, втыкало не загружается.
+//   В случае, когда LoadLibraryDefine содержит monostate, втыкала не загружается.
 using LoadLibraryDefine = std::variant<std::monostate, std::string, PluginGetInfoFunc>; // Тип определителя загруженной (подключённой) втыкалы.
 
 // Ожидаемое имя головной функции динамически загружаемой библиотеки со втыкалами.

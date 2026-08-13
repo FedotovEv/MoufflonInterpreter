@@ -517,7 +517,7 @@ namespace runtime
 
     // Перекодировка МУФЛОН-строки src_string в целевую кодировку dest_encoding.
     ObjectHolder StringOpsInstance::ConvertTranscodeTo
-        (const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding) const
+        (const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding)
     {
         const runtime::String* src_string = string_holder.TryAs<runtime::String>();
         if (!src_string)

@@ -27,10 +27,11 @@ namespace runtime
 {
     enum class CommandGenus
     {
-        CMD_GENUS_UNKNOWN = 0,
+        CMD_GENUS_COMMON = 0,               // Инструкция общего вида.
         CMD_GENUS_PRE_FIRST_METHOD_STMT,    // Псевдоинструкция, расположенная непосредственно перед первой действительной командой метода или функции.
-        CMD_GENUS_RETURN_FROM_METHOD,       // Инструкция выхода из метода (return, return_ref, co_yield, и.т.д.).
         CMD_GENUS_AFTER_LAST_METHOD_STMT,   // Псевдоинструкция, размещённая после последней действительной команды метода или функции.
+        CMD_GENUS_CALL_METHOD,              // Инструкция вызова метода или свободной функции.
+        CMD_GENUS_RETURN_FROM_METHOD,       // Инструкция выхода из метода (return, return_ref, co_yield, и.т.д.).
         CMD_GENUS_DECLARATIVE,              // Узел АСД декларативной природы, не являющийся непосредственной исполняемой инструкцией.
         CMD_GENUS_INITIALIZE                // (Псевдо)инструкция общей инициализации программы (ProgramCompound).
     };
@@ -44,7 +45,7 @@ namespace runtime
             CONTEXT_OPT_UNKNOWN = 0,
             CONTEXT_OPT_DESTRUCT_AT_FINISH,  // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
             CONTEXT_OPT_SKIP_DECLARATIVE,    // Пропускать при отладке (не совершать отладочных звонков) декларативные узлы АСД.
-            CONTEXT_OPT_SKIP_FUNC_FRAME      // Пропускать при отладке рамочные (ограничительные) узлы функций и методов.
+            CONTEXT_OPT_SKIP_CALL_FRAME      // Пропускать при отладке рамочные (ограничительные) узлы вызова функций и методов.
         };
 
         Context()
@@ -279,7 +280,7 @@ namespace runtime
         }
 
     private:
-        CommandGenus command_genus_ = CommandGenus::CMD_GENUS_UNKNOWN;
+        CommandGenus command_genus_ = CommandGenus::CMD_GENUS_COMMON;
         ProgramCommandDescriptor command_desc_;
     };
 

@@ -21,10 +21,8 @@ namespace runtime
         {
         case DebugCallbackReason::DEBUG_CALLBACK_INIT:
             return "Инициализация";
-        case DebugCallbackReason::DEBUG_CALLBACK_STEP_IN:
-            return "Шаг с заходом";
-        case DebugCallbackReason::DEBUG_CALLBACK_STEP_OUT:
-            return "Шаг с обходом";
+        case DebugCallbackReason::DEBUG_CALLBACK_STEP:
+            return "Обычный шаг";
         case DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD:
             return "Выход из метода";
         case DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT:
@@ -112,19 +110,6 @@ namespace runtime
                 stack_entry_index = call_stack_desc_.size() - 1; \
             if (stack_entry_index >= call_stack_desc_.size()) \
                 return (what_ret)
-    
-        size_t DebugContext::DecDebugStackCounter()
-        {
-            size_t old_debug_exec_stack_counter, new_debug_exec_stack_counter;
-            old_debug_exec_stack_counter = debug_exec_stack_counter_;
-            do
-            {
-                if (old_debug_exec_stack_counter == 0)
-                    return old_debug_exec_stack_counter;
-                new_debug_exec_stack_counter = old_debug_exec_stack_counter - 1;
-            } while (!debug_exec_stack_counter_.compare_exchange_strong(old_debug_exec_stack_counter, new_debug_exec_stack_counter));
-            return new_debug_exec_stack_counter;
-        }
     #else
         // Однопоточный вариант отладочного контекста.
         // Макрос проверки допустимости индекса для некоторой существующей точки останова.
@@ -141,12 +126,6 @@ namespace runtime
                 stack_entry_index = call_stack_desc_.size() - 1; \
             if (stack_entry_index >= call_stack_desc_.size()) \
                 return (what_ret)
-
-        size_t DebugContext::DecDebugStackCounter()
-        {
-            if (debug_exec_stack_counter_)
-                return --debug_exec_stack_counter_;
-        }
     #endif
 
     // Получение функтора-перехватчика отладочного звонка, назначенного при конструировании контекста.
@@ -155,22 +134,46 @@ namespace runtime
         return debug_callback_;
     }
 
-    // Получение константной ссылки на весь массив, содержащий стек вызовов программы, исполняемой в отладочном режиме.
-    const std::vector<CallStackEntry>& DebugContext::GetCallStack() const
-    {
-        return call_stack_desc_;
-    }
-
-    // Получение константной ссылки на полный список точек останова (включая и вакантные места, где таких бряков уже нет).
-    const std::vector<BreakpointDesc>& DebugContext::GetBreakpointsList() const
-    {
-        return breakpoints_;
-    }
-
     // Переустановка обработчика отладочных звонков.
     void DebugContext::SetDebugCallback(DebugCallback debug_callback)
     {
         debug_callback_ = std::move(debug_callback);
+    }
+
+    // Получение константной ссылки на весь массив, содержащий стек вызовов программы, исполняемой в отладочном режиме.
+    const std::vector<CallStackEntry>& DebugContext::GetCallStack() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            call_stack_desc_ext_lock_.lock();
+        #endif
+
+        return call_stack_desc_;
+    }
+
+    void DebugContext::FreeCallStack() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            call_stack_desc_ext_lock_.unlock();
+        #endif
+    }
+
+    // Захват и получение константной ссылки на полный список точек останова (включая и вакантные места, где таких бряков уже нет).
+    // Для возобновления работы с этим списком всех прочих клиентов контекста, а также его внутренних механизмов, требуется как можно
+    // быстрее освободить захваченный список вызовом FreeBreakpointsList().
+    const std::vector<BreakpointDesc>& DebugContext::GetBreakpointsList() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            breakpoints_ext_lock_.lock();
+        #endif
+
+        return breakpoints_;
+    }
+
+    void DebugContext::FreeBreakpointsList() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            breakpoints_ext_lock_.unlock();
+        #endif
     }
 
     // Функции-члены получения/установки режима возобновления (исполнения) программы.
@@ -205,6 +208,7 @@ namespace runtime
         #endif
 
         call_stack_desc_.clear();
+        TestActiveDebugStackIndex();
     }
 
     // Формирование/правка/удаление описателя отладочного стекового кадра метода или функции отлаживаемой программы.
@@ -245,10 +249,15 @@ namespace runtime
         #endif
 
         if (call_stack_desc_.empty())
+        {
+            active_stack_index_ = 0;
             return {};
+        }
 
         CallStackEntry ret_value = call_stack_desc_.back();
         call_stack_desc_.pop_back();
+        TestActiveDebugStackIndex();
+
         return ret_value;
     }
 
@@ -258,18 +267,88 @@ namespace runtime
         return call_stack_desc_[stack_entry_index].is_valid;
     }
 
+    // Проверка наличия ранее совершенного звонка типа DEBUG_CALLBACK_EXIT_METHOD при исполнении инструкций вызода из данной процедуры.
+    bool DebugContext::IsCallbackExitMethod(size_t stack_entry_index) const
+    {
+        CHECK_RET_CALL_ENTRY(true);
+        return call_stack_desc_[stack_entry_index].is_method_exit_callback;
+    }
+    
+    // Установка признака совершения звонка типа DEBUG_CALLBACK_EXIT_METHOD для процедуры, которой соответствует указанный кадр вызова.
+    size_t DebugContext::SetCallbackExitMethod(bool new_callback_status, size_t stack_entry_index)
+    {
+        CHECK_RET_CALL_ENTRY(RESERVED_VALUE);
+        call_stack_desc_[stack_entry_index].is_method_exit_callback = new_callback_status;
+        return stack_entry_index;
+    }
+
     // Методы обслуживания указателя (индекса) положения в стеке вызовов текущей отлаживаемой функции
     // (то есть той, с которой в данный момент работает отладчик).
     // Возврат положения (индекса) текущего "активного" (принадлежащего отлаживаемой функции) стекового кадра.
-    size_t DebugContext::GetDebugStackCounter() const
+    size_t DebugContext::GetActiveStackIndex() const
     {
-        return debug_exec_stack_counter_;
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(call_stack_desc_mutex_);
+        #endif
+
+        return active_stack_index_;
     }
 
     // Установка нового значения индекса "активного" стекового кадра.
-    void DebugContext::SetDebugStackCounter(size_t debug_exec_stack_counter)
+    void DebugContext::SetActiveStackIndex(size_t new_active_stack_index)
     {
-        debug_exec_stack_counter_ = debug_exec_stack_counter;
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(call_stack_desc_mutex_);
+        #endif
+
+        active_stack_index_ = new_active_stack_index;
+        TestActiveDebugStackIndex();
+    }
+
+    // Проверяем "активность" последнего стекового кадра в их общем списке. Если "активен" именно последний такой
+    // кадр, то, соответственно, "активной" (отлаживаемой) явлется как раз исполняемый в данный момент метод либо
+    // свободная функция.
+    bool DebugContext::IsLastFrameActive() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(call_stack_desc_mutex_);
+        #endif
+
+        return active_stack_index_ >= (call_stack_desc_.size() - 1);
+    }
+
+    // Возврат ранее сохранённого описания последнего встретившегося в потоке исполнения программы оператора вызова
+    // подпрограммы.
+    CallStatementDesc DebugContext::GetCallStatementDesc() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(last_call_statement_mutex_);
+        #endif
+
+        return last_call_statement_;
+    }
+    
+    // Сохранение данных последнего встретившегося при исполнении программы оператора вызова подпрограммы.
+    void DebugContext::SetCallStatementDesc(const CallStatementDesc& call_statement)
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(last_call_statement_mutex_);
+        #endif
+
+        last_call_statement_ = call_statement;
+    }
+
+    // Проверка индекса активного элемента стека вызовов на допустимость и, при необходимости, его коррекция.
+    void DebugContext::TestActiveDebugStackIndex()
+    {
+        if (call_stack_desc_.empty())
+        {
+            active_stack_index_ = 0;
+            return;
+        }
+
+        if (active_stack_index_ >= call_stack_desc_.size())
+            active_stack_index_ = call_stack_desc_.size() - 1;
     }
 
     // Инициализация объекта - приведение его в начальное состояние и сброс всех данных, кроме звонкового функтора.
@@ -282,7 +361,7 @@ namespace runtime
         SimpleContext::Clear();
         call_stack_desc_.clear();
         breakpoints_.clear();
-        debug_exec_stack_counter_ = 0;
+        active_stack_index_ = 0;
         debug_exec_ = DebugExecutionMode::DEBUG_NO_DEBUG;
     }
 

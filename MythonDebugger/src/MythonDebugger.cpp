@@ -21,7 +21,7 @@ wxCmdLineEntryDesc const static cmd_line_desc[] =
     {wxCMD_LINE_SWITCH, "f", "full-save", "сохранение исходников в файле проекта"},
     {wxCMD_LINE_SWITCH, "u", "utf8", "исходники в кодировке utf-8"},
     {wxCMD_LINE_PARAM, NULL, NULL, "входной файл", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL},
-    {wxCMD_LINE_NONE}
+    wxCMD_LINE_DESC_END
 };
 
 IMPLEMENT_APP(MythonDebuggerApp)

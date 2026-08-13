@@ -32,7 +32,7 @@
 #include <wx/dialog.h>
 #include <wx/stattext.h>
 
-#include "../redefine_.h"
+#include "redefine_.h"
 
 ///////////////////////////////////////////////////////////////////////////
 

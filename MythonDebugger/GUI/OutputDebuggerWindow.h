@@ -2,7 +2,7 @@
 #define __OutputDebuggerWindow__
 
 #include "MythonDebuggerGui.h"
-#include "../redefine_.h"
+#include "redefine_.h"
 
 class OutputDebuggerWindowImpl : public OutputDebuggerWindow
 {

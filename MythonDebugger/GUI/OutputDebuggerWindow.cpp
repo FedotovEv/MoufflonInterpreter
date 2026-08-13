@@ -1,5 +1,5 @@
 
-#include "../MythonDebugger.h"
+#include "MythonDebugger.h"
 #include "OutputDebuggerWindow.h"
 
 OutputDebuggerWindowImpl::OutputDebuggerWindowImpl(wxWindow* parent) :

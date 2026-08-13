@@ -102,7 +102,7 @@ public:
         parent_window_(parent_window),
         debug_output_(parent_window_),
         debugger_project_(debugger_project),
-        debug_context_(debug_output_.GetOutputStream())
+        debug_context_(debug_output_.GetOutputStream(), {})
     {}
     
     ~DebugController() = default;
