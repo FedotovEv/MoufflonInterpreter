@@ -389,22 +389,20 @@ public:
         return "TypeTraits";
     }
 
-    static void ClearInternalClassIds()
-    {
-        internal_classes_ids_.clear();
-    }
-    
-    static void AppendInternalClassId(const std::string& class_name, int class_id)
-    {
-        internal_classes_ids_.emplace(std::pair{class_name, class_id});
-    }
-
-    static void ClearDeclaredClassDefs()
-    {
-        declared_classes_def_.clear();
-    }
-    
+    // Методы управления хранилищами сущностей, определяемых в исходном тексте МУФЛОН-программы.
+    static void ClearAllStaticStorages();    
+    static void AppendInternalClassId(const std::string& class_name, int class_id);
     static void AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def);
+    static void AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def);
+
+    // Статические функции исследования множеств сущностей, определённых в МУФЛОН-программе, и поиск среди них сущностей
+    // некоторого типа с конкретным именем.
+    // Поиск класса с заданным именем class_name.
+    static runtime::ProgramCommandDescriptor ScanForClass(const std::string& class_name);
+    // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
+    static runtime::ProgramCommandDescriptor ScanForMethod(const std::string& method_sign, const std::string& class_name = {});
+    // Поиск свободной функции с заданной сигнатурой free_func_sign.
+    static runtime::ProgramCommandDescriptor ScanForFreeFunction(const std::string& free_func_sign);
 
 private:
     static const std::unordered_map<std::string_view, TypeTraitsCallMethod> type_traits_method_table_;
@@ -413,11 +411,15 @@ private:
     static std::unordered_map<std::string, int> internal_classes_ids_;
     // Словарь связи имени класса и его объекта-дескриптора типа ClassDefinition.
     static std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;
+    // Словарь сохранения связи между сигнатурой (расширенным именем) свободной функции и её объектом-дескриптором
+    // типа FreeFunctionDefinition.
+    static std::unordered_map<std::string, ast::FreeFunctionDefinition*> declared_free_functions_def_;
 
     ObjectHolder traits_value_;       // Характеризуемое значение.
 
+    // Определение числового идента и имени типа значения, хранящегося во вместилище what_id и what_name.
     static int ObjectIdInternal(const ObjectHolder& what_id);
-    static std::string ObjectNameInternal(const ObjectHolder& what_id);
+    static std::string ObjectNameInternal(const ObjectHolder& what_name);
 
     // Обработчики методов характеристического класса.
     ObjectHolder MethodIsBool(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

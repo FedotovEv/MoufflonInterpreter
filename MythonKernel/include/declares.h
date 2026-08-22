@@ -173,6 +173,8 @@ namespace runtime
             return module_string_number >= 0;
         }
     };
+    // Зарезервированное некорректное (невалидное) значение позиционного описателя программной инструкции.
+    constexpr ProgramCommandDescriptor DUMB_PROG_POS{.module_id = -1, .module_string_number = -1};
 
     std::ostream& operator<<(std::ostream& ostr, const ProgramCommandDescriptor& command_desc);
 
@@ -184,3 +186,8 @@ namespace runtime
         SUSPEND_POINT_CO_AWAIT
     };
 } // namespace runtime
+
+// Функция генерации декорированного имени метода либо функции, содержащего также элемент, кодирующий количество аргументов в нём.
+std::string MangleMethodFunctionName(const std::string& method_func_name, size_t arg_count);
+// Функция разделяет калечное имя метода или функции на его компоненты - само имя и количество аргументов процедуры.
+std::pair<std::string, size_t> DemangleMethodFunctionName(const std::string& mangled_method_func_name);

@@ -56,16 +56,25 @@ namespace
         {}
 
         template <typename T>
-        [[nodiscard]] unique_ptr<T> Create(T&& object)
+        void PostProcessObject(const unique_ptr<T>& object_ptr)
         {
-            auto result = make_unique<T>(forward<T>(object));
-            result->SetCommandDesc(lexer_.GetCurrentCommandDesc());
             if constexpr (std::is_same_v<T, ast::ClassDefinition>)
             { // Для узлов определителей классов нужно дополнительно добавить указатель на каждый такой определитель во вспомогательный словарь
               // характеризатора runtime::TypeTraitsInstance.
-                runtime::TypeTraitsInstance::AppendDeclaredClassDef(result->GetClassName(), result.get());
+                runtime::TypeTraitsInstance::AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
             }
+            else if constexpr (std::is_same_v<T, ast::FreeFunctionDefinition>)
+            { // Для узлов же определителей свободных функций следует сделать аналогичное действие, но добавление происходит в другой словарь.
+                runtime::TypeTraitsInstance::AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
+            }
+        }
 
+        template <typename T>
+        [[nodiscard]] unique_ptr<T> Create(T&& object)
+        {
+            auto result = make_unique<T>(forward<T>(object));
+            result->SetCommandDesc(lexer_.GetCurrentCommandDesc());            
+            PostProcessObject(result); // Постобработка созданных объектов, которая требуется для некоторых их типов.
             return result;
         }
 
@@ -74,6 +83,7 @@ namespace
         {
             auto result = make_unique<T>(forward<T>(object));
             result->SetCommandDesc(targ_command_desc);
+            PostProcessObject(result); // Постобработка созданных объектов, которая требуется для некоторых их типов.
             return result;
         }
 
@@ -124,8 +134,7 @@ namespace
         explicit Parser(parse::Lexer& lexer, parse::ParseContext& parse_context) :
             lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
         {
-            runtime::TypeTraitsInstance::ClearInternalClassIds();
-            runtime::TypeTraitsInstance::ClearDeclaredClassDefs();
+            runtime::TypeTraitsInstance::ClearAllStaticStorages();
             // Регистрируем внутренние встроенные "завершённые" классы - с фиксированным набором методов, реализуемых непосредственно
             // в коде данной исполняющей среды и без возможности наследования от них и их дальнейшей модификации.
             // Регистрация класса массива "array".
@@ -233,6 +242,8 @@ namespace
         unique_ptr<ast::Statement> ParseFreeFunction()
         {
             lexer_.Expect<ITokenType::Def>();
+            // Запомним истинное положение в исходном тексте строки с заголовком метода (строки, содержащей def).
+            runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
             runtime::FreeFunction new_free_func = runtime::FreeFunction(ParseMethodDef());
 
             std::string new_func_name = new_free_func.GetName();
@@ -241,7 +252,7 @@ namespace
                 exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + new_func_name + "%2",
                                               {ThrowMessageNumber::THRM_FUNCTION, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
 
-            return exec_factory_.Create(ast::FreeFunctionDefinition(it->second));
+            return exec_factory_.Create(ast::FreeFunctionDefinition(it->second), def_desc);
         }
 
         // Methods -> [def id(Params) : Suite]*
@@ -277,7 +288,7 @@ namespace
             lexer_.ExpectNext<ITokenType::Char>(':');
             lexer_.NextToken();
 
-            parsed_method.body = exec_factory_.Create(ast::MethodBody(ParseSuite()), def_desc);
+            parsed_method.body = exec_factory_.Create(ast::MethodBody(ParseSuite(), def_desc), def_desc);
 
             exec_factory_.SetCurrentMethod();
             return parsed_method;
@@ -309,13 +320,15 @@ namespace
         // ClassDefinition -> Id ['(' Id ')'] : new_line indent MethodList dedent
         unique_ptr<ast::Statement> ParseClassDefinition()
         {
+            // Запомним истинное положение в исходном тексте строки с заголовком класса (строки, содержащей class).
+            runtime::ProgramCommandDescriptor class_desc = lexer_.GetCurrentCommandDesc();
+            lexer_.NextToken();
             string class_name = lexer_.Expect<ITokenType::Id>().value;
 
             lexer_.NextToken();
 
             const runtime::Class* base_class = nullptr;
             std::vector<const runtime::Class*> base_classes;
-            bool is_one_parent = true;
             if (lexer_.CurrentToken() == '(')
             { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
                 std::vector<std::string> parent_list_name = ParseIdList(true);
@@ -332,7 +345,6 @@ namespace
                         
                     base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
                 }
-                is_one_parent = false;
             }
 
             lexer_.Expect<ITokenType::Char>(':');
@@ -345,17 +357,14 @@ namespace
             lexer_.NextToken();
 
             runtime::ObjectHolder class_object_holder;
-            //if (is_one_parent)
-                //class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), base_class));
-            //else
-                class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
+            class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
 
             auto [it, inserted] = declared_classes_.insert({class_name, move(class_object_holder)});
             if (!inserted)
                 exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + class_name + "%2"s,
                     {ThrowMessageNumber::THRM_CLASS, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
 
-            return exec_factory_.Create(ast::ClassDefinition(it->second));
+            return exec_factory_.Create(ast::ClassDefinition(it->second), class_desc);
         }
 
         // Функция выделения "именного терма" - комбинации (последовательности) имён, разделённых точками.
@@ -981,27 +990,16 @@ namespace
             {
                 const auto& tok = lexer_.CurrentToken();
 
-                if (tok.Is<ITokenType::Class>())
-                { // Это определение класса.
-                    lexer_.NextToken();
+                if (tok.Is<ITokenType::Class>())  // Это определение класса.
                     return ParseClassDefinition();
-                }
-                else if (tok.Is<ITokenType::Def>())
-                { // Это определение свободной функции, не являющейся методом класса.
+                else if (tok.Is<ITokenType::Def>())  // Это определение свободной функции, не являющейся методом класса.
                     return ParseFreeFunction();
-                }
                 else if (tok.Is<ITokenType::If>())
-                {
                     return ParseIfCondition();
-                }
                 else if (tok.Is<ITokenType::While>())
-                {
                     return ParseWhileCondition();
-                }
                 else if (tok.Is<ITokenType::Try>())
-                {
                     return ParseTrySuite();
-                }
 
                 auto result = ParseSimpleStatement();
                 lexer_.Expect<ITokenType::Newline>();

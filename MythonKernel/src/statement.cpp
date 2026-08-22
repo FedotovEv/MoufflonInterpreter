@@ -79,7 +79,7 @@ pair<string, size_t> DemangleMethodFunctionName(const string& mangled_method_fun
     return {move(direct_name), arg_count};
 }
 
-void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context& context)
+void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context)
 {
     using namespace runtime;
     CommandGenus current_genus = exec_obj_ptr->GetCommandGenus();
@@ -89,12 +89,48 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
     { // Эти операции будут выполняться только при отладке, то есть если в качестве операнда context
       // передана переменная типа DebugContext.
         DebugExecutionMode use_debug_mode = dbg_context->GetDebugMode();
-        bool is_in_active_frame = dbg_context->IsLastFrameActive();         // Флаг нашего нахождения внутри "активной" (отлаживаемой клиентом-отладчиком) подпрограммы.
-        ProgramCommandDescriptor prev_command = context.GetLastCommandDesc();
-        bool is_new_source_line = prev_command != current_command;  // Признак перехода к новой строке исходника исполняемой МУФЛОН-программы.
-        context.SetLastCommandDesc(current_command);
+        // Флаг нашего нахождения внутри "активной" (отлаживаемой клиентом-отладчиком) подпрограммы.
+        bool is_in_active_frame = dbg_context->IsLastFrameActive();
+        // Формируем (считываем из контекста) набор логических переменных, соответствующих опциям контекста, управляющим различными режимами отладки.
+        // ------
+        //   В общем случае каждая строка исходного текста МУФЛОН-программы может содержать несколько неисполняемых и несколько исполняемых инструкций
+        // (соответствующих этим инструкциям узлов АСД). Множественное совершение различных звонков разных типов для одной и той же строки исходника может
+        // оказаться неоправданным и затрудняющим работу клиента-обработчика, получающего такие звонки. Поэтому система поддержки внешнего отладчика
+        // МУФЛОН-интерпретатора позволяет в некоторых пределах ограничивать генерацию таких звонков с помощью определённых опций отладочного контекста,
+        // позволяющих сократить их количество до одного единственного звонка каждой категории.
+        //   Таких ограничений существует три: только один "исполнительный" звонок на строку исходника, только один "неисполнительный" звонок на строку,
+        // только один любой звонок на строку вообще, вне зависимости от его категории. Кроме того, есть возможность явно ограничить до одного количество
+        // звонков совершаемых по поводу срабатывания точек останова (которые могут быть привязаны как к исполнительным, так и к неисполнительным узлам).
+        // ------
+        // Флаг режима однократности отправления получателю любых звонков для данной строки исходника.
+        LinkageValue any_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_ANY_CALL);
+        bool any_call_once = std::holds_alternative<bool>(any_call_once_opt) && std::get<bool>(any_call_once_opt);
+        // Флаг режима однократности отправления получателю звонков, ассоциированных с неисполняемыми инструкциями.
+        LinkageValue nonexec_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_NONEXEC_CALL);
+        bool nonexec_call_once = std::holds_alternative<bool>(nonexec_call_once_opt) && std::get<bool>(nonexec_call_once_opt);
+        // Флаг режима однократности отправления получателю звонков, ассоциированных с исполняемыми инструкциями.
+        LinkageValue exec_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_EXEC_CALL);
+        bool exec_call_once = std::holds_alternative<bool>(exec_call_once_opt) && std::get<bool>(exec_call_once_opt);
+        // Флаг необходимости высылки звонка только о первом бряке, сработавшем на очередной строке программы.
+        LinkageValue only_first_breakpoint_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_BREAKPOINT_CALL);
+        bool only_first_breakpoint = std::holds_alternative<bool>(only_first_breakpoint_opt) && std::get<bool>(only_first_breakpoint_opt);
+        // Логическое значение блокировки высылки звонков для рамочных ограничителей вызова подпрограмм.
+        LinkageValue skip_call_frame_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
+        bool skip_call_frame = std::holds_alternative<bool>(skip_call_frame_opt) && std::get<bool>(skip_call_frame_opt);
+        // Логическое значение блокировки высылки звонков для декларативнх узлов АСД.
+        LinkageValue skip_declarative_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
+        bool skip_declarative = std::holds_alternative<bool>(skip_declarative_opt) && std::get<bool>(skip_declarative_opt);
 
-        // Лямбда для совершения звонка, если выполнены необхожимые для него условия.
+        // Флаг перехода на новую строку исходника.
+        bool is_new_source_line = (current_command != context.GetLastCommandDesc()) || (current_genus == CommandGenus::CMD_GENUS_INITIALIZE);
+        if (is_new_source_line)
+        { // Произошёл переход на следующую строку исходного текста исполняемой МУФЛОН-программы.
+            dbg_context->ClearAllRowCallbackFlags();
+            dbg_context->SetLastCommandDesc(current_command);
+        }
+
+        // Вспомогательные локальные функторы для совершения некоторых однородных действий в разных местах данной процедуры.
+        // Лямбда для совершения звонка, если выполнены необходимые для него условия.
         auto debug_callback_caller = [&](DebugCallbackReason call_reason)
             {
                 // Звонок типа DEBUG_CALLBACK_INIT выполянется безусловно. Судьба остальных звонков зависит от режима отладки.
@@ -127,9 +163,30 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                     default:
                         break;
                     }
+
+                    // Проверка выполнения условия однократности совершения тех или иных звонков разных категорий.
+                    DebugContext::CallbackCategoryFlag row_already_callbacked = dbg_context->GetRowCallbackFlags();
+                    if (any_call_once && (row_already_callbacked != DebugContext::CallbackCategoryFlag::CALLBACK_CAT_NOTHING))
+                        return; // При такой настройке любой сигнал должен высылаться только единственный раз на строку исходника и ранее это уже было сделано.
+                    if (exec_obj_ptr->IsCommandExecutable())
+                    { // Предстоящий звонок связан с исполнительным узлом АСД.
+                        if (exec_call_once && (row_already_callbacked & DebugContext::CallbackCategoryFlag::CALLBACK_CAT_EXEC))
+                            return; // "Исполнительный" сигнал должен высылаться только однажды на строку исходника и ранее это уже было сделано.
+                    }
+                    else
+                    { // Предстоящий звонок связан с неисполнительным узлом АСД.
+                        if (nonexec_call_once && (row_already_callbacked & DebugContext::CallbackCategoryFlag::CALLBACK_CAT_NONEXEC))
+                            return; // "Неисполнительный" сигнал должен высылаться только однажды на строку исходника и ранее это уже было сделано.
+                    }
                 }
 
                 // Отладочный звонок требуется.
+                // Сначала устанавливаем метку состоявшегося звонка в отладочном контексте.
+                if (exec_obj_ptr->IsCommandExecutable())
+                    dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_EXEC);
+                else
+                    dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_NONEXEC);
+                // Далее производим сам звонок, если для него назначен обработчик.
                 if (dbg_context->GetDebugCallback())
                     dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
                         (call_reason, exec_obj_ptr, closure, context));
@@ -142,13 +199,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                 // (типа "шаг с обходом" или "исполнение до завершения") будут подаваться применительно к телу именно этого
                 // метода (функции).
                 dbg_context->SetActiveStackIndex();
-            };
-        // Лямбда для совершения опционального звонка (управляемого опциями контекста).
-        auto opt_debug_callback_caller = [&](DebugCallbackReason call_reason, Context::OptionType opt_type)
-            {
-                LinkageValue skip_call_opt = dbg_context->GetOption(opt_type);
-                if (!(std::holds_alternative<bool>(skip_call_opt) && std::get<bool>(skip_call_opt)))
-                    debug_callback_caller(call_reason);  // Опция opt_type не блокирует звонки - звонок можно произвести.
+
             };
         // Лямбда-функтор получения типа объекта вызывающей инструкции (MethodCall, FreeFunctionCall).
         auto get_invoked_type = [&]() -> CallStatementType
@@ -160,7 +211,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                 else
                     return CallStatementType::CALL_STATEMENT_UNKNOWN;
             };
-        // Лямбда-функтор для извлечения из объекта вызывающей инструкции (MethodCall, FreeFunctionCall).
+        // Лямбда-функтор для извлечения из объекта вызывающей инструкции (MethodCall, FreeFunctionCall) имени вызываемой процедуры.
         auto get_invoked_name = [&]() -> string
             {
                 if (ast::MethodCall* method_call_exec = dynamic_cast<ast::MethodCall*>(exec_obj_ptr))
@@ -171,68 +222,109 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
                     return {};
             };
 
+        // Подготовительная часть закончена, приступаем к обработке поступившей команды. Сначала создадим новый кадр в модели стека вызовов,
+        // если поступившая команда предполагает образование такого кадра
         if (current_genus == CommandGenus::CMD_GENUS_INITIALIZE)
         {
             dbg_context->ClearCallStack();
             // Здесь создаём запись о корневом стековом кадре, соответствующем модульному уровню кода исполняемой МУФЛОН-прошграммы.
-            CallStackEntry call_stack_entry;
-            call_stack_entry.call_command = current_command;
-            call_stack_entry.first_command = current_command;
-            call_stack_entry.closure_ptr = &closure;
-            call_stack_entry.info_data = "root";
-            call_stack_entry.is_valid = true;
-            dbg_context->PushCallStackEntry(call_stack_entry);
-            // Для инициализирующего (псевдо)оператора всегда безусловно выполняем отладочный звонок.
-            debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_INIT);
-            return;
+            dbg_context->PushCallStackEntry
+                ({
+                    .call_command = current_command,
+                    .first_command = current_command,
+                    .closure_ptr = &closure,
+                    .info_data = "root",
+                    .is_valid = true
+                });
         }
         else if (current_genus == CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT)
         { // Это пседокоманда-уведомление, формируемая перед началом обработки действительного тела метода пользовательского
-          // (не встроенного) класса. Создаём запись о новом стековом кадре. Она пока будет неполна, но позже будет дополнена
-          // при исполнении первой команды тела вызванного метода.
-            CallStatementDesc last_call_statement_desc = dbg_context->GetCallStatementDesc();
-            CallStackEntry new_stack_rec;
-            new_stack_rec.call_command = {-1, -1};
-            void* info_data = static_cast<PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr;
-            if (info_data)
+          // (не встроенного) класса или свободной функции. Создаём запись о новом стековом кадре (кадре для вызванной подпрограммы).
+            CallStackEntry new_stack_rec
+            {
+                .call_command = dbg_context->GetCallStatementDesc().position,      // Координаты инструкции, вызвавшей эту процедуру.
+                .first_command = current_command,
+                .closure_ptr = &closure,
+                .is_valid = true  // Все поля записи нового стекового кадра заполнены - теперь он вполне валиден.
+            };            
+            if (void* info_data = static_cast<PsevdoExecutable*>(exec_obj_ptr)->info_data_ptr)
                 new_stack_rec.info_data = *reinterpret_cast<std::string*>(info_data);
-            new_stack_rec.first_command = current_command;
-            new_stack_rec.call_command = last_call_statement_desc.position;      // Координаты инструкции, вызвавшей эту процедуру.
-            new_stack_rec.closure_ptr = &closure;
-            new_stack_rec.is_valid = true;  // Все поля записи нового стекового кадра заполнены - теперь он вполне валиден.
-
-            // Пока new_stack_rec.is_valid оставляем == false, так как на данный момент структура стекового кадра new_stack_rec всё
-            // ещё полностью не определена, и информация о первой исполняемой строке нового кадра будет известна и захвачена только
-            // при последующем переходе к следующей строке исходника.
             dbg_context->PushCallStackEntry(new_stack_rec);
-            // Производим отладочный звонок, если это разрешено настройками (соответствующим атрибутом отладочного контекста).
-            opt_debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_PRE_CALL_METHOD, Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
-            return;
         }
-        else if (current_genus == CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
+
+        // При переходе на новую строку исходника проверим наличие здесь (на этой новой строке) сработавших точек останова (бряков).
+        // Модель стека вызовов к этому моменту уже будет иметь законченный вид, соответствующий исполняемой процедуре МУФЛОН-программы.
+        if (is_new_source_line)
+            dbg_context->FindBreakpoints(current_command, exec_obj_ptr, closure);
+
+        // Продолжим обработку поступившей инструкции, высылая отладчику-получателю соответствующие отладочные звонки. Звонки от "стартовых"
+        // (открывающих) неисполняющих узлов будут поступать первыми (до возможных точек останова, которые тоже могут быть с ними связаны).
+        if (current_genus == CommandGenus::CMD_GENUS_INITIALIZE)
+        { // Для инициализирующего (псевдо)оператора всегда безусловно выполняем отладочный звонок.
+            debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_INIT);
+        }
+        else if (current_genus == CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT)
+        { // Это пседокоманда-уведомление, формируемая перед началом обработки действительного тела метода пользовательского
+          // (не встроенного) класса. Производим отладочный звонок, если это разрешено настройками (соответствующим атрибутом отладочного контекста).
+            if (!skip_call_frame)  
+                debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_PRE_CALL_METHOD);
+        }
+        else if (current_genus == CommandGenus::CMD_GENUS_DECLARATIVE)
+        { // Это организующая (декларативная или группирующая) команда, не выполняющая прямых непосредственных действий.
+            if (!skip_declarative)
+                debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_DECLARATIVE);
+        }
+
+        // Далее должны последовать звонки от сработавших бряков.
+        if (is_new_source_line)
+        {
+            for (size_t triggered_breakpoint : dbg_context->GetTriggredBreakpoints())
+            { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
+                // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
+                closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
+                debug_callback_caller(runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT);
+                closure.erase(BREAKPOINT_INFO_FIELD_NAME);
+                if (only_first_breakpoint)
+                    break;  // Используется такой режим обработки бряков, при котором звонком сопровождается только первая сработавшая точка останова.
+            }
+        }
+
+        // Наконец, совершаем звонки для "финишных" (закрывающих) неисполняющих узлов, которые будут следовать после звонков от возможно
+        // связанных с ними точек останова.
+        if (current_genus == CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT)
         { // Это пседокоманда-уведомление, формируемая после завершения обработки действительного тела метода пользовательского
           // (не встроенного) класса.
-            if (!dbg_context->IsCallbackExitMethod())
+            if (!dbg_context->IsCallbackEntryExitMethod())
+            {
                 // При завершении любой подпрограммы путём исполнения инструкции явного выхода из неё перед оконечным ограничительным сигналом
                 // будет сгенерирован также отладочный звонок о прерывании работы этой процедуры по такой инструкции (звонок типа DEBUG_CALLBACK_EXIT_METHOD).
                 // Если же метод или функция не содержат или не исполнили какого-либо оператора явного выхода из метода и доработали до
                 // своего конца (до завершающего ограничителя), то чтобы соблюсти единообразие сигнализации для всех случаев завершения подпрограмм,
                 // сгенерируем такой звонок здесь принудительно.
+                dbg_context->SetCallbackEntryExitMethod();
                 debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD);
+                dbg_context->ClearAllRowCallbackFlags();    // Сбросим флаг состоявшегося звонка, чтобы он не мешал последующему рамочному сигналу.
+            }
             // Возможен ещё отладочный рамочный (ограничительный) звонок вызова метода, если это разрешено соответствующим атрибутом отладочного контекста.
-            opt_debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_AFTER_CALL_METHOD, Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
+            if (!skip_call_frame)
+                debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_AFTER_CALL_METHOD);
             dbg_context->PopCallStackEntry(); // Удаляем запись о выбывающем стековом кадре завершившегося метода.
-            return;
         }
-        else if (current_genus == CommandGenus::CMD_GENUS_CALL_METHOD)
+        // Все неисполнительные команды полностью обслужены, для таких узлов следует просто прекратить работу.
+        if (!exec_obj_ptr->IsCommandExecutable())
+            return;
+
+        // Далее обслуживаем только исполнительные команды.
+        if (current_genus == CommandGenus::CMD_GENUS_CALL_METHOD)
         { // Команда вызова метода.
             // Здесь нужно сохранить координаты вызыващей процедуру (метод или свободную функцию) инструкции, чтобы после записать её адрес в стековый
             // кадр вызванной процедуры.
-            CallStatementDesc call_statement_desc;
-            call_statement_desc.call_type = get_invoked_type();
-            call_statement_desc.position = current_command;
-            call_statement_desc.invoked_name = get_invoked_name();
-            dbg_context->SetCallStatementDesc(call_statement_desc);
+            dbg_context->SetCallStatementDesc
+                ({
+                    .call_type = get_invoked_type(),
+                    .position = current_command,
+                    .invoked_name = get_invoked_name()
+                });
             // Делаем звонок о встретившейся инструкции вызова подпрограммы.
             debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_CALL_METHOD);
             return;
@@ -240,47 +332,12 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, Closure& closure, Context
         else if (current_genus == CommandGenus::CMD_GENUS_RETURN_FROM_METHOD)
         { // Инструкция выхода из процедуры.
             // Сделаем отметку в стековом кадре текущей процедуры, что звонок типа DEBUG_CALLBACK_EXIT_METHOD был сделан.
-            dbg_context->SetCallbackExitMethod();
+            dbg_context->SetCallbackEntryExitMethod();
             debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD);
             return;
         }
-        else if (current_genus == CommandGenus::CMD_GENUS_DECLARATIVE)
-        { // Это организующая (декларативная или группирующая) команда, не выполняющая прямых непосредственных действий.
-            opt_debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_DECLARATIVE, Context::OptionType::CONTEXT_OPT_SKIP_DECLARATIVE);
-            return;
-        }
-
-        // Все прочие события обрабатываются только при первом переходе к новой строке исходника.
-        if (is_new_source_line)
-        { // Исполнение перешло к следующей строке исходного текста.
-            /*
-            if (!dbg_context->IsCallStackEntryValid() && current_command.module_string_number >= 0)
-            { // Сохраняем информацию о положении первой исполняемой строки текущего стекового кадра.
-              // Сам такой кадр был уже создан ранее при входе в функцию-член ClassInstance::Call, вызывающую
-              // какой-либо метод класса. Эта функция отправляет уведомление о начале своей работы в виде
-              // псевдокоманды рода runtime::CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT.
-                CallStackEntry new_stack_rec = dbg_context->GetCallStackEntry().first;
-                new_stack_rec.first_command = current_command;
-                new_stack_rec.closure_ptr = &closure;
-                new_stack_rec.is_valid = true;  // Все поля записи нового стекового кадра заполнены - теперь он вполне валиден.
-                dbg_context->UpdateCallStackEntry(new_stack_rec);
-            }
-            */
-            // Сначала проверим наличие здесь (на этой новой строке) точек останова.
-            if (dbg_context->GetDebugCallback())
-            { // Если обработчик звонков не назначен, исследовать возможные бряки бессмысленно.
-                for (size_t triggered_breakpoint : dbg_context->FindBreakpoints(current_command, exec_obj_ptr, closure))
-                {
-                    if (dbg_context->IsBreakpointEnabled(triggered_breakpoint))
-                    { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
-                        // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
-                        closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
-                        debug_callback_caller(runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT);
-                        closure.erase(BREAKPOINT_INFO_FIELD_NAME);
-                    }
-                }
-            }
-            //
+        else
+        { // Все прочие возможные звонки от ординарных исполнительских инструкций.
             debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_STEP);
         }
     }
@@ -1260,6 +1317,11 @@ namespace ast
         return cls_.TryAs<runtime::Class>();
     }
 
+    const runtime::Class* ClassDefinition::GetClass() const
+    {
+        return cls_.TryAs<runtime::Class>();
+    }
+
     FreeFunctionDefinition::FreeFunctionDefinition(runtime::ObjectHolder free_function) :
         free_function_(move(free_function))
     {
@@ -1934,7 +1996,8 @@ namespace ast
         return ObjectHolder::Share(new_class_instance_);
     }
 
-    MethodBody::MethodBody(std::unique_ptr<Statement>&& body) : body_(move(body))
+    MethodBody::MethodBody(std::unique_ptr<Statement>&& body, const runtime::ProgramCommandDescriptor& real_method_pos) :
+        body_(move(body))
     {
         // Инструкция является декларативной - контейнером для фактически исполняемых инструкций body_.
         SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
@@ -1944,7 +2007,10 @@ namespace ast
         method_sentinel_end_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
 
         // Определим положения ограничителей в исходном тексте исполняемой программы.
-        method_sentinel_begin_->SetCommandDesc(body_->GetCommandDesc());
+        if (real_method_pos.IsValid())
+            method_sentinel_begin_->SetCommandDesc(real_method_pos);
+        else
+            method_sentinel_begin_->SetCommandDesc(body_->GetCommandDesc());
         runtime::ProgramCommandDescriptor after_body_command_desc;
         if (Compound* compound_body_ptr = dynamic_cast<Compound*>(body_.get()))
             after_body_command_desc = compound_body_ptr->GetLastCommandDesc();

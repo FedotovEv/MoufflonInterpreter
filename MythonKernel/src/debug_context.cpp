@@ -97,7 +97,7 @@ namespace runtime
         // Макрос проверки допустимости индекса для некоторой существующей точки останова.
         #define CHECK_RET_BREAKPOINT(what_ret) \
             std::lock_guard lg(breakpoints_mutex_); \
-            if (breakpoint_index >= breakpoints_.size() || breakpoints_[breakpoint_index].position == BreakpointDesc::DUMB_PROG_POS) \
+            if (breakpoint_index >= breakpoints_.size() || !breakpoints_[breakpoint_index].position.IsValid()) \
                 return (what_ret)
 
         // Макрос подстановки индекса истинной вершины стека вызовов вместо значения по умолчанию (если индекс не указан явно) и
@@ -208,7 +208,7 @@ namespace runtime
         #endif
 
         call_stack_desc_.clear();
-        TestActiveDebugStackIndex();
+        TestActiveStackIndex();
     }
 
     // Формирование/правка/удаление описателя отладочного стекового кадра метода или функции отлаживаемой программы.
@@ -256,7 +256,7 @@ namespace runtime
 
         CallStackEntry ret_value = call_stack_desc_.back();
         call_stack_desc_.pop_back();
-        TestActiveDebugStackIndex();
+        TestActiveStackIndex();
 
         return ret_value;
     }
@@ -268,14 +268,14 @@ namespace runtime
     }
 
     // Проверка наличия ранее совершенного звонка типа DEBUG_CALLBACK_EXIT_METHOD при исполнении инструкций вызода из данной процедуры.
-    bool DebugContext::IsCallbackExitMethod(size_t stack_entry_index) const
+    bool DebugContext::IsCallbackEntryExitMethod(size_t stack_entry_index) const
     {
         CHECK_RET_CALL_ENTRY(true);
         return call_stack_desc_[stack_entry_index].is_method_exit_callback;
     }
     
     // Установка признака совершения звонка типа DEBUG_CALLBACK_EXIT_METHOD для процедуры, которой соответствует указанный кадр вызова.
-    size_t DebugContext::SetCallbackExitMethod(bool new_callback_status, size_t stack_entry_index)
+    size_t DebugContext::SetCallbackEntryExitMethod(bool new_callback_status, size_t stack_entry_index)
     {
         CHECK_RET_CALL_ENTRY(RESERVED_VALUE);
         call_stack_desc_[stack_entry_index].is_method_exit_callback = new_callback_status;
@@ -302,7 +302,7 @@ namespace runtime
         #endif
 
         active_stack_index_ = new_active_stack_index;
-        TestActiveDebugStackIndex();
+        TestActiveStackIndex();
     }
 
     // Проверяем "активность" последнего стекового кадра в их общем списке. Если "активен" именно последний такой
@@ -339,7 +339,7 @@ namespace runtime
     }
 
     // Проверка индекса активного элемента стека вызовов на допустимость и, при необходимости, его коррекция.
-    void DebugContext::TestActiveDebugStackIndex()
+    void DebugContext::TestActiveStackIndex()
     {
         if (call_stack_desc_.empty())
         {
@@ -376,7 +376,7 @@ namespace runtime
         size_t result = 0;
         for (const BreakpointDesc& break_desc : breakpoints_)
         {
-            if (break_desc.position != BreakpointDesc::DUMB_PROG_POS)
+            if (break_desc.position.IsValid())
             {
                 if (break_desc.is_enabled || !is_enabled_only)
                     ++result;
@@ -393,8 +393,8 @@ namespace runtime
 
         size_t result = RESERVED_VALUE;
         for (size_t break_index = 0;
-            break_index < breakpoints_.size() && breakpoints_[break_index].position != BreakpointDesc::DUMB_PROG_POS;
-            ++break_index)
+             break_index < breakpoints_.size() && breakpoints_[break_index].position.IsValid();
+             ++break_index)
         {
             if (result == RESERVED_VALUE || result < break_index)
                 result = break_index;
@@ -409,7 +409,7 @@ namespace runtime
         #endif
 
         size_t break_index = 0;
-        for (; break_index < breakpoints_.size() && breakpoints_[break_index].position != BreakpointDesc::DUMB_PROG_POS; ++break_index);
+        for (; break_index < breakpoints_.size() && breakpoints_[break_index].position.IsValid(); ++break_index);
         if (break_index >= breakpoints_.size()) // Пустых ячеек в breakpoints_ сейчас нет, создаём новые.
             breakpoints_.resize(breakpoints_.size() + 10);
 
@@ -422,10 +422,33 @@ namespace runtime
         return AddBreakpoint({.position = new_break_position});
     }
 
+    // Создание бряка на любой вызов некоторого метода с именем methon_name, принимающий params_count аргументов и принадлежащий
+    // классу class_name (или любому классу, если class_name пуст).
+    size_t DebugContext::AddBreakAtMethod(const std::string& method_name, size_t params_count, const std::string& class_name)
+    {
+        if (ProgramCommandDescriptor method_def_pos =
+            TypeTraitsInstance::ScanForMethod(MangleMethodFunctionName(method_name, params_count)); method_def_pos != DUMB_PROG_POS)
+            // Метод с затребованной сигнатурой найден. Создаёи бряк на его декларацию и возвращаем индекс этого бряка.
+            return AddBreakpoint(method_def_pos);
+        else    // Метод с указанными именными характеристиками и классовой принадлежностью найти не удалось.
+            return RESERVED_VALUE;
+    }
+
+    // Создание бряка на любой вызов свободной функции с именем free_func_name, принимающей params_count аргументов.
+    size_t DebugContext::AddBreakAtFreeFunction(const std::string& free_func_name, size_t params_count)
+    {
+        if (ProgramCommandDescriptor free_func_def_pos =
+            TypeTraitsInstance::ScanForFreeFunction(MangleMethodFunctionName(free_func_name, params_count)); free_func_def_pos != DUMB_PROG_POS)
+            // Свободная функция с затребованной сигнатурой найдена. Создаёи бряк на её декларацию и возвращаем его индекс.
+            return AddBreakpoint(free_func_def_pos);
+        else    // Свободную функцию с указанными именными характеристиками найти не удалось.
+            return RESERVED_VALUE;
+    }
+
     bool DebugContext::DeleteBreakpoint(size_t breakpoint_index)
     { // Удаление существующей в списке точки останова.
         CHECK_RET_BREAKPOINT(false);
-        breakpoints_[breakpoint_index].position = BreakpointDesc::DUMB_PROG_POS;
+        breakpoints_[breakpoint_index].position = DUMB_PROG_POS;
         breakpoints_[breakpoint_index].is_enabled = false;
         return true;
     }
@@ -485,19 +508,19 @@ namespace runtime
         return breakpoints_[breakpoint_index];
     }
 
-    std::vector<size_t> DebugContext::FindBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure)
+    size_t DebugContext::FindBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure)
     { // Составление списка точек останова для исходной строки test_break_position, которые должны сработать в данный момент.
         #ifndef MYTHON_UNITHREAD
             std::lock_guard lg(breakpoints_mutex_);
         #endif
 
-        std::vector<size_t> result_break_list;
+        triggered_breakpoints_.clear();
         size_t break_index = 0;
         for (; break_index < breakpoints_.size(); ++break_index)
         {
             BreakpointDesc& break_desc = breakpoints_[break_index];
-            if (break_desc.position == test_break_position && break_desc.is_enabled)
-            { // Перебираем все активные точки останова, установленные на test_break_position.
+            if (break_desc.position.IsValid() && break_desc.position == test_break_position && break_desc.is_enabled)
+            { // Перебираем все существующие и активные точки останова, установленные на test_break_position.
                 if (break_desc.is_conditional)
                 { // Это условная точка останова, нужно проверить выполнение условия, что мы сейчас и проделаем.
                     if (!debug_callback_)
@@ -515,9 +538,51 @@ namespace runtime
                         continue;
                 }
                 // Очередная нужная точка останова с индексом break_index найдена. Добавим её в формируемый список.
-                result_break_list.push_back(break_index);
+                triggered_breakpoints_.push_back(break_index);
             }
         }
-        return result_break_list;
+        return triggered_breakpoints_.size();
+    }
+
+    std::vector<size_t> DebugContext::GetTriggredBreakpoints() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(breakpoints_mutex_);
+        #endif
+
+        return triggered_breakpoints_;
+    }
+
+    // Сброс всех строковых признаков ранее совершённых отладочных звонков.
+    void DebugContext::ClearAllRowCallbackFlags()
+    {
+        row_callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
+    }
+
+    // Установка строкового (для текущей строки исходника) флага совершённого отладочного звонка категории set_flag.
+    #ifndef MYTHON_UNITHREAD
+        DebugContext::CallbackCategoryFlag DebugContext::SetRowCallbackFlag(CallbackCategoryFlag set_flag)
+        {
+            CallbackCategoryFlag old_callback_flags_value = row_callback_flags_.load(), new_callback_flags_value;
+
+            do
+            {
+                new_callback_flags_value = static_cast<CallbackCategoryFlag>(old_callback_flags_value | set_flag);
+            }
+            while (!row_callback_flags_.compare_exchange_strong(old_callback_flags_value, new_callback_flags_value));
+
+            return new_callback_flags_value;
+        }
+    #else
+        DebugContext::CallbackCategoryFlag DebugContext::SetRowCallbackFlag(CallbackCategoryFlag set_flag)
+        {
+            return row_callback_flags_ = static_cast<CallbackCategoryFlag>(callback_flags_ | set_flag);
+        }
+    #endif
+
+    // Возврат текущего состояния строковых флагов совершённых ранее звонков.
+    DebugContext::CallbackCategoryFlag DebugContext::GetRowCallbackFlags() const
+    {
+        return row_callback_flags_;
     }
 } // namespace runtime

@@ -20,8 +20,6 @@ namespace runtime
 
     struct BreakpointDesc
     {
-        static constexpr ProgramCommandDescriptor DUMB_PROG_POS{.module_id = -1, .module_string_number = -1};
-
         ProgramCommandDescriptor position{-1, -1};  // Положение точки останова в исходном коде МУФЛОН-программы.
         int break_count = 0;            // Счетчик срабатываний этой точки.
         bool is_conditional = false;    // Является ли точка останова условной. Если == "ИСТИНА", к точке привязано некоторое условие, которое будет
@@ -80,6 +78,8 @@ namespace runtime
 
     class DebugContext : public SimpleContext
     {
+        friend void ::PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context);
+
     public:
         static constexpr size_t RESERVED_VALUE = (std::numeric_limits<size_t>::max)();
 
@@ -93,7 +93,7 @@ namespace runtime
         void SetDebugCallback(DebugCallback debug_callback);
         // Инициализация объекта - приведение его в начальное состояние и сброс всех данных, кроме звонкового функтора.
         void Clear();
-
+        
         // Три определённые ниже функции нарушают инкапсуляцию класса и синхронизацию при параллельном доступе,
         // поэтому предназначены только для отладочных и исследовательских целей.
         // Возврат просмотровой ссылки на стек вызовов исполяющейся МУФЛОН-программы.
@@ -133,36 +133,26 @@ namespace runtime
         bool IsCallStackEntryValid(size_t stack_entry_index = RESERVED_VALUE) const;
         // Методы обслуживания флага наличия звонка инструкции явного выхода (типа DEBUG_CALLBACK_EXIT_METHOD).
         // Проверка наличия ранее совершенного звонка типа DEBUG_CALLBACK_EXIT_METHOD при исполнении инструкций вызода из данной процедуры.
-        bool IsCallbackExitMethod(size_t stack_entry_index = RESERVED_VALUE) const;
+        bool IsCallbackEntryExitMethod(size_t stack_entry_index = RESERVED_VALUE) const;
         // Установка признака совершения звонка типа DEBUG_CALLBACK_EXIT_METHOD для процедуры, которой соответствует указанный кадр вызова.
-        size_t SetCallbackExitMethod(bool new_callback_status = true, size_t stack_entry_index = RESERVED_VALUE);
-
-        // Методы обслуживания указателя (индекса) положения в стеке вызовов текущей отлаживаемой функции
-        // (то есть той, с которой в данный момент работает отладчик).
-        // Возврат положения (индекса) текущего "активного" стекового кадра (то есть кадра, принадлежащего тому методу или функции,
-        // с которой в данный момент работает отладчик).
-        size_t GetActiveStackIndex() const;
-        // Установка нового значения индекса "активного" стекового кадра. При вызове с аргументом по умолчанию устанавливает этот
-        // индекс на верхушку стека вызовов.
-        void SetActiveStackIndex(size_t new_active_stack_index = RESERVED_VALUE);
-        // Проверка "активности" последнего стекового кадра в их общем списке.
-        bool IsLastFrameActive() const;
-
-        // Несколько методов для запоминания положений инструкций (соответствующих им узлов АСД), вызывающих различные подпрограммы.
-        // Возврат сохранённого описания инструкции вызова процедуры.
-        CallStatementDesc GetCallStatementDesc() const;
-        // Сохранение сведений об операторе, вызывающем какую-либо процедуру.
-        void SetCallStatementDesc(const CallStatementDesc& call_statement);
+        size_t SetCallbackEntryExitMethod(bool new_callback_status = true, size_t stack_entry_index = RESERVED_VALUE);
 
         // Выполнение операций над списком точек останова.
         // Подсчёт общего количества существующих на данный момент точек останова (бряков).
         size_t BreakpointsCount(bool is_enabled_only = false) const;
         // Возвращает максимальный индекс существующей точки останова. Если бряков вовсе нет, возвращаем зарезервированное значение.
         size_t MaxBreakpointIndex() const;
+        // Набор функций-членов создания точек останова в разных вариантах.
         // Создание полностью описанной точки останова.
         size_t AddBreakpoint(const BreakpointDesc& new_break);
         // Создание типового бряка. Все его параметры, кроме положения, принимаются по умолчанию.
         size_t AddBreakpoint(const ProgramCommandDescriptor& new_break_position);
+        // Создание бряка на любой вызов некоторого метода с именем methon_name, принимающий params_count аргументов и принадлежащий
+        // классу class_name (или любому классу, если class_name пуст).
+        size_t AddBreakAtMethod(const std::string& method_name, size_t params_count, const std::string& class_name = {});
+        // Создание бряка на любой вызов свободной функции с именем free_func_name, принимающей params_count аргументов.
+        size_t AddBreakAtFreeFunction(const std::string& free_func_name, size_t params_count);
+        // -----------
         // Удаление существующей в списке точки останова.
         bool DeleteBreakpoint(size_t breakpoint_index);
         // Активация (включение) точки останова с индексом breakpoint_index.
@@ -183,16 +173,50 @@ namespace runtime
         bool SetBreakpointCount(size_t breakpoint_index, int new_break_count = 0);
         // Получение копии полного описания существующей точки останова с индексом breakpoint_index.
         BreakpointDesc GetBreakpointDesc(size_t breakpoint_index) const;
-        // Формирование списка точек останова для исходной строки test_break_position, которые должны сработать в данный момент.
-        std::vector<size_t> FindBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure);
+        // Получение списка бряков, которые должны сработать в текущей исполняемой строке программы. Этот список обновляется
+        // каждый раз при переходе к другой строке исходника.
+        std::vector<size_t> GetTriggredBreakpoints() const;
 
     private:
         static constexpr BreakpointDesc DUMB_BREAKPOINT{.position = {-1, -1}, .break_count = 0, .is_conditional = false, .is_enabled = false/*, .is_passed = true*/};
+        enum CallbackCategoryFlag
+        {
+            CALLBACK_CAT_NOTHING = 0,
+            CALLBACK_CAT_NONEXEC = 1,
+            CALLBACK_CAT_EXEC = 2
+        };
 
-        void TestActiveDebugStackIndex();
+        // Методы обслуживания указателя (индекса) положения в стеке вызовов текущей отлаживаемой функции
+        // (то есть той, с которой в данный момент работает отладчик).
+        // Возврат положения (индекса) текущего "активного" стекового кадра (то есть кадра, принадлежащего тому методу или функции,
+        // с которой в данный момент работает отладчик).
+        size_t GetActiveStackIndex() const;
+        // Установка нового значения индекса "активного" стекового кадра. При вызове с аргументом по умолчанию устанавливает этот
+        // индекс на верхушку стека вызовов.
+        void SetActiveStackIndex(size_t new_active_stack_index = RESERVED_VALUE);
+        // Проверка "активности" последнего стекового кадра в их общем списке.
+        bool IsLastFrameActive() const;
+        // Проверка индекса активного элемента стека вызовов на допустимость и, при необходимости, его коррекция.
+        void TestActiveStackIndex();
+
+        // Несколько методов для запоминания положений инструкций (соответствующих им узлов АСД), вызывающих различные подпрограммы.
+        // Возврат сохранённого описания инструкции вызова процедуры.
+        CallStatementDesc GetCallStatementDesc() const;
+        // Сохранение сведений об операторе, вызывающем какую-либо процедуру.
+        void SetCallStatementDesc(const CallStatementDesc& call_statement);
+
+        // Формирование списка точек останова для исходной строки test_break_position, которые должны сработать в данный момент.
+        size_t FindBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure);
+
+        // Методы запоминания фактов совершения отладочных звонков различных категорий для текущей строки исходника.
+        void ClearAllRowCallbackFlags();                   // Сброс всех признаков ранее совершённых отладочных звонков.
+        // Установка флага совершённого отладочного звонка категории set_flag.
+        CallbackCategoryFlag SetRowCallbackFlag(CallbackCategoryFlag set_flag);
+        CallbackCategoryFlag GetRowCallbackFlags() const;  // Возврат текущего состояния флагов совершённых ранее звонков.
 
         DebugCallback debug_callback_;                      // Экземпляр функтора-обработчика отладочных звонков.
         std::vector<BreakpointDesc> breakpoints_;           // Список существующих точек останова.
+        std::vector<size_t> triggered_breakpoints_;         // Список индексов точек останова, которые должны сработать в текущей исполняемой строке.
         std::vector<CallStackEntry> call_stack_desc_;       // Описание текущего стека вызовов программы.
         // active_stack_index_ - индекс стекового кадра, принадлежащего методу (или свободной функции), с которым в данный
         // момент проводится работа (для него внешнему отладчику был отправлен последний состоявшийся отладочный звонок).
@@ -205,6 +229,8 @@ namespace runtime
             // потокобезопасности, так как предназначен для одновременного доступа как из потока исполнения программы, так и из
             // параллельно выполняющегося потока стороннего отладчика.
             std::atomic<DebugExecutionMode> debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};  // Текущий режим исполнения программы.
+            // Строковые (для текущей строки исходника) флаги состоявшихся отладочных звонков.
+            std::atomic<CallbackCategoryFlag> row_callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
             // Мьютексы и запоры для прикрытия атомарных операций доступа к некоторым поля класса при многопоточных обращениях к ним.
             mutable std::mutex breakpoints_mutex_;
             mutable std::unique_lock<std::mutex> breakpoints_ext_lock_{breakpoints_mutex_, std::defer_lock};
@@ -215,6 +241,8 @@ namespace runtime
             // Поля однопоточного варианта отладочного контекста. Доступ к его методам может выполняться только последовательно,
             // с применением способов внешней синхронизации.                    
             DebugExecutionMode debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};     // Текущий режим исполнения программы.
+            // Флаги состоявшихся отладочных звонков.
+            CallbackCategoryFlag callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
         #endif
     };
     

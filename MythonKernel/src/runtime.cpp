@@ -862,13 +862,19 @@ namespace runtime
         opt_data_.emplace(OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH, true);
         opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_DECLARATIVE, true);
         opt_data_.emplace(OptionType::CONTEXT_OPT_SKIP_CALL_FRAME, true);
+        // Описательные (неисполнительные) отладочные звонки в умолчательном режиме ограничиваться не будут (если они, конечно,
+        // включены своими специальными опциями).
+        opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_ANY_CALL, false);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_NONEXEC_CALL, false);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_EXEC_CALL, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_BREAKPOINT_CALL, true);
     }
 
     #ifndef MYTHON_UNITHREAD
         // Вариант с синхронизацией при параллельном доступе.
         SimpleContext::SimpleContext(SimpleContext&& other) noexcept :
             output_(other.output_), external_link_(move(other.external_link_)),
-            is_terminate_{ other.is_terminate_.exchange(true) },
+            is_terminate_{other.is_terminate_.exchange(true)},
             opt_data_(move(other.opt_data_))
         {}
     #else
@@ -908,11 +914,20 @@ namespace runtime
     {
         switch (cmd_genus)
         {
+        case CommandGenus::CMD_GENUS_COMMON:
+            // Обыкновенная инструкция общего назначения.
+            return "Инструкция";
+        case CommandGenus::CMD_GENUS_CALL_METHOD:
+            // Команда вызова метода или свободной функции.
+            return "Вызов метода";
+        case CommandGenus::CMD_GENUS_RETURN_FROM_METHOD:
+            return "Возврат из метода";
+        case CommandGenus::CMD_GENUS_DECLARATIVE:
+            // Организующая инструкция (узел АСД) без содержательных действий при исполнении.
+            return "Декларация";
         case CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT:
             // Пседвоинструкция-маркёр начала метода или функции (расположена перед первой их действительной командой).
             return "Начало метода";
-        case CommandGenus::CMD_GENUS_RETURN_FROM_METHOD:
-            return "Возврат из метода";
         case CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT:
             // Маркёрная псевдоинструкция, размещённая в его конце (за последней его действительной командой).
             return "Конец метода";

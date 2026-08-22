@@ -276,7 +276,22 @@ namespace
                 третий член - коллекция событий отладчика.
     */
     using DebugExecutionModeV = std::vector<runtime::DebugExecutionMode>;
-    using OneBreakpointDef = std::variant<runtime::ProgramCommandDescriptor, runtime::BreakpointDesc>;
+    // Возможные варианты способа задания точки останова. Первый - прямая позиция в коде, второй - полное описание бряка,
+    // третий - параметры свободной функции, четвёртый - характеристики метода.
+    struct FreeFunctionCharm
+    {
+        std::string name;
+        size_t arg_count = 0;
+    };
+
+    struct MethodCharm
+    {
+        std::string name;
+        std::string class_name;
+        size_t arg_count = 0;
+    };
+
+    using OneBreakpointDef = std::variant<runtime::ProgramCommandDescriptor, runtime::BreakpointDesc, FreeFunctionCharm, MethodCharm>;
     using BreakpointsList = std::vector<OneBreakpointDef>;
 
     std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> DebugMythonProgram
@@ -336,24 +351,39 @@ namespace
                 }
             };
 
-        ostringstream out_ostr;
-        DebugContext debug_context(out_ostr, debug_event_handler, link_function);
-        if (!breaks.empty())
-        {
-            for (const OneBreakpointDef& one_break : breaks)
-            {
-                if (std::holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
-                    debug_context.AddBreakpoint(std::get<runtime::ProgramCommandDescriptor>(one_break));
-                else if (std::holds_alternative<runtime::BreakpointDesc>(one_break))
-                    debug_context.AddBreakpoint(std::get<runtime::BreakpointDesc>(one_break));
-            }
-        }
-
         parse::TrivialParseContext parse_context;
         runtime::Closure closure;
 
         parse::Lexer lexer(input);
         auto program = ParseProgram(lexer, parse_context);
+
+        ostringstream out_ostr;
+        DebugContext debug_context(out_ostr, debug_event_handler, link_function);
+        if (!breaks.empty())
+        {
+            for (const OneBreakpointDef& one_break : breaks)
+            { // Установка единичного бряка различных допустимых типов.
+                if (std::holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
+                {
+                    debug_context.AddBreakpoint(std::get<runtime::ProgramCommandDescriptor>(one_break));
+                }
+                else if (std::holds_alternative<runtime::BreakpointDesc>(one_break))
+                {
+                    debug_context.AddBreakpoint(std::get<runtime::BreakpointDesc>(one_break));
+                }
+                else if (std::holds_alternative<FreeFunctionCharm>(one_break))
+                {
+                    const FreeFunctionCharm& break_charm = std::get<FreeFunctionCharm>(one_break);
+                    debug_context.AddBreakAtFreeFunction(break_charm.name, break_charm.arg_count);
+                }
+                else if (std::holds_alternative<MethodCharm>(one_break))
+                {
+                    const MethodCharm& break_charm = std::get<MethodCharm>(one_break);
+                    debug_context.AddBreakAtMethod(break_charm.name, break_charm.arg_count, break_charm.class_name);
+                }
+            }
+        }
+
         if (std::holds_alternative<DebugExecutionMode>(what_return))
         {
             debug_context.SetDebugMode(std::get<DebugExecutionMode>(what_return));
@@ -1988,6 +2018,9 @@ cls_2_ret = tst_class.ClassMethod_2(lc_1 + lc_2)    # Строка 41
 print cls_2_ret                                     # Строка 42
 cls_3 = cls_1_ret + cls_2_ret                       # Строка 43
 print cls_3                                         # Строка 44
+cls_3 = cls_3 * 2                                   # Строка 45
+cls_3 = cls_3 * 3                                   # Строка 46
+print cls_3                                         # Строка 47
 )--");
 
         { // Пошаговое исполнение с заходом и обходом вызовов методов.
@@ -1997,7 +2030,7 @@ print cls_3                                         # Строка 44
             DebugExecutionModeV what_return_arr
             {
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов в процессе инициализации программы.
-                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 29.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 29 - первая исполняемая строка программы.
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 30.
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 31.
                 DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 33 - обход тела функции FreeFunction_1().
@@ -2016,14 +2049,43 @@ print cls_3                                         # Строка 44
                 DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 12 (в теле метода ClassMethod_2()).
                 DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 13 (в теле метода ClassMethod_2()).
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 14 (в теле метода ClassMethod_2()).
-                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 15 (в теле метода ClassMethod_2()).
-                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед возвратом из метода ClassMethod_2().
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 15 (в теле метода ClassMethod_2()) - явный возврат из метода.
                 // ----------
-                DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 42. Дальнейшая работа программы происходит без трассировки.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 42. Сюда возвращается управление после завершения ClassMethod_2().
+                DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 43. Дальнейшая работа программы происходит без трассировки.
             };
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
-            std::cout << "3. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            //ASSERT_EQUAL(ostr.str(), "2 4 6 8\n"s);
+            // Вывод в консоль трассы исполнения тестовой программы.
+            // std::cout << "3. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    // Далее следуют события последовательного исполнения от первой исполяемой строки программы 29 до строки 37 (вход в тело конструктора
+                    // __init__() класса TestClass).
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 29},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 30},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 31},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 33},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 34},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 35},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 37},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 3},  // Заход в тело конструктора __init__() класса TestClass.
+                    // Нижеследующий звонок - имитация оператора "выхода из метода" при его "естественном" завершении (исполнения до конца без явных инструкций выхода).
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 4},
+                    // После возврата из конструктора продолжение последовательного исполнения команд от строки 38 до строки 41.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 38},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 39},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 40},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 41},
+                    // Вход в тело метода ClassMethod_2() и его нормальная работа.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 12},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 13},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 14},
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 15},  // Выход из метода ClassMethod_2() с возвратом значения по return.
+                    // Вновь возврат на модульный уровень.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 42},         // После выхода из метода возврат управления в строку 42.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 43},         // Звонок перед выполнением строки 43. На этом пошаговое исполнение заканчивается.
+                }));
         }
 
         { // Заход и ускоренный выход из методов и свободных функций.
@@ -2040,7 +2102,7 @@ print cls_3                                         # Строка 44
                 // ----------
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 18 (в теле функции FreeFunction_1()).
                 DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 19 (в теле функции FreeFunction_1()).
-                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед возвратом из функции FreeFunction_1().
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов в строке 21 перед возвратом из функции FreeFunction_1() по return.
                 // ----------
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 34.
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 35.
@@ -2055,29 +2117,66 @@ print cls_3                                         # Строка 44
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 40.
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 41 (вход в тело метода ClassMethod_2()).
                 // ----------
-                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 6 (в теле метода ClassMethod_2()).
-                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 7 (в теле метода ClassMethod_2()).
-                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед возвратом из метода ClassMethod_2().
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 12 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Вызов перед исполнением строки 13 (в теле метода ClassMethod_2()).
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов в строке 15 перед возвратом из метода ClassMethod_2().
                 // ----------
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 42.
                 DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 43. Дальнейшая работа программы происходит без трассировки.
             };
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
-            std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-
+            // Очередную порцию трасс исполнения - в консоль.
+            // std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    // Ординарное исполнение строк от первой исполнимой с номером 29 до строки 33.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 29},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 30},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 31},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 33},
+                    // Работа внутри функции FreeFunction_1().
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 19},
+                    // Строка 20 пропускается, так как после 19-ой строки выполнен шаг типа DEBUG_EXIT_METHOD.
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 21},  // Явный выход из свободной функции FreeFunction_1() с возвратом значения по return.
+                    // Возврат управления на модульный уровень программы в строку 34, затем последовательное исполнение до строки 39. В строке 37 заход в тело
+                    // конструктора __init__() класса TestClass не совершается, так как применён шаг типа DEBUG_STEP_OUT.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 34},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 35},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 37},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 38},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 39},     // Заход в тело метода ClassMethod_1().
+                    // Исполнение тела метода ClassMethod_1(). Строка 8 пропускается (не прозванивается) вследствие совершения шага типа DEBUG_EXIT_METHOD
+                    // после строки 7.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 6},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 7},
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 9},   // Выход из метода ClassMethod_1() по return.
+                    // Вновь работа на верхнем уровне до вызова метода ClassMethod_2() в строке 41.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 40},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 41},
+                    // Обработка тела метода ClassMethod_2(). Строка 14 также опускается из-за шага типа DEBUG_EXIT_METHOD в строке 13.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 12},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 13},         // Тут делается шаг типа DEBUG_EXIT_METHOD.
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 15},  // Выход из метода ClassMethod_2() по return.
+                    // Возобновление работы на модульном уровне.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 42},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 43}      // Шаг типа DEBUG_NO_DEBUG - прекращение трассировки.
+                }));
         }
 
         { // Простые и условные точки останова.
             istringstream input;
             input.str(methods_def + main_body);
+            // Составляем список точек останова, которые будут наложены на исполняемую программу.
             BreakpointsList break_list =
             {
-                runtime::ProgramCommandDescriptor{.module_string_number = -1},    // Ординарная точка останова на строку -1 (останов при инициализации программы).
                 runtime::ProgramCommandDescriptor{.module_string_number = 29},    // Ординарная точка останова на строку 29 (первая действительно исполняемая строка).
                 runtime::ProgramCommandDescriptor{.module_string_number = 31},    // Ординарная точка останова на строку 31.
                 runtime::ProgramCommandDescriptor{.module_string_number = 31},    // Дублирующая ординарная точка останова на строку 31.
                 runtime::ProgramCommandDescriptor{.module_string_number = 19},    // Ординарная точка останова на строку 19 (внутри свободной функции FreeFunction_1).
                 runtime::ProgramCommandDescriptor{.module_string_number = 37},    // Ординарная точка останова на строку 37.
+                MethodCharm{.name = "ClassMethod_2", .class_name = "TestClass", .arg_count =  1}, // Точка останова на вызов метода TestClass::ClassMethod_2().
                 runtime::BreakpointDesc{.position{.module_string_number = 7},     // Отключённый останов на строку 7 (внутри метода TestClass::ClassMethod_1). Срабатывать не должен.
                                         .is_enabled = false},
                 runtime::BreakpointDesc{.position{.module_string_number = 8}},    // Обычный останов на строку 8 (внутри метода TestClass::ClassMethod_1), но созданный с помощью BreakpointDesc{}.
@@ -2096,21 +2195,56 @@ print cls_3                                         # Строка 44
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 29},
-                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 31},
-                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 31},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 31},       // Однократное срабатывание сдвоенного бряка в строке 31.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 19},
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 37},
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 8},
                     {DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION, 40},  // Проверка условия для условного бряка на строке 40.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 40},
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 11},       // Срабатывание точки останова на вызов метода TestClass::ClassMethod_2()
+                                                                                // при обращении к нему в строке 41 программы.
                     {DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION, 14},  // Проверка условия для условного бряка на строке 14.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 14},
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 44}
                 }));
         }
 
-        { // Работа трассировщика внутри сопрограмм.
+        // Далее находится группа тестов, осуществляющих работу трассировщика внутри сопрограмм.
+        // Испытательная программа, содержащая сопрограмму - свободную функцию.
+        std::string coro_program_free_func(R"--(
+def CoroFunction_1(g, h) :                              # Строка 1
+  print g, h                                            # Строка 2
+  gh = g * h + g - h                                    # Строка 3
+  print gh                                              # Строка 4
+  while True:                                           # Строка 5
+    co_yield gh + (gh / 2.0)                            # Строка 6
+  print gh                                              # Строка 7
+                                                        # Строка 8
+# Создаём объект сопрограммы. Здесь он не выполняется.    Строка 9
+coro_variable = CoroFunction_1(1, 2)                    # Строка 10
+print 2 + 3                                             # Строка 11
+resume_result_1 = coro_variable.resume()                # Строка 12
+print resume_result_1                                   # Строка 13
+resume_result_2 = coro_variable.resume()                # Строка 14
+print resume_result_2                                   # Строка 15
+resume_result_3 = coro_variable.resume()                # Строка 16
+print resume_result_3                                   # Строка 17
+# Завершаем выполнение программы.                         Строка 18
+print resume_result_1, resume_result_2, resume_result_3 # Строка 19
+)--");
 
+        { // Точки останова внутри сопрограмм.
+            istringstream input(coro_program_free_func);
+            BreakpointsList break_list =
+            {
+                FreeFunctionCharm{.name = "CoroFunction_1", .arg_count = 2},    // Точка останова на вызов сопрограммы-функции CoroFunction_1(g, h).
+                runtime::ProgramCommandDescriptor{.module_string_number = 6}    // Ординарная точка останова на строку 6.
+            };
+
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+                DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
+            // Выведем в консоль результаты трассировки.
+            std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
 
         }
     }
@@ -2121,8 +2255,8 @@ print cls_3                                         # Строка 44
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
 
-        //RUN_TEST(tr, TestDebugExecution);
-        //return;
+        RUN_TEST(tr, TestDebugExecution);
+        return;
 
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);

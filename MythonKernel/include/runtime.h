@@ -21,13 +21,14 @@ namespace ast
 {
     class CoYield;
     class ClassDefinition;
+    class FreeFunctionDefinition;
 }
 
 namespace runtime
 {
     enum class CommandGenus
     {
-        CMD_GENUS_COMMON = 0,               // Инструкция общего вида.
+        CMD_GENUS_COMMON = 0,               // Исполнимая инструкция общего вида.
         CMD_GENUS_PRE_FIRST_METHOD_STMT,    // Псевдоинструкция, расположенная непосредственно перед первой действительной командой метода или функции.
         CMD_GENUS_AFTER_LAST_METHOD_STMT,   // Псевдоинструкция, размещённая после последней действительной команды метода или функции.
         CMD_GENUS_CALL_METHOD,              // Инструкция вызова метода или свободной функции.
@@ -43,9 +44,23 @@ namespace runtime
         enum class OptionType
         { // Тип опции, запрашиваемой у функции-члена GetOption().
             CONTEXT_OPT_UNKNOWN = 0,
-            CONTEXT_OPT_DESTRUCT_AT_FINISH,  // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
-            CONTEXT_OPT_SKIP_DECLARATIVE,    // Пропускать при отладке (не совершать отладочных звонков) декларативные узлы АСД.
-            CONTEXT_OPT_SKIP_CALL_FRAME      // Пропускать при отладке рамочные (ограничительные) узлы вызова функций и методов.
+            CONTEXT_OPT_DESTRUCT_AT_FINISH,     // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
+            CONTEXT_OPT_SKIP_DECLARATIVE,       // Пропускать при отладке (не совершать отладочных звонков) декларативные узлы АСД.
+            CONTEXT_OPT_SKIP_CALL_FRAME,        // Пропускать при отладке рамочные (ограничительные) узлы вызова функций и методов.
+            CONTEXT_OPT_ONCE_ANY_CALL,          // Только один ЛЮБОЙ (любого рода) отладочный звонок на каждую следующую строку исходника.
+                                                // В таком режиме на каждую очередную строку исходника (то есть при переходе к новой его строке
+                                                // в процессе выполнения программы) всегда совершается максимум один отладочный звонок вне
+                                                // зависимости от его типа (или не совершается ни одного, если для каких-либо звонков нет причин).
+            CONTEXT_OPT_ONCE_NONEXEC_CALL,      // Только один НЕИСПОЛНИМЫЙ (относящийся к неисполняемым инструкциям) звонок на каждую очередную
+                                                // строку исходника. При наличии только такой опции все "исполняемые" звонки совершаются в полном
+                                                // объёме, а неисполняемый звонок будет сделан только один (первый по порядку).
+            CONTEXT_OPT_ONCE_EXEC_CALL,         // Только один ИСПОЛНИМЫЙ (относящийся к исполняемым инструкциям) звонок на каждую очередную строку
+                                                // исходника. В этом режиме все незаблокированные другими опциями неисполняемые звонки передаются
+                                                // внешнему отладчику безо всяких ограничений, а вот исполнимый звонок (звонок для какого-либо
+                                                // исполнимого узла строки) в таком случае совершается всегда только один.
+            CONTEXT_OPT_ONCE_BREAKPOINT_CALL    // Совершать звонок только от первой точки останова, сработавшей на данной исходной строке. Данное
+                                                // ограничение накладывается как дополнительное (сужающее) дополнительно к ограничениям, введённым
+                                                // определёнными выше опциями.
         };
 
         Context()
@@ -279,6 +294,15 @@ namespace runtime
             command_genus_ = command_genus;
         }
 
+        // Проверка принадлежности узла к роду исполняемых инструкций.
+        bool IsCommandExecutable() const
+        { // Возвращает "ИСТИНУ", если данный узел АСД является исполняемым.
+            return
+                command_genus_ == CommandGenus::CMD_GENUS_COMMON ||
+                command_genus_ == CommandGenus::CMD_GENUS_CALL_METHOD ||
+                command_genus_ == CommandGenus::CMD_GENUS_RETURN_FROM_METHOD;
+        }
+
     private:
         CommandGenus command_genus_ = CommandGenus::CMD_GENUS_COMMON;
         ProgramCommandDescriptor command_desc_;
@@ -470,7 +494,7 @@ namespace runtime
         std::string name;
         // Имена формальных параметров метода.
         std::vector<std::string> formal_params;
-        // Тело метода
+        // Тело метода (как правило, объект типа ast::MethodBody).
         std::unique_ptr<Executable> body;
         // Признак того, что данный метод является сопрограммой (крутиной).
         bool is_coroutine = false;
@@ -498,12 +522,6 @@ namespace runtime
         // explicit Class(std::string name, std::vector<Method> methods, const Class* parent);
         explicit Class(std::string name, std::vector<Method> methods, std::vector<const Class*> parents);
 
-        //   Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует.
-        // args_count - требуемое количество формальных параметров у искомого метода. Если этот аргумент < 0,
-        // будет найден какой-либо метод с именем name из имеющихся в наличии с любым числом формальных параметров.
-        //   Аргумент parent_name указывает имя родительского класса, начиная с которого (от класса parent_name в
-        // направлении его предков) будет выполняться поиск целевого метода name. Если аргумент parent_name пуст,
-        // поиск выполняется непосредственно от данного класса.
         struct GetMethodRet
         {
             const Method* method = nullptr;
@@ -546,6 +564,12 @@ namespace runtime
                 return ostr;
             }
         };
+        //   Возвращает указатель на метод name или nullptr, если метод с таким именем отсутствует.
+        // args_count - требуемое количество формальных параметров у искомого метода. Если этот аргумент < 0,
+        // будет найден какой-либо метод с именем name из имеющихся в наличии с любым числом формальных параметров.
+        //   Аргумент parent_name указывает имя родительского класса, начиная с которого (от класса parent_name в
+        // направлении его предков) будет выполняться поиск целевого метода name. Если аргумент parent_name пуст,
+        // поиск выполняется непосредственно от данного класса.
         [[nodiscard]] GetMethodRet GetMethod(const std::string& name, int args_count = -1, const std::string& parent_name = {}) const;
         
         // Возвращает массив пар-описателей методов класса
@@ -561,7 +585,7 @@ namespace runtime
         [[nodiscard]] bool IsSuccessorOf(const std::string& test_my_parent) const;
         [[nodiscard]] bool IsSuccessorOf(const Class& test_my_parent) const;
 
-        // Выводит в os строку "Class <имя класса>", например "Class cat"
+        // Выводит в os строку "Class <имя класса>", например "Class cat".
         void Print(std::ostream& os, Context& context) override;
 
         const void* GetPtr() const override
@@ -574,14 +598,15 @@ namespace runtime
             return 0;
         }
 
+        // Возвращает численный идентификатор (идент) типа, присвоенный данному программно-определённому классу.
         int GetId() const
         {
             return my_id_;
         }
 
     private:
-        int my_id_;
-        std::string my_name_;
+        int my_id_;             // Присвоенный классу числовой идент типа.
+        std::string my_name_;   // Имя данного класса.
         // Список ссылок на ближайших предков данного класса (ближайших по восходящей линии в иерархии наследования).
         using ParentRefType = std::reference_wrapper<const Class>;
         std::vector<ParentRefType> parents_;

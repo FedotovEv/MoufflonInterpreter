@@ -7,11 +7,6 @@
 
 #include <functional>
 
-// Функция генерации декорированного имени метода либо функции, содержащего также элемент, кодирующий количество аргументов в нём.
-std::string MangleMethodFunctionName(const std::string& method_func_name, size_t arg_count);
-// Функция разделяет калечное имя метода или функции на его компоненты - само имя и количество аргументов процедуры.
-std::pair<std::string, size_t> DemangleMethodFunctionName(const std::string& mangled_method_func_name);
-
 namespace ast
 {
     struct ReturnResult
@@ -683,7 +678,7 @@ namespace ast
     class MethodBody : public Statement
     {
     public:
-        explicit MethodBody(std::unique_ptr<Statement>&& body);
+        explicit MethodBody(std::unique_ptr<Statement>&& body, const runtime::ProgramCommandDescriptor& real_method_pos = runtime::DUMB_PROG_POS);
 
         // Вычисляет инструкцию, переданную в качестве body.
         // Если внутри body была выполнена инструкция return, возвращает результат return.
@@ -892,6 +887,8 @@ namespace ast
         // В результирующем массиве пар каждая пара соответствует определённому методу класса.
         // Первый член пары (.first) - имя метода, второй (.second) - количество его формальных параметров.
         std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
+        // Возвращает констаный указатель на внутренний класс, позволяющий внешнему коду исследовать его, но не изменять.
+        const runtime::Class* GetClass() const;
     
     private:
         runtime::ObjectHolder cls_; // "По построению" будет содержать внутри только объект типа runtime::Class.
@@ -917,6 +914,22 @@ namespace ast
         runtime::FreeFunction* GetFunction()
         {
             return free_function_.TryAs<runtime::FreeFunction>();
+        }
+        // Возврат имени внутренней функции.
+        std::string GetFunctionName() const
+        {
+            return free_function_.TryAs<runtime::FreeFunction>()->GetName();
+        }
+        // Возврат сигнатуры функции - её расширенного (изуродованного) имени.
+        std::string GetFunctionMangledName() const
+        {
+            const runtime::FreeFunction* int_function = free_function_.TryAs<runtime::FreeFunction>();
+            return MangleMethodFunctionName(int_function->GetName(), int_function->GetArgCount());
+        }
+        // Получение количества формальных аргументов вложенной функции.
+        size_t GetArgCount() const
+        {
+            return free_function_.TryAs<runtime::FreeFunction>()->GetArgCount();
         }
 
     private:

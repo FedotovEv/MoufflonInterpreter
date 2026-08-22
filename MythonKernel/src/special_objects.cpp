@@ -1067,6 +1067,7 @@ namespace runtime
     // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
     std::unordered_map<std::string, int> TypeTraitsInstance::internal_classes_ids_;
     std::unordered_map<std::string, ast::ClassDefinition*> TypeTraitsInstance::declared_classes_def_;
+    std::unordered_map<std::string, ast::FreeFunctionDefinition*> TypeTraitsInstance::declared_free_functions_def_;
 
     // Определение методов класса TypeTraitsInstance.
 
@@ -1103,9 +1104,66 @@ namespace runtime
         }
     }
 
+    // Группа методов обслуживания статических хранилищ-накопителей информации о различных сущностях, определеяемых в ходе разбора МУФЛОН-программы.
+    void TypeTraitsInstance::ClearAllStaticStorages()
+    {
+        internal_classes_ids_.clear();
+        declared_classes_def_.clear();
+        declared_free_functions_def_.clear();
+    }
+
+    void TypeTraitsInstance::AppendInternalClassId(const std::string& class_name, int class_id)
+    {
+        internal_classes_ids_.emplace(std::pair{class_name, class_id});
+    }
+
     void TypeTraitsInstance::AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def)
     {
         declared_classes_def_.emplace(std::pair{class_name, class_def});
+    }
+
+    void TypeTraitsInstance::AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def)
+    {
+        declared_free_functions_def_.emplace(std::pair{free_func_sign, free_func_def});
+    }
+
+    // Поиск класса с заданным именем class_name среди всех объявленных в программе сущностей.
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForClass(const std::string& class_name)
+    {
+        auto class_it = declared_classes_def_.find(class_name);
+        if (class_it != declared_classes_def_.end())
+            return class_it->second->GetCommandDesc();
+        else
+            return runtime::DUMB_PROG_POS;
+    }
+    
+    // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForMethod(const std::string& method_sign, const std::string& class_name)
+    {
+        pair<string, size_t> method_params_pair = DemangleMethodFunctionName(method_sign);
+        for (const auto& class_pair : declared_classes_def_)
+        {
+            if (class_name.empty() || class_pair.second->GetClassName() == class_name)
+            { // Подходящий по имени класс найден. Проверим наличие в нём метода с требуемой сигнатурой (расширенным именем).
+                const Class* test_class = class_pair.second->GetClass();
+                if (Class::GetMethodRet test_method_ret =
+                    test_class->GetMethod(method_params_pair.first, static_cast<int>(method_params_pair.second)))
+                    // Метод с сигнатурой method_sign принадлежит классу class_name (может быть для него вызван).
+                    return test_method_ret.method->body->GetCommandDesc();
+            }
+        }
+        // Искомый метод не существует для указанного класса или не существует вообще.
+        return DUMB_PROG_POS;
+    }
+    
+    // Поиск определённой в МУФЛОН-программе свободной функции с заданной сигнатурой free_func_sign.
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForFreeFunction(const std::string& free_func_sign)
+    {
+        auto free_function_it = declared_free_functions_def_.find(free_func_sign);
+        if (free_function_it != declared_free_functions_def_.end())
+            return free_function_it->second->GetCommandDesc();
+        else
+            return runtime::DUMB_PROG_POS;
     }
 
     int TypeTraitsInstance::ObjectIdInternal(const ObjectHolder& what_id)
@@ -1132,17 +1190,17 @@ namespace runtime
             return INVALID_TYPE_IDENT;
     }
 
-    std::string TypeTraitsInstance::ObjectNameInternal(const ObjectHolder& what_id)
+    std::string TypeTraitsInstance::ObjectNameInternal(const ObjectHolder& what_name)
     {
-        if (!what_id)
+        if (!what_name)
             return "None"s;
-        else if (what_id.TryAs<runtime::Bool>())
+        else if (what_name.TryAs<runtime::Bool>())
             return "Bool"s;
-        else if (what_id.TryAs<runtime::Number>())
+        else if (what_name.TryAs<runtime::Number>())
             return "Number"s;
-        else if (what_id.TryAs<runtime::String>())
+        else if (what_name.TryAs<runtime::String>())
             return "String"s;
-        else if (runtime::CommonClassInstance* common_class_instance = what_id.TryAs<runtime::CommonClassInstance>())
+        else if (runtime::CommonClassInstance* common_class_instance = what_name.TryAs<runtime::CommonClassInstance>())
             return common_class_instance->GetClassName();
         else
             return {};
