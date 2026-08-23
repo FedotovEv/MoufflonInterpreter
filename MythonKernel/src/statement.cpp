@@ -92,6 +92,12 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
         // Флаг нашего нахождения внутри "активной" (отлаживаемой клиентом-отладчиком) подпрограммы.
         bool is_in_active_frame = dbg_context->IsLastFrameActive();
         // Формируем (считываем из контекста) набор логических переменных, соответствующих опциям контекста, управляющим различными режимами отладки.
+        // Для удобства оформим простейший функтор для извлечения из контекста значения логического атрибута.
+        auto bool_attr_extractor = [dbg_context](Context::OptionType ask_option) -> bool
+            {
+                LinkageValue extract_val_opt = dbg_context->GetOption(ask_option);
+                return std::holds_alternative<bool>(extract_val_opt) && std::get<bool>(extract_val_opt);
+            };
         // ------
         //   В общем случае каждая строка исходного текста МУФЛОН-программы может содержать несколько неисполняемых и несколько исполняемых инструкций
         // (соответствующих этим инструкциям узлов АСД). Множественное совершение различных звонков разных типов для одной и той же строки исходника может
@@ -103,36 +109,31 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
         // звонков совершаемых по поводу срабатывания точек останова (которые могут быть привязаны как к исполнительным, так и к неисполнительным узлам).
         // ------
         // Флаг режима однократности отправления получателю любых звонков для данной строки исходника.
-        LinkageValue any_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_ANY_CALL);
-        bool any_call_once = std::holds_alternative<bool>(any_call_once_opt) && std::get<bool>(any_call_once_opt);
+        bool any_call_once = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_ONCE_ANY_CALL);
         // Флаг режима однократности отправления получателю звонков, ассоциированных с неисполняемыми инструкциями.
-        LinkageValue nonexec_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_NONEXEC_CALL);
-        bool nonexec_call_once = std::holds_alternative<bool>(nonexec_call_once_opt) && std::get<bool>(nonexec_call_once_opt);
+        bool nonexec_call_once = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_ONCE_NONEXEC_CALL);
         // Флаг режима однократности отправления получателю звонков, ассоциированных с исполняемыми инструкциями.
-        LinkageValue exec_call_once_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_EXEC_CALL);
-        bool exec_call_once = std::holds_alternative<bool>(exec_call_once_opt) && std::get<bool>(exec_call_once_opt);
+        bool exec_call_once = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_ONCE_EXEC_CALL);
+        // Логическое значение блокировки высылки звонков для декларативнх узлов АСД при "пошаговых" событиях.
+        bool skip_declarative = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_SKIP_DECLARATIVE);
+        // Логическое значение блокировки высылки звонков для рамочных ограничителей вызова подпрограмм при "пошаговых" событиях.
+        bool skip_call_frame = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
+        // Флаги режимов обработки точек останова (специфика звонков, возникающтх при их срабатывании).
         // Флаг необходимости высылки звонка только о первом бряке, сработавшем на очередной строке программы.
-        LinkageValue only_first_breakpoint_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_ONCE_BREAKPOINT_CALL);
-        bool only_first_breakpoint = std::holds_alternative<bool>(only_first_breakpoint_opt) && std::get<bool>(only_first_breakpoint_opt);
-        // Логическое значение блокировки высылки звонков для рамочных ограничителей вызова подпрограмм.
-        LinkageValue skip_call_frame_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
-        bool skip_call_frame = std::holds_alternative<bool>(skip_call_frame_opt) && std::get<bool>(skip_call_frame_opt);
-        // Логическое значение блокировки высылки звонков для декларативнх узлов АСД.
-        LinkageValue skip_declarative_opt = dbg_context->GetOption(Context::OptionType::CONTEXT_OPT_SKIP_CALL_FRAME);
-        bool skip_declarative = std::holds_alternative<bool>(skip_declarative_opt) && std::get<bool>(skip_declarative_opt);
-
-        // Флаг перехода на новую строку исходника.
-        bool is_new_source_line = (current_command != context.GetLastCommandDesc()) || (current_genus == CommandGenus::CMD_GENUS_INITIALIZE);
-        if (is_new_source_line)
-        { // Произошёл переход на следующую строку исходного текста исполняемой МУФЛОН-программы.
-            dbg_context->ClearAllRowCallbackFlags();
-            dbg_context->SetLastCommandDesc(current_command);
-        }
+        bool only_first_breakpoint = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_ONCE_BREAKPOINT_CALL);
+        // Пропускать при обработке точек останова декларативные узлы АСД.
+        bool break_skip_declarative = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_BREAK_SKIP_DECLARATIVE);
+        // Пропускать при обработке точек останова рамочные (ограничительные) узлы вызова функций и методов.
+        bool break_skip_call_frame = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_BREAK_SKIP_CALL_FRAME);
+        // Предпочитать исполняемый узел для совершения звонков по поводу срабатывания бряков в данной строке.
+        bool break_prefer_exec = bool_attr_extractor(Context::OptionType::CONTEXT_OPT_BREAK_PREFER_EXEC);
 
         // Вспомогательные локальные функторы для совершения некоторых однородных действий в разных местах данной процедуры.
         // Лямбда для совершения звонка, если выполнены необходимые для него условия.
-        auto debug_callback_caller = [&](DebugCallbackReason call_reason)
+        auto debug_callback_caller = [&](DebugCallbackReason call_reason, runtime::Executable* use_exec_obj_ptr = nullptr)
             {
+                if (!use_exec_obj_ptr)
+                    use_exec_obj_ptr = exec_obj_ptr;
                 // Звонок типа DEBUG_CALLBACK_INIT выполянется безусловно. Судьба остальных звонков зависит от режима отладки.
                 if (call_reason != DebugCallbackReason::DEBUG_CALLBACK_INIT)
                 {
@@ -168,7 +169,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                     DebugContext::CallbackCategoryFlag row_already_callbacked = dbg_context->GetRowCallbackFlags();
                     if (any_call_once && (row_already_callbacked != DebugContext::CallbackCategoryFlag::CALLBACK_CAT_NOTHING))
                         return; // При такой настройке любой сигнал должен высылаться только единственный раз на строку исходника и ранее это уже было сделано.
-                    if (exec_obj_ptr->IsCommandExecutable())
+                    if (use_exec_obj_ptr->IsCommandExecutable())
                     { // Предстоящий звонок связан с исполнительным узлом АСД.
                         if (exec_call_once && (row_already_callbacked & DebugContext::CallbackCategoryFlag::CALLBACK_CAT_EXEC))
                             return; // "Исполнительный" сигнал должен высылаться только однажды на строку исходника и ранее это уже было сделано.
@@ -182,14 +183,14 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
 
                 // Отладочный звонок требуется.
                 // Сначала устанавливаем метку состоявшегося звонка в отладочном контексте.
-                if (exec_obj_ptr->IsCommandExecutable())
+                if (use_exec_obj_ptr->IsCommandExecutable())
                     dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_EXEC);
                 else
                     dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_NONEXEC);
                 // Далее производим сам звонок, если для него назначен обработчик.
                 if (dbg_context->GetDebugCallback())
                     dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
-                        (call_reason, exec_obj_ptr, closure, context));
+                        (call_reason, use_exec_obj_ptr, closure, context));
                 else
                     dbg_context->SetDebugMode(DebugExecutionMode::DEBUG_NO_DEBUG);
 
@@ -221,9 +222,55 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                 else
                     return {};
             };
+        // Лямбда высылки звонков по причине срабатывания каких-либо бряков на данной строке исходника.
+        auto send_break_callbacks = [&](runtime::Executable* use_exec_obj_ptr = nullptr) -> void
+            {
+                if (dbg_context->GetRowCallbackFlags() & DebugContext::CallbackCategoryFlag::CALLBACK_CAT_BREAKS_PROCESSED)
+                    return; // Звонки по поводу бряков для этой строки исходника уже совершались ранее.
 
-        // Подготовительная часть закончена, приступаем к обработке поступившей команды. Сначала создадим новый кадр в модели стека вызовов,
-        // если поступившая команда предполагает образование такого кадра
+                for (size_t triggered_breakpoint : dbg_context->GetTriggredBreakpoints())
+                { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
+                    // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
+                    closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
+                    debug_callback_caller(runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, use_exec_obj_ptr);
+                    closure.erase(BREAKPOINT_INFO_FIELD_NAME);
+                    if (only_first_breakpoint)
+                        break;  // Используется такой режим обработки бряков, при котором звонком сопровождается только первая сработавшая точка останова.
+                }
+                dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_BREAKS_PROCESSED);
+            };
+
+        // Подготовительная часть закончена, приступаем к обработке поступившей команды.
+        // Фиксация события перехода на новую строку исходника.
+        bool is_new_source_line = (current_command != context.GetLastCommandDesc()) || (current_genus == CommandGenus::CMD_GENUS_INITIALIZE);
+        if (is_new_source_line)
+        { // Произошёл переход на следующую строку исходного текста исполняемой МУФЛОН-программы.
+            // Сначала завершим все свои дела с предыдущей строкой, которую мы покинули. Если в предыдущей строке были сработавшие бряки,
+            // но звонки по их поводу так и не были произведены, то попробуем совершить их сейчас.
+            if (runtime::Executable* proper_break_statement = dbg_context->GetFirstProperStatementInRow())
+                send_break_callbacks(proper_break_statement);
+
+            dbg_context->ClearAllRowCallbackFlags();
+            dbg_context->SetFirstProperStatementInRow(nullptr);
+            dbg_context->SetLastCommandDesc(current_command);
+        }
+
+        // Если ранее в текущей строке программы узла, подходящего для сигналов о точках останова, ещё не встречалось, попробуем в качестве такового
+        // захватить тот узел, который мы сейчас обрабатываем.
+        if (!dbg_context->GetFirstProperStatementInRow())
+        {
+            bool do_catch_command = true;
+            if (break_skip_declarative && current_genus == CommandGenus::CMD_GENUS_DECLARATIVE)
+                do_catch_command = false;
+            if (break_skip_call_frame &&
+                (current_genus == CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT ||
+                 current_genus == CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT))
+                do_catch_command = false;
+            if (do_catch_command)
+                dbg_context->SetFirstProperStatementInRow(exec_obj_ptr);
+        }
+
+        // Далее создадим новый кадр в модели стека вызовов, если поступившая команда предполагает образование такого кадра
         if (current_genus == CommandGenus::CMD_GENUS_INITIALIZE)
         {
             dbg_context->ClearCallStack();
@@ -275,18 +322,17 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                 debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_DECLARATIVE);
         }
 
-        // Далее должны последовать звонки от сработавших бряков.
-        if (is_new_source_line)
-        {
-            for (size_t triggered_breakpoint : dbg_context->GetTriggredBreakpoints())
-            { // Бряк с индексом triggered_breakpoint должен сработать и вызвать отладочный звонок.
-                // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
-                closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_breakpoint))));
-                debug_callback_caller(runtime::DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT);
-                closure.erase(BREAKPOINT_INFO_FIELD_NAME);
-                if (only_first_breakpoint)
-                    break;  // Используется такой режим обработки бряков, при котором звонком сопровождается только первая сработавшая точка останова.
-            }
+        // Далее могут последовать звонки от сработавших бряков.
+        if (exec_obj_ptr->IsCommandExecutable())
+        { // Если узел исполнимый, отправляем пакет звонков (может быть и единственным) от точек останова безусловно (со всем остальным
+          // разберётся сам функтор send_break_callbacks()).
+            send_break_callbacks();
+        }
+        else if (!break_prefer_exec)
+        { // Для неисполнимых узлов отправляем сигналы только в том случае, если политические соображения не требуют отдавать приоритет
+          // исполняемым инструкциям.
+            if (runtime::Executable* proper_break_statement = dbg_context->GetFirstProperStatementInRow())
+                send_break_callbacks(proper_break_statement);
         }
 
         // Наконец, совершаем звонки для "финишных" (закрывающих) неисполняющих узлов, которые будут следовать после звонков от возможно
@@ -300,11 +346,16 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                 // будет сгенерирован также отладочный звонок о прерывании работы этой процедуры по такой инструкции (звонок типа DEBUG_CALLBACK_EXIT_METHOD).
                 // Если же метод или функция не содержат или не исполнили какого-либо оператора явного выхода из метода и доработали до
                 // своего конца (до завершающего ограничителя), то чтобы соблюсти единообразие сигнализации для всех случаев завершения подпрограмм,
-                // сгенерируем такой звонок здесь принудительно.
+                // сгенерируем такой звонок здесь искусственно.
                 dbg_context->SetCallbackEntryExitMethod();
                 debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD);
                 dbg_context->ClearAllRowCallbackFlags();    // Сбросим флаг состоявшегося звонка, чтобы он не мешал последующему рамочному сигналу.
             }
+            // Если в строке исходника, с которой ассоциирована данная псевдокоманда, есть какие-либо сработавшие точки останова, но звонки для них ещё
+            // не совершались ранее, то сделаем их именно тут, так как при переходе к следующей строке уже будет уничтожен стековый кадр вызова
+            // завершающейся процедуры (метода или свободной функции), а доступ к нему для приёмника звонков очень желателен.
+            if (!break_skip_call_frame)
+                send_break_callbacks();
             // Возможен ещё отладочный рамочный (ограничительный) звонок вызова метода, если это разрешено соответствующим атрибутом отладочного контекста.
             if (!skip_call_frame)
                 debug_callback_caller(DebugCallbackReason::DEBUG_CALLBACK_AFTER_CALL_METHOD);

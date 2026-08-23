@@ -867,7 +867,13 @@ namespace runtime
         opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_ANY_CALL, false);
         opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_NONEXEC_CALL, false);
         opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_EXEC_CALL, true);
+        // Режимы обработки бряков по умолчанию приняты следующие: не более одного звонка на строку, пропускать декларации
+        // (на них бряки не активируются), рамочные узлы обрабатываются обычным образом, предпочтение отдаётся исполняющимся
+        // инструкциям.
         opt_data_.emplace(OptionType::CONTEXT_OPT_ONCE_BREAKPOINT_CALL, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_BREAK_SKIP_DECLARATIVE, true);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_BREAK_SKIP_CALL_FRAME, false);
+        opt_data_.emplace(OptionType::CONTEXT_OPT_BREAK_PREFER_EXEC, true);
     }
 
     #ifndef MYTHON_UNITHREAD

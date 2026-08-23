@@ -176,14 +176,17 @@ namespace runtime
         // Получение списка бряков, которые должны сработать в текущей исполняемой строке программы. Этот список обновляется
         // каждый раз при переходе к другой строке исходника.
         std::vector<size_t> GetTriggredBreakpoints() const;
+        // Количество сработавших точек в списке.
+        size_t GetTriggredBreakpointsCount() const;
 
     private:
         static constexpr BreakpointDesc DUMB_BREAKPOINT{.position = {-1, -1}, .break_count = 0, .is_conditional = false, .is_enabled = false/*, .is_passed = true*/};
         enum CallbackCategoryFlag
         {
             CALLBACK_CAT_NOTHING = 0,
-            CALLBACK_CAT_NONEXEC = 1,
-            CALLBACK_CAT_EXEC = 2
+            CALLBACK_CAT_NONEXEC = 1,           // Совершён звонок по поводу неисполнимого узла АСД.
+            CALLBACK_CAT_EXEC = 2,              // Совершён звонок по поводу исполнимого узла АСД.
+            CALLBACK_CAT_BREAKS_PROCESSED = 4   // Для данной строки выслан пакет звонков по срабатыванию точек останова.
         };
 
         // Методы обслуживания указателя (индекса) положения в стеке вызовов текущей отлаживаемой функции
@@ -214,6 +217,14 @@ namespace runtime
         CallbackCategoryFlag SetRowCallbackFlag(CallbackCategoryFlag set_flag);
         CallbackCategoryFlag GetRowCallbackFlags() const;  // Возврат текущего состояния флагов совершённых ранее звонков.
 
+        // Операции сохранения/возвращения первого узла АСД для некоторой исходной строки, пригодного для выдачи звонков по сработке бряков.
+        // Запоминание указателя на первую инструкцию (узел АСД) в очередной строке исходника, удовлетворяющую политике оповещений о
+        // срабатывании точек останова.
+        void SetFirstProperStatementInRow(Executable* exec_obj_ptr);
+        // Возвращение ранее сохранённого указателя на первую инструкцию (узел АСД) текущей строки исходника, пригодную для звонков,
+        // связанных с точками останова.
+        Executable* GetFirstProperStatementInRow();
+
         DebugCallback debug_callback_;                      // Экземпляр функтора-обработчика отладочных звонков.
         std::vector<BreakpointDesc> breakpoints_;           // Список существующих точек останова.
         std::vector<size_t> triggered_breakpoints_;         // Список индексов точек останова, которые должны сработать в текущей исполняемой строке.
@@ -231,6 +242,8 @@ namespace runtime
             std::atomic<DebugExecutionMode> debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};  // Текущий режим исполнения программы.
             // Строковые (для текущей строки исходника) флаги состоявшихся отладочных звонков.
             std::atomic<CallbackCategoryFlag> row_callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
+            // Указатель на первый узел АСД, пригодный для оповещений о бряках, для текущей строки исходного текста.
+            std::atomic<Executable*> first_row_exec_obj_ = nullptr;
             // Мьютексы и запоры для прикрытия атомарных операций доступа к некоторым поля класса при многопоточных обращениях к ним.
             mutable std::mutex breakpoints_mutex_;
             mutable std::unique_lock<std::mutex> breakpoints_ext_lock_{breakpoints_mutex_, std::defer_lock};
@@ -241,8 +254,10 @@ namespace runtime
             // Поля однопоточного варианта отладочного контекста. Доступ к его методам может выполняться только последовательно,
             // с применением способов внешней синхронизации.                    
             DebugExecutionMode debug_exec_{DebugExecutionMode::DEBUG_NO_DEBUG};     // Текущий режим исполнения программы.
-            // Флаги состоявшихся отладочных звонков.
-            CallbackCategoryFlag callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
+            // Строковые (для текущей строки исходника) флаги состоявшихся отладочных звонков.
+            CallbackCategoryFlag row_callback_flags_ = CallbackCategoryFlag::CALLBACK_CAT_NOTHING;
+            // Указатель на первый узел АСД, пригодный для оповещений о бряках, для текущей строки исходного текста.
+            Executable* first_row_exec_obj_ = nullptr;
         #endif
     };
     

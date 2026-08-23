@@ -2244,8 +2244,17 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 19
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
             // Выведем в консоль результаты трассировки.
-            std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-
+            // std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 12.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 14.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 16.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
+                }));
         }
     }
 
@@ -2255,8 +2264,8 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 19
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
 
-        RUN_TEST(tr, TestDebugExecution);
-        return;
+        //RUN_TEST(tr, TestDebugExecution);
+        //return;
 
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);

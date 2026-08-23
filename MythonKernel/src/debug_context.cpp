@@ -553,6 +553,27 @@ namespace runtime
         return triggered_breakpoints_;
     }
 
+    size_t DebugContext::GetTriggredBreakpointsCount() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(breakpoints_mutex_);
+        #endif
+
+        return triggered_breakpoints_.size();
+    }
+
+    // Запоминание указателя на первую инструкцию (узла АСД любого типа) в очередной строке исходника.
+    void DebugContext::SetFirstProperStatementInRow(Executable* exec_obj_ptr)
+    {
+        first_row_exec_obj_ = exec_obj_ptr;
+    }
+
+    // Возвращение ранее сохранённого указателя на первую инструкцию (узел АСД) текущей строки исходника.
+    Executable* DebugContext::GetFirstProperStatementInRow()
+    {
+        return first_row_exec_obj_;
+    }
+
     // Сброс всех строковых признаков ранее совершённых отладочных звонков.
     void DebugContext::ClearAllRowCallbackFlags()
     {
