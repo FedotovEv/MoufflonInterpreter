@@ -60,7 +60,8 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         ObjectHolder traits_value = args_[0]->Execute(closure, context);
-        return ObjectHolder::Own(runtime::TypeTraitsInstance(move(traits_value)));
+        return ObjectHolder::Own(runtime::TypeTraitsInstance
+            (move(traits_value), static_cast<ProgramCompound*>(context.GetProgramRoot())));
     }
 
     unique_ptr<Statement> CreateArray(vector<unique_ptr<Statement>> args)
@@ -1065,19 +1066,27 @@ namespace runtime
     };
 
     // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
-    std::unordered_map<std::string, int> TypeTraitsInstance::internal_classes_ids_;
-    std::unordered_map<std::string, ast::ClassDefinition*> TypeTraitsInstance::declared_classes_def_;
-    std::unordered_map<std::string, ast::FreeFunctionDefinition*> TypeTraitsInstance::declared_free_functions_def_;
+    // std::unordered_map<std::string, int> TypeTraitsInstance::internal_classes_ids_;
+    // std::unordered_map<std::string, ast::ClassDefinition*> TypeTraitsInstance::declared_classes_def_;
+    // std::unordered_map<std::string, ast::FreeFunctionDefinition*> TypeTraitsInstance::declared_free_functions_def_;
 
     // Определение методов класса TypeTraitsInstance.
 
-    TypeTraitsInstance::TypeTraitsInstance(ObjectHolder traits_value) : traits_value_(move(traits_value))
+    TypeTraitsInstance::TypeTraitsInstance(ObjectHolder traits_value, ast::ProgramCompound* program_compound) :
+        traits_value_(move(traits_value)), program_compound_(program_compound)
     {}
 
     void TypeTraitsInstance::Print(std::ostream& os, Context& context)
     {
-        os << "Типовая характеристика TypeTraits : ID - " << ObjectIdInternal(traits_value_)
-           << " - Name - " << ObjectNameInternal(traits_value_);
+        const ast::ProgramCompound* program_root = dynamic_cast<const ast::ProgramCompound*>(context.GetProgramRoot());
+        if (!program_root)
+        {
+            assert(false);
+            return;
+        }
+
+        os << "Типовая характеристика TypeTraits : ID - " << ObjectIdInternal(program_root->GetInternalClassesIds(), traits_value_)
+            << " - Name - " << ObjectNameInternal(traits_value_);
     }
 
     ObjectHolder TypeTraitsInstance::Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
@@ -1105,6 +1114,7 @@ namespace runtime
     }
 
     // Группа методов обслуживания статических хранилищ-накопителей информации о различных сущностях, определеяемых в ходе разбора МУФЛОН-программы.
+    /*
     void TypeTraitsInstance::ClearAllStaticStorages()
     {
         internal_classes_ids_.clear();
@@ -1126,22 +1136,26 @@ namespace runtime
     {
         declared_free_functions_def_.emplace(std::pair{free_func_sign, free_func_def});
     }
+    */
 
     // Поиск класса с заданным именем class_name среди всех объявленных в программе сущностей.
-    ProgramCommandDescriptor TypeTraitsInstance::ScanForClass(const std::string& class_name)
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForClass
+        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& class_name)
     {
-        auto class_it = declared_classes_def_.find(class_name);
-        if (class_it != declared_classes_def_.end())
+        auto class_it = declared_classes_def.find(class_name);
+        if (class_it != declared_classes_def.end())
             return class_it->second->GetCommandDesc();
         else
             return runtime::DUMB_PROG_POS;
     }
     
     // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
-    ProgramCommandDescriptor TypeTraitsInstance::ScanForMethod(const std::string& method_sign, const std::string& class_name)
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForMethod
+        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
+         const std::string& method_sign, const std::string& class_name)
     {
         pair<string, size_t> method_params_pair = DemangleMethodFunctionName(method_sign);
-        for (const auto& class_pair : declared_classes_def_)
+        for (const auto& class_pair : declared_classes_def)
         {
             if (class_name.empty() || class_pair.second->GetClassName() == class_name)
             { // Подходящий по имени класс найден. Проверим наличие в нём метода с требуемой сигнатурой (расширенным именем).
@@ -1157,16 +1171,17 @@ namespace runtime
     }
     
     // Поиск определённой в МУФЛОН-программе свободной функции с заданной сигнатурой free_func_sign.
-    ProgramCommandDescriptor TypeTraitsInstance::ScanForFreeFunction(const std::string& free_func_sign)
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForFreeFunction
+        (const std::unordered_map<std::string, ast::FreeFunctionDefinition*>& declared_free_functions_def, const std::string& free_func_sign)
     {
-        auto free_function_it = declared_free_functions_def_.find(free_func_sign);
-        if (free_function_it != declared_free_functions_def_.end())
+        auto free_function_it = declared_free_functions_def.find(free_func_sign);
+        if (free_function_it != declared_free_functions_def.end())
             return free_function_it->second->GetCommandDesc();
         else
             return runtime::DUMB_PROG_POS;
     }
 
-    int TypeTraitsInstance::ObjectIdInternal(const ObjectHolder& what_id)
+    int TypeTraitsInstance::ObjectIdInternal(const std::unordered_map<std::string, int>& internal_classes_ids, const ObjectHolder& what_id)
     {
         if (!what_id)
             return NONE_IDENT;
@@ -1180,8 +1195,8 @@ namespace runtime
             return class_instance->GetBaseClass().GetId();
         else if (runtime::CommonClassInstance* common_class_instance = what_id.TryAs<runtime::CommonClassInstance>())
         {
-            auto classes_ids_it = internal_classes_ids_.find(common_class_instance->GetClassName());
-            if (classes_ids_it != internal_classes_ids_.end())
+            auto classes_ids_it = internal_classes_ids.find(common_class_instance->GetClassName());
+            if (classes_ids_it != internal_classes_ids.end())
                 return classes_ids_it->second;
             else
                 return INVALID_TYPE_IDENT;
@@ -1239,8 +1254,14 @@ namespace runtime
         CheckMethodParams(context, "IsSameType"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
-        int traits_value_id = ObjectIdInternal(traits_value_);
-        int actual_arg_id = ObjectIdInternal(actual_args[0]);
+        const ast::ProgramCompound* program_root = dynamic_cast<const ast::ProgramCompound*>(context.GetProgramRoot());
+        if (!program_root)
+        {
+            assert(false);
+            return ObjectHolder::Own(Bool(false));
+        }
+        int traits_value_id = ObjectIdInternal(program_root->GetInternalClassesIds(), traits_value_);
+        int actual_arg_id = ObjectIdInternal(program_root->GetInternalClassesIds(), actual_args[0]);
         if (traits_value_id < 0 || actual_arg_id < 0)
             return ObjectHolder::Own(Bool(false));
 
@@ -1349,16 +1370,22 @@ namespace runtime
         if (!traits_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Наше значение не класс, оно не участвует в наследственных отношениях.        
         
-        auto test_internal_class_it = internal_classes_ids_.find(test_our_successor_class_name);
-        if (test_internal_class_it != internal_classes_ids_.end())
+        const ast::ProgramCompound* program_root = dynamic_cast<const ast::ProgramCompound*>(context.GetProgramRoot());
+        if (!program_root)
+        { // Произошло нечто странное. Явная ошибка в программе.
+            assert(false);
+            return ObjectHolder::Own(Bool(false));
+        }
+        auto test_internal_class_it = program_root->GetInternalClassesIds().find(test_our_successor_class_name);
+        if (test_internal_class_it != program_root->GetInternalClassesIds().end())
             // Предположительный потомок является встроенным классом исполнительской среды. Отношения типа "предок-потомок" между такими классами
             // могут существовать только в виде их полной эквивалентности, что мы сейчас и проверим.
             return ObjectHolder::Own(Bool(traits_common_class_instance->GetClassName() == test_our_successor_class_name));
 
         // Дальнейшая проверка предусматривает только тот случай, если проверяемый класс (с именем test_our_successor_class_name) является классом
         // общего типа.
-        auto test_declared_classes_it = declared_classes_def_.find(test_our_successor_class_name);
-        if (test_declared_classes_it == declared_classes_def_.end())
+        auto test_declared_classes_it = program_root->GetDeclaredClassesDef().find(test_our_successor_class_name);
+        if (test_declared_classes_it == program_root->GetDeclaredClassesDef().end())
             // Такого (с именем test_our_successor_class_name) общего класса не существует. Поэтому он не может быть чьим-то
             // потомком (включая нас).
             return ObjectHolder::Own(Bool(false));
@@ -1378,7 +1405,15 @@ namespace runtime
     {
         CheckMethodParams(context, "Id"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-        return ObjectHolder::Own(Number(ObjectIdInternal(traits_value_)));
+        
+        const ast::ProgramCompound* program_root = dynamic_cast<const ast::ProgramCompound*>(context.GetProgramRoot());
+        if (!program_root)
+        { // Произошло нечто странное. Явная ошибка в программе.
+            assert(false);
+            return ObjectHolder::Own(Number(NONE_IDENT));
+        }
+        
+        return ObjectHolder::Own(Number(ObjectIdInternal(program_root->GetInternalClassesIds(), traits_value_)));
     }
     
     ObjectHolder TypeTraitsInstance::MethodName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)

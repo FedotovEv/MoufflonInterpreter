@@ -575,9 +575,29 @@ namespace runtime
         return ObjectHolder::Own(move(result_string));
     }
 
-    // Обобщённый поиск подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой поисковой функцией find_func.
-    ObjectHolder StringOpsInstance::MethodCommonFind
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos, CommonFindFunc find_func)
+    // Обобщённый поиск подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
+    // поисковой функцией find_func. Эта функция применяется только для обработки строк в однобайтовых кодировках.
+    ObjectHolder StringOpsInstance::MethodCommonFindUnibyte
+        (const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func, Context& context) const
+    {
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding == UTF_8_ENCODING)
+            return {};  // Для многобайтовых строк эту функцию применять невозможно.
+
+        // Перекодируем искомую подстроку в ту же кодировку, которую имеет строка-аргумент, в которой будет производиться поиск.
+        needle_holder = ConvertTranscodeTo(needle_holder, context, arg_str_haystack->encoding);
+        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                          &arg_str_needle_std = needle_holder.TryAs<runtime::String>()->GetValue();
+        size_t arg_pos = std::get<2>(args_values);
+
+        // Все параметры предстоящей операции определены и проверены. Можно выполнять.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>((arg_str_haystack_std.*find_func)(arg_str_needle_std, arg_pos))));
+    }
+
+    // Метод извлечения стандартного набора аргументов функции поиска, у всех разновидностей которого этот набор одинаков
+    // ("стог", "иголка" и начальная/конечная позиция поиска).
+    StringOpsInstance::FindArgsT StringOpsInstance::ExtractFindParams
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos) const
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -585,10 +605,7 @@ namespace runtime
         if (actual_args.size() > 3) // Допускается от 2 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод " + method + " может принимать 2 или 3 параметра");
 
-        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue(),
-                    arg_str_what = actual_args[1].TryAs<runtime::String>()->GetValue();
         size_t arg_pos = default_pos; // Значение начальной (или конечной) позиции поиска по умолчанию.
-
         if (actual_args.size() >= 3)
         { // Явно задан arg_pos.
             const runtime::Number* arg_pos_ptr = actual_args[2].TryAs<runtime::Number>();
@@ -600,8 +617,7 @@ namespace runtime
             arg_pos = static_cast<size_t>(arg_pos_int);
         }
 
-        // Все параметры предстоящей операции определены и проверены. Можно выполнять.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>((arg_str.*find_func)(arg_str_what, arg_pos))));
+        return {actual_args[0].TryAs<runtime::String>(), actual_args[1].TryAs<runtime::String>(), arg_pos};
     }
 
     ObjectHolder StringOpsInstance::MethodSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
@@ -627,10 +643,10 @@ namespace runtime
         { // Требуется вернуть размер строки в UTF-8-символах.
             if (arg_str->encoding == UTF_8_ENCODING)
                 // Карта UTF-8-символов уже существует. Используем её размер как размер строки.
-                return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_str->utf8_map.begin_map.size())));
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_str->SymbolSizeOf())));
             else
                 // Карты местоположения UTF-8-символов в строке нет, так как она имеет однобайтовую кодировку. Создадим такую карту и вернём её длину.
-                return ObjectHolder::Own(runtime::Number(static_cast<int>(BuildUTF8Map(arg_str_std).begin_map.size())));
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(BuildUTF8Map(arg_str_std).SymbolSizeOf())));
         }
         else
         { // Нужно вычислить длину строки в однобайтовых символа (то есть просто в байтах).
@@ -681,7 +697,7 @@ namespace runtime
         // распределения многобайтовых символов в полученной UTF-8-строке.
         runtime::String appended_str(move(arg_str_to_std.append(cnv_str_what->GetValue(), arg_byte_pos, arg_byte_count)));
         appended_str.encoding = arg_str_to->encoding;
-        if (arg_str_to->encoding == UTF_8_ENCODING)
+        if (appended_str.encoding == UTF_8_ENCODING)
             appended_str.utf8_map = BuildUTF8Map(appended_str.GetValue());
 
         return ObjectHolder::Own(runtime::String(move(appended_str)));
@@ -699,30 +715,134 @@ namespace runtime
         const std::string& arg_str_std = arg_str->GetValue();
         auto [arg_pos, arg_count] = ExtractPosSize(actual_args, 1, arg_str, context);
 
-        // Все параметры предстоящей операции определены и проверены. Можно выполнять.
-        return ObjectHolder::Own(runtime::String(arg_str_std.substr(arg_pos, arg_count)));
+        // Все параметры предстоящей операции определены и проверены. Можно выполнять. Для UTF-8-строки также составим для выделенной
+        // из неё подстроки карту расположения UTF-8-символов в ней.
+        runtime::String substr_val(arg_str_std.substr(arg_pos, arg_count));
+        substr_val.encoding = arg_str->encoding;
+        if (substr_val.encoding == UTF_8_ENCODING)
+            substr_val.utf8_map = BuildUTF8Map(substr_val.GetValue());
+
+        return ObjectHolder::Own(runtime::String(move(substr_val)));
     }
 
     // find(arg_str_haystack, arg_str_needle, arg_pos) - поиск первого вхождения подстроки arg_str_needle в строку arg_str_haystack,
     // начиная с позиции arg_pos.
     ObjectHolder StringOpsInstance::MethodFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, 0, &std::string::find);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
+        // выполняем поисковую операцию самостоятельно. Сначала перекодируем искомую подстроку ("иголку") также в UTF-8,
+        // а затем проверяем возможное наличие "иголки" по всем возможным начальным позициям в "стоге", начиная с arg_pos.
+        ObjectHolder needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needle = needle_holder.TryAs<runtime::String>();
+        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                          &arg_str_needle_std = arg_str_needle->GetValue();
+        size_t arg_pos = std::get<2>(args_values),
+               haystack_size = arg_str_haystack->SymbolSizeOf(),
+               needle_size = arg_str_needle->SymbolSizeOf();
+
+        if (needle_size > haystack_size || arg_pos > (haystack_size - needle_size))
+            // Подстроку нужной длины с такой позиции arg_pos найти заведомо невозможно.
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        if (needle_size == 0)
+            // Считаем, что пустая подстрока существует всегда и везде, то есть у любой строки с любой её существующей позиции.
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_pos)));
+
+        size_t needle_byte_size = arg_str_needle->BytePosAfterEnd();
+        for (size_t i = arg_pos; i <= haystack_size - needle_size; ++i)
+        {
+            // Проверяем наличие подстроки arg_str_needle_std в строке arg_str_haystack_std, начиная с UTF-8-символа с индексом i.
+            size_t haystack_substr_pos = arg_str_haystack->SymbolBytePos(i);
+            if (CompareUTF8Substr(arg_str_haystack_std, haystack_substr_pos, needle_byte_size,
+                                  arg_str_needle_std, 0, needle_byte_size) == 0)
+                // Подстрока "иголка" обнаружилась в "стогу".
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+        }
+        // Найти требуемую подстроку в указанной строке не удалось.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
     // rfind(arg_str_haystack, arg_str_needle, arg_pos) - поиск последнего вхождения подстроки arg_str_needle в строку arg_str_haystack,
-    // заканчивая поиск позицией arg_pos.
+    // заканчивая поиск позицией arg_pos (то есть поиск проводится внутри префикса arg_str_haystack до символа arg_pos включительно).
     ObjectHolder StringOpsInstance::MethodRFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::rfind);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, (std::numeric_limits<size_t>::max)());
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую готовую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::rfind, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
+        // используем другой способ выполнения операции. Сначала перекодируем искомую подстроку также в UTF-8, а затем сканируем "стог"
+        // на предмет поиска символов из "иголки" своими собственными средствами.
+        ObjectHolder needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needle = needle_holder.TryAs<runtime::String>();
+        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                          &arg_str_needle_std = arg_str_needle->GetValue();
+        size_t haystack_size = arg_str_haystack->SymbolSizeOf(),
+               needle_size = arg_str_needle->SymbolSizeOf(),
+               arg_pos = std::get<2>(args_values);
+
+        if (needle_size == 0)
+            // Считаем, что пустая подстрока существует всегда и везде, то есть у любой строки с любой её существующей позиции.
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(min(arg_pos, haystack_size))));
+        if (needle_size > haystack_size)
+            // Строка слишком короткая, в такой строке требуемой подстроки явно не существует.
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+
+        size_t min_arg_pos = haystack_size - needle_size;
+        if (arg_pos > min_arg_pos)
+            arg_pos = min_arg_pos;
+        size_t needle_byte_size = arg_str_needle->BytePosAfterEnd();
+        while (true)
+        {
+            size_t haystack_substr_pos = arg_str_haystack->SymbolBytePos(arg_pos);
+            if (CompareUTF8Substr(arg_str_haystack_std, haystack_substr_pos, needle_byte_size,
+                arg_str_needle_std, 0, needle_byte_size) == 0)
+                // Подстрока "иголка" обнаружилась в "стогу".
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_pos)));
+
+            if (arg_pos == 0)
+                break;
+            --arg_pos;
+        }
+        // Найти требуемую подстроку в указанной строке не удалось.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
-    // find_first_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа строки arg_str_needle в
+    // find_first_of(arg_str_haystack, arg_str_needles, arg_pos) - поиск первого вхождения любого символа строки arg_str_needles в
     // строку arg_str_haystack, начиная с позиции arg_pos.
     ObjectHolder StringOpsInstance::MethodFindFirstOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, 0, &std::string::find_first_of);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_first_of, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
+        // используем другой способ выполнения операции. Сначала перекодируем искомую подстроку также в UTF-8, а затем сканируем "стог"
+        // на предмет поиска символов из "иголки" своими собственными средствами.
+        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
+        const std::string& haystack_std = arg_str_haystack->GetValue();
+        size_t arg_pos = std::get<2>(args_values),
+               haystack_size = arg_str_haystack->SymbolSizeOf();
+
+        for (size_t i = arg_pos; i < haystack_size; ++i)
+        {
+            if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) != std::string::npos)
+                // Символ "стога" с индексом i обнаружился среди "иголок" arg_str_needles.
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+        }
+        // Ни один символ из набора "иголок" arg_str_needles не найден в arg_str_haystack.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
     // find_first_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа не из строки arg_str_needle в
@@ -730,7 +850,28 @@ namespace runtime
     ObjectHolder StringOpsInstance::MethodFindFirstNotOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, 0, &std::string::find_first_not_of);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_first_not_of, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
+        // используем альтернативный метод выполнения операции собственными средствами.
+        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
+        const std::string& haystack_std = arg_str_haystack->GetValue();
+        size_t arg_pos = std::get<2>(args_values),
+               haystack_size = arg_str_haystack->SymbolSizeOf();
+
+        for (size_t i = arg_pos; i < haystack_size; ++i)
+        {
+            if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) == std::string::npos)
+                // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_str_needles.
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+        }
+        // В "стогу" arg_str_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_str_needles.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
     // find_last_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа строки arg_str_needle в
@@ -738,7 +879,33 @@ namespace runtime
     ObjectHolder StringOpsInstance::MethodFindLastOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::find_last_of);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_last_of, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление, используем другой способ
+        // выполнения поисковой операции.
+        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
+        const std::string& haystack_std = arg_str_haystack->GetValue();
+        size_t arg_pos = std::get<2>(args_values),
+               haystack_size = arg_str_haystack->SymbolSizeOf();
+
+        if (haystack_size > 0)
+        {
+            for (size_t i = haystack_size - 1; i >= arg_pos; --i)
+            {
+                if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) != std::string::npos)
+                    // Символ "стога" с индексом i обнаружился среди "иголок" arg_str_needles.
+                    return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+                if (i == 0)
+                    break;
+            }
+        }
+        // Ни один символ из набора "иголок" arg_str_needles не найден в arg_str_haystack.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
 
     // find_last_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа не из строки arg_str_needle в
@@ -746,7 +913,33 @@ namespace runtime
     ObjectHolder StringOpsInstance::MethodFindLastNotOf
         (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        return MethodCommonFind(method, actual_args, context, std::string::npos, &std::string::find_last_not_of);
+        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
+        runtime::String* arg_str_haystack = std::get<0>(args_values);
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_last_not_of, context);
+
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
+        // используем альтернативный метод выполнения операции собственными средствами.
+        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
+        const std::string& haystack_std = arg_str_haystack->GetValue();
+        size_t arg_pos = std::get<2>(args_values),
+               haystack_size = arg_str_haystack->SymbolSizeOf();
+
+        if (haystack_size > 0)
+        {
+            for (size_t i = haystack_size - 1; i >= arg_pos; --i)
+            {
+                if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) == std::string::npos)
+                    // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_str_needles.
+                    return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+                if (i == 0)
+                    break;
+            }
+        }
+        // В "стогу" arg_str_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_str_needles.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
     // starts_with(arg_str_test, arg_str_start) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test начинается с подстроки arg_str_start.
@@ -755,9 +948,28 @@ namespace runtime
         CheckMethodParams(context, "StartsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
-        std::string arg_str_haystack = actual_args[0].TryAs<runtime::String>()->GetValue(),
-                    arg_str_needle = actual_args[1].TryAs<runtime::String>()->GetValue();
-        return ObjectHolder::Own(runtime::Bool(arg_str_haystack.starts_with(arg_str_needle)));
+        runtime::String* arg_str_haystack = actual_args[0].TryAs<runtime::String>();
+        // Если требуется, транскодируем "иголку" в кодировку "стога".
+        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                          &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
+        // Для однобайтовых кодировок используем стандартный starts_with и всё содержимое строк (их контейнеров). Для многобайтовых UTF-8 строк
+        // используем только их начальные UTF-8-корректные части.
+        bool starts_with_result;
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+        {
+            starts_with_result = arg_str_haystack_std.starts_with(arg_str_needle_std);
+        }
+        else
+        {
+            runtime::String* arg_str_needle = arg_str_needle_holder.TryAs<runtime::String>();
+            if (arg_str_needle->SymbolSizeOf() > arg_str_haystack->SymbolSizeOf())
+                return ObjectHolder::Own(runtime::Bool(false)); // Предполагаемый префикс слишком длинный, так что началом "стога" он быть явно не может.
+            size_t needle_byte_length = arg_str_needle->BytePosAfterEnd();
+
+            starts_with_result = (arg_str_haystack_std.compare(0, needle_byte_length, arg_str_needle_std, 0, needle_byte_length) == 0);
+        }
+        return ObjectHolder::Own(runtime::Bool(starts_with_result));
     }
     
     // ends_with(arg_str_test, arg_str_end) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test заканчиватеся подстрокой arg_str_end.
@@ -766,9 +978,30 @@ namespace runtime
         CheckMethodParams(context, "EndsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
-        std::string arg_str_haystack = actual_args[0].TryAs<runtime::String>()->GetValue(),
-                    arg_str_needle = actual_args[1].TryAs<runtime::String>()->GetValue();
-        return ObjectHolder::Own(runtime::Bool(arg_str_haystack.ends_with(arg_str_needle)));
+        runtime::String* arg_str_haystack = actual_args[0].TryAs<runtime::String>();
+        // Если требуется, транскодируем "иголку" в кодировку "стога".
+        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
+        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                          &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
+        // Для однобайтовых кодировок используем стандартный ends_with и всё содержимое строк (их контейнеров). Для многобайтовых UTF-8 строк
+        // используем только их начальные UTF-8-корректные части.
+        bool ends_with_result;
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+        {
+            ends_with_result = arg_str_haystack_std.ends_with(arg_str_needle_std);
+        }
+        else
+        {
+            runtime::String* arg_str_needle = arg_str_needle_holder.TryAs<runtime::String>();
+            size_t haystack_byte_length = arg_str_haystack->BytePosAfterEnd(),                
+                   needle_byte_length = arg_str_needle->BytePosAfterEnd();
+            if (arg_str_needle->SymbolSizeOf() > arg_str_haystack->SymbolSizeOf() || needle_byte_length > haystack_byte_length)
+                return ObjectHolder::Own(runtime::Bool(false)); // Предполагаемый суффикс слишком длинный, так что началом "стога" он быть явно не может.
+
+            size_t haystack_suffix_pos = haystack_byte_length - needle_byte_length;
+            ends_with_result = (arg_str_haystack_std.compare(haystack_suffix_pos, needle_byte_length, arg_str_needle_std, 0, needle_byte_length) == 0);
+        }
+        return ObjectHolder::Own(runtime::Bool(ends_with_result));
     }
     
     // contains(arg_str_haystack, arg_str_needle) - предикат, возвращающий "ИСТИНУ", если подстрока arg_str_needle входит в строку arg_str_haystack.

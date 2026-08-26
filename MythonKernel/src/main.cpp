@@ -358,7 +358,7 @@ namespace
         auto program = ParseProgram(lexer, parse_context);
 
         ostringstream out_ostr;
-        DebugContext debug_context(out_ostr, debug_event_handler, link_function);
+        DebugContext debug_context(out_ostr, debug_event_handler, program.get(), link_function);
         if (!breaks.empty())
         {
             for (const OneBreakpointDef& one_break : breaks)

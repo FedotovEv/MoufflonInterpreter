@@ -5,6 +5,7 @@
 #include "error_classes.h"
 #include "throw_messages.h"
 #include "plugin_caller.h"
+#include <cassert>
 
 using namespace std;
 using runtime::ThrowMessages;
@@ -61,11 +62,15 @@ namespace
             if constexpr (std::is_same_v<T, ast::ClassDefinition>)
             { // Для узлов определителей классов нужно дополнительно добавить указатель на каждый такой определитель во вспомогательный словарь
               // характеризатора runtime::TypeTraitsInstance.
-                runtime::TypeTraitsInstance::AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
+                // runtime::TypeTraitsInstance::AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
+                if (root_program_statement_)
+                    root_program_statement_->AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
             }
             else if constexpr (std::is_same_v<T, ast::FreeFunctionDefinition>)
             { // Для узлов же определителей свободных функций следует сделать аналогичное действие, но добавление происходит в другой словарь.
-                runtime::TypeTraitsInstance::AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
+                // runtime::TypeTraitsInstance::AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
+                if (root_program_statement_)
+                    root_program_statement_->AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
             }
         }
 
@@ -123,9 +128,22 @@ namespace
             current_method_ = current_method;
         }
 
+        // Сохранение/получение указателя на корневой узел АСД исполняемой программы. Этот узел потребуется нам при
+        // постобработке некоторых создаваемых узлов.
+        ast::ProgramCompound* GetProgramRoot() const
+        {
+            return root_program_statement_;
+        }
+
+        void SetProgramRoot(ast::ProgramCompound* program_root)
+        {
+            root_program_statement_ = program_root;
+        }
+
     private:
         const parse::Lexer& lexer_;
         runtime::Method* current_method_ = nullptr;
+        ast::ProgramCompound* root_program_statement_ = nullptr;  // Указатель на корневой узел строящегося АСД анализируемой программы.
     };
 
     class Parser
@@ -133,68 +151,76 @@ namespace
     public:
         explicit Parser(parse::Lexer& lexer, parse::ParseContext& parse_context) :
             lexer_(lexer), exec_factory_(lexer_), parse_context_(parse_context)
+        {}
+
+        void FormatePredefinedEntities()
         {
-            runtime::TypeTraitsInstance::ClearAllStaticStorages();
+            ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(exec_factory_.GetProgramRoot());
+            if (!program_root)
+            {
+                assert(false);
+                return;
+            }
             // Регистрируем внутренние встроенные "завершённые" классы - с фиксированным набором методов, реализуемых непосредственно
             // в коде данной исполняющей среды и без возможности наследования от них и их дальнейшей модификации.
             // Регистрация класса массива "array".
             internal_classes_[ARRAY_CLASS_NAME] = {.creator = ast::CreateArray};
-            runtime::TypeTraitsInstance::AppendInternalClassId(ARRAY_CLASS_NAME, internal_classes_[ARRAY_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(ARRAY_CLASS_NAME, internal_classes_[ARRAY_CLASS_NAME].my_id);
             // Регистрация класса ассоциативного массива (словаря) map.
             internal_classes_[MAP_CLASS_NAME] = {.creator = ast::CreateMap};
-            runtime::TypeTraitsInstance::AppendInternalClassId(MAP_CLASS_NAME, internal_classes_[MAP_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(MAP_CLASS_NAME, internal_classes_[MAP_CLASS_NAME].my_id);
             // Регистрация класса коллекции математических функций math.
             internal_classes_[MATH_CLASS_NAME] = {.creator = ast::CreateMath};
-            runtime::TypeTraitsInstance::AppendInternalClassId(MATH_CLASS_NAME, internal_classes_[MATH_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(MATH_CLASS_NAME, internal_classes_[MATH_CLASS_NAME].my_id);
             // Регистрация класса коллекции строковых преобразований string_ops.
             internal_classes_[STRINGOPS_CLASS_NAME] = {.creator = ast::CreateStringOps};
-            runtime::TypeTraitsInstance::AppendInternalClassId(STRINGOPS_CLASS_NAME, internal_classes_[STRINGOPS_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(STRINGOPS_CLASS_NAME, internal_classes_[STRINGOPS_CLASS_NAME].my_id);
 
             // Набор записей с указаниями на производящие функции экземпляров классов ошибок.
             // Общая недетализированная ошибка. Родоначальник иерархии всех прочих классов ошибок.
             internal_classes_[COMMON_ERROR_CLASS_NAME] = {.creator = ast::CreateCommonError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(COMMON_ERROR_CLASS_NAME, internal_classes_[COMMON_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(COMMON_ERROR_CLASS_NAME, internal_classes_[COMMON_ERROR_CLASS_NAME].my_id);
             // Класс общесистемной ошибки.
             internal_classes_[SYSTEM_ERROR_CLASS_NAME] = {.creator = ast::CreateSystemError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(SYSTEM_ERROR_CLASS_NAME, internal_classes_[SYSTEM_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(SYSTEM_ERROR_CLASS_NAME, internal_classes_[SYSTEM_ERROR_CLASS_NAME].my_id);
             // Ошибка деления на нуль.
             internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME] = {.creator = ast::CreateErrorDivisionByZero};
-            runtime::TypeTraitsInstance::AppendInternalClassId
+            program_root->AppendInternalClassId
                 (ERROR_DIVISION_BY_ZERO_CLASS_NAME, internal_classes_[ERROR_DIVISION_BY_ZERO_CLASS_NAME].my_id);
             // Ошибка математического переполнения.
             internal_classes_[OVERFLOW_ERROR_CLASS_NAME] = {.creator = ast::CreateOverflowError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(OVERFLOW_ERROR_CLASS_NAME, internal_classes_[OVERFLOW_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(OVERFLOW_ERROR_CLASS_NAME, internal_classes_[OVERFLOW_ERROR_CLASS_NAME].my_id);
             // Ошибка области определения функции.
             internal_classes_[DOMAIN_ERROR_CLASS_NAME] = {.creator = ast::CreateDomainError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(DOMAIN_ERROR_CLASS_NAME, internal_classes_[DOMAIN_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(DOMAIN_ERROR_CLASS_NAME, internal_classes_[DOMAIN_ERROR_CLASS_NAME].my_id);
             // Ошибка несогласованности формальных и фактических параметров метода или функции.
             internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME] = {.creator = ast::CreateErrorParamsInconsistency};
-            runtime::TypeTraitsInstance::AppendInternalClassId
+            program_root->AppendInternalClassId
                 (ERROR_PARAMS_INCONSISTENCY_CLASS_NAME, internal_classes_[ERROR_PARAMS_INCONSISTENCY_CLASS_NAME].my_id);
             // Общая синтаксическая ошибка разбора программы.
             internal_classes_[SYNTAX_ERROR_CLASS_NAME] = {.creator = ast::CreateSyntaxError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(SYNTAX_ERROR_CLASS_NAME, internal_classes_[SYNTAX_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(SYNTAX_ERROR_CLASS_NAME, internal_classes_[SYNTAX_ERROR_CLASS_NAME].my_id);
             // Ошибка работы с подключаемыми модулями.
             internal_classes_[MODULE_ERROR_CLASS_NAME] = {.creator = ast::CreateModuleError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(MODULE_ERROR_CLASS_NAME, internal_classes_[MODULE_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(MODULE_ERROR_CLASS_NAME, internal_classes_[MODULE_ERROR_CLASS_NAME].my_id);
             // Логическая ошибка исполнения программы.
             internal_classes_[LOGIC_ERROR_CLASS_NAME] = {.creator = ast::CreateLogicError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(LOGIC_ERROR_CLASS_NAME, internal_classes_[LOGIC_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(LOGIC_ERROR_CLASS_NAME, internal_classes_[LOGIC_ERROR_CLASS_NAME].my_id);
             // Неверное формирование ссылки на поле объекта или некорректная работа с ней.
             internal_classes_[REFERENCE_ERROR_CLASS_NAME] = {.creator = ast::CreateReferenceError};
-            runtime::TypeTraitsInstance::AppendInternalClassId(REFERENCE_ERROR_CLASS_NAME, internal_classes_[REFERENCE_ERROR_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(REFERENCE_ERROR_CLASS_NAME, internal_classes_[REFERENCE_ERROR_CLASS_NAME].my_id);
 
             // Регистрируем класс типовых характеристик - TypeTraits.
             internal_classes_[TYPE_TRAITS_CLASS_NAME] = {.creator = ast::CreateTypeTraits};
-            runtime::TypeTraitsInstance::AppendInternalClassId(TYPE_TRAITS_CLASS_NAME, internal_classes_[TYPE_TRAITS_CLASS_NAME].my_id);
+            program_root->AppendInternalClassId(TYPE_TRAITS_CLASS_NAME, internal_classes_[TYPE_TRAITS_CLASS_NAME].my_id);
 
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
             // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
             std::vector<runtime::Method> methods;
-            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, {"coro_instance"s},
-                              std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
-            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, {"coro_instance"s, "suspend_value"s},
-                              std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, { "coro_instance"s },
+                std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, { "coro_instance"s, "suspend_value"s },
+                std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
             declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), {}));
         }
 
@@ -203,10 +229,16 @@ namespace
         unique_ptr<ast::Statement> ParseProgram()
         {
             auto result = exec_factory_.Create(ast::ProgramCompound());
+            // Настраиваем корневой узел строящейся программы - он хранит некоторые общие данные и требует специальных установок.
             program_compound_ = result.get();
+            program_compound_->SetSourceEncoding(lexer_.GetSourceEncoding());
             // Первому исполняемому узлу программы назначим специальный атрибут - CMD_GENUS_INITIALIZE.
             result->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_INITIALIZE);
             result->SetCommandDesc({.module_string_number = -1});   // Головной узел не имеет определённого положения в исходнике.
+            // Укажем фабрике узлов АСД программы местонахождение его корня.
+            exec_factory_.SetProgramRoot(result.get());
+            // 
+            FormatePredefinedEntities();
             // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
             // в словаре declared_classes_. Каждый такой класс будет доступен с самого начала исполнения программы для всего её последующего кода.
             for (const auto& declared_classes_pair : declared_classes_)

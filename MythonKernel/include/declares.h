@@ -105,14 +105,18 @@ struct UTF8Map
         return !begin_map.empty();
     }
 
-    // Функция-член возвращает байтовую позиция сразу за концом корректной UTF-8-строки.
-    size_t BytePosAfterEnd() const
+    // Возврат действительной длины строки в символах.
+    size_t SymbolSizeOf() const
     {
-        if (begin_map.empty())
-            return 0;
-        else
-            return begin_map.back() + last_symbol_size;
+        return begin_map.size();
     }
+
+    // Функция-член возвращает байтовую позицию сразу за концом корректной UTF-8-строки.
+    size_t BytePosAfterEnd() const;
+    // Возвращает байтовую позицию символа с индексом symb_index.
+    size_t SymbolBytePos(size_t symb_index) const;
+    // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
+    size_t SymbolByteSize(size_t symb_index) const;
 };
 
 // Константы, связанные с обработкой кодировки различных строковых констант, встречающихся в МУФЛОН-программе.

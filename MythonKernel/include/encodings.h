@@ -46,7 +46,10 @@ std::optional<std::pair<char, char>> FindRegisterPair(char scan_c, bool scan_for
 // Многорежимная функция сравнения однобайтовых строк op_str_1 и op_str_2 с возможностью игнорирования регистра символов и
 // применения взвешивающей строки.
 int CompareCollate(const std::string& op_str_1, const std::string& op_str_2, const CompareCollateMode& compare_mode = {});
-// Функция сравнения UTF-8 кодированных строк.
+// Функция сравнения подстрок UTF-8 кодированных строк. Начальные позиции подстрок и их размеры являются байтовыми.
+int CompareUTF8Substr(const std::string& op_str_1, size_t start_op_pos_1, size_t op_size_1,
+					  const std::string& op_str_2, size_t start_op_pos_2, size_t op_size_2);
+// Функция сравнения полных UTF-8 кодированных строк.
 int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2);
 // Преобразование символа с UNCODE-кодом unicode_symb в набор байт в UTF-8 представлении.
 std::string ConvSymbToUTF8(uint32_t unicode_symb);

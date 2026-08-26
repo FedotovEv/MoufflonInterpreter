@@ -83,9 +83,13 @@ namespace runtime
     public:
         static constexpr size_t RESERVED_VALUE = (std::numeric_limits<size_t>::max)();
 
-        explicit DebugContext(std::ostream& output, DebugCallback debug_callback, LinkageFunction external_link = LinkageFunction())
+        explicit DebugContext
+            (std::ostream& output, DebugCallback debug_callback, runtime::Executable* program_root = nullptr, LinkageFunction external_link = LinkageFunction())
             : SimpleContext(output, std::move(external_link)), debug_callback_(std::move(debug_callback))
-        {}
+        {
+            if (program_root)
+                SetProgramRoot(program_root);
+        }
 
         // Получение функтора-перехватчика отладочного звонка, назначенного при конструировании контекста.
         const DebugCallback& GetDebugCallback() const;

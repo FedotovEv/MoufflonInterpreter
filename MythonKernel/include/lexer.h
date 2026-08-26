@@ -284,6 +284,21 @@ namespace parse
             --current_command_desc_.module_string_number;
         }
 
+        void SetSourceEncoding(const SingleByteEncodingDesc* source_encoding)
+        {
+            source_encoding_ = source_encoding;
+        }
+
+        const SingleByteEncodingDesc* GetSourceEncoding() const
+        {
+            return source_encoding_;
+        }
+
+        bool IsSourceInUTF8() const
+        {
+            return source_encoding_ == UTF_8_ENCODING;
+        }
+
     private:
 
         static constexpr int SPACES_PER_INDENT_STEP = 2;
@@ -294,5 +309,7 @@ namespace parse
         Token current_token_;
         runtime::ProgramCommandDescriptor current_command_desc_;
         bool is_input_need_delete_;
+        // Информация о строковой кодировке исходных текстов разбираемой программы.
+        const SingleByteEncodingDesc* source_encoding_ = NO_ENCODING;
     };
 }  // namespace parse

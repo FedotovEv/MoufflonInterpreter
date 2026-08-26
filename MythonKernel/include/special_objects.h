@@ -350,7 +350,7 @@ class TypeTraitsInstance : public CommonClassInstance
 {
 public:
     using TypeTraitsCallMethod = ObjectHolder(TypeTraitsInstance::*)(const std::string&, const std::vector<ObjectHolder>&, Context&);
-    TypeTraitsInstance(ObjectHolder traits_value);
+    TypeTraitsInstance(ObjectHolder traits_value, ast::ProgramCompound* program_compound);
     TypeTraitsInstance(const TypeTraitsInstance&) = delete;
     TypeTraitsInstance(TypeTraitsInstance&&) = default;
     TypeTraitsInstance& operator=(const TypeTraitsInstance&) = delete;
@@ -390,35 +390,40 @@ public:
     }
 
     // Методы управления хранилищами сущностей, определяемых в исходном тексте МУФЛОН-программы.
-    static void ClearAllStaticStorages();    
-    static void AppendInternalClassId(const std::string& class_name, int class_id);
-    static void AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def);
-    static void AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def);
+    //static void ClearAllStaticStorages();    
+    //static void AppendInternalClassId(const std::string& class_name, int class_id);
+    //static void AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def);
+    //static void AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def);
 
     // Статические функции исследования множеств сущностей, определённых в МУФЛОН-программе, и поиск среди них сущностей
     // некоторого типа с конкретным именем.
     // Поиск класса с заданным именем class_name.
-    static runtime::ProgramCommandDescriptor ScanForClass(const std::string& class_name);
+    static runtime::ProgramCommandDescriptor ScanForClass
+        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& class_name);
     // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
-    static runtime::ProgramCommandDescriptor ScanForMethod(const std::string& method_sign, const std::string& class_name = {});
+    static runtime::ProgramCommandDescriptor ScanForMethod
+        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
+         const std::string& method_sign, const std::string& class_name = {});
     // Поиск свободной функции с заданной сигнатурой free_func_sign.
-    static runtime::ProgramCommandDescriptor ScanForFreeFunction(const std::string& free_func_sign);
+    static runtime::ProgramCommandDescriptor ScanForFreeFunction
+        (const std::unordered_map<std::string, ast::FreeFunctionDefinition*>& declared_free_functions_def, const std::string& free_func_sign);
 
 private:
     static const std::unordered_map<std::string_view, TypeTraitsCallMethod> type_traits_method_table_;
     static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> type_traits_method_argument_count_;
     // Словарь хранения идентов встроенных фиксированных классов инсполнительской среды.
-    static std::unordered_map<std::string, int> internal_classes_ids_;
+    // static std::unordered_map<std::string, int> internal_classes_ids_;
     // Словарь связи имени класса и его объекта-дескриптора типа ClassDefinition.
-    static std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;
+    // static std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;
     // Словарь сохранения связи между сигнатурой (расширенным именем) свободной функции и её объектом-дескриптором
     // типа FreeFunctionDefinition.
-    static std::unordered_map<std::string, ast::FreeFunctionDefinition*> declared_free_functions_def_;
+    // static std::unordered_map<std::string, ast::FreeFunctionDefinition*> declared_free_functions_def_;
 
     ObjectHolder traits_value_;       // Характеризуемое значение.
+    ast::ProgramCompound* program_compound_ = nullptr;  // Указатель на головной узел АСД разбираемой программы.
 
     // Определение числового идента и имени типа значения, хранящегося во вместилище what_id и what_name.
-    static int ObjectIdInternal(const ObjectHolder& what_id);
+    static int ObjectIdInternal(const std::unordered_map<std::string, int>& internal_classes_ids, const ObjectHolder& what_id);
     static std::string ObjectNameInternal(const ObjectHolder& what_name);
 
     // Обработчики методов характеристического класса.

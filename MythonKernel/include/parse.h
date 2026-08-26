@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "throw_messages.h"
+#include "encodings.h"
 
 namespace runtime
 {

@@ -1107,8 +1107,10 @@ namespace ast
 
     runtime::ObjectHolder ProgramCompound::Execute(runtime::Closure& closure, runtime::Context& context)
     {
+        // Привяжем контекст context к нашей программе, сохранив в нём указатель на этот корневой узел её АСД.
+        context.SetProgramRoot(this);
+        // Исполним программу.
         runtime::ObjectHolder ret_value = Compound::Execute(closure, context);
-
         // Если это не запрещено соответствующей опцией контекста, после завершения программы корректно удаляем все объекты,
         // сохранившиеся к данному моменту в таблице символов closure - если нужно, взываем для каждого из них внутренний деструктор.
         runtime::LinkageValue destroy_at_finish_opt = context.GetOption(runtime::Context::OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH);
@@ -1133,6 +1135,21 @@ namespace ast
 
         #endif
         dll_list_.clear();
+    }
+
+    void ProgramCompound::AppendInternalClassId(const std::string& class_name, int class_id)
+    {
+        internal_classes_ids_.emplace(std::pair{class_name, class_id});
+    }
+
+    void ProgramCompound::AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def)
+    {
+        declared_classes_def_.emplace(std::pair{class_name, class_def});
+    }
+
+    void ProgramCompound::AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def)
+    {
+        declared_free_functions_def_.emplace(std::pair{free_func_sign, free_func_def});
     }
 
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)

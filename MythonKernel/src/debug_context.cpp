@@ -1,8 +1,10 @@
 
 #include "debug_context.h"
+#include "statement.h"
 #include <iomanip>
 #include <codecvt>
 #include <locale>
+#include <cassert>
 
 namespace runtime
 {
@@ -426,8 +428,16 @@ namespace runtime
     // классу class_name (или любому классу, если class_name пуст).
     size_t DebugContext::AddBreakAtMethod(const std::string& method_name, size_t params_count, const std::string& class_name)
     {
-        if (ProgramCommandDescriptor method_def_pos =
-            TypeTraitsInstance::ScanForMethod(MangleMethodFunctionName(method_name, params_count)); method_def_pos != DUMB_PROG_POS)
+        ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(GetProgramRoot());
+        if (!program_root)
+        {
+            assert(false);
+            return RESERVED_VALUE;
+        }
+
+        if (ProgramCommandDescriptor method_def_pos = TypeTraitsInstance::ScanForMethod
+            (program_root->GetDeclaredClassesDef(), MangleMethodFunctionName(method_name, params_count));
+            method_def_pos != DUMB_PROG_POS)
             // Метод с затребованной сигнатурой найден. Создаёи бряк на его декларацию и возвращаем индекс этого бряка.
             return AddBreakpoint(method_def_pos);
         else    // Метод с указанными именными характеристиками и классовой принадлежностью найти не удалось.
@@ -437,8 +447,16 @@ namespace runtime
     // Создание бряка на любой вызов свободной функции с именем free_func_name, принимающей params_count аргументов.
     size_t DebugContext::AddBreakAtFreeFunction(const std::string& free_func_name, size_t params_count)
     {
-        if (ProgramCommandDescriptor free_func_def_pos =
-            TypeTraitsInstance::ScanForFreeFunction(MangleMethodFunctionName(free_func_name, params_count)); free_func_def_pos != DUMB_PROG_POS)
+        ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(GetProgramRoot());
+        if (!program_root)
+        {
+            assert(false);
+            return RESERVED_VALUE;
+        }
+
+        if (ProgramCommandDescriptor free_func_def_pos = TypeTraitsInstance::ScanForFreeFunction
+            (program_root->GetDeclaredFreeFunctionsDef(), MangleMethodFunctionName(free_func_name, params_count));
+            free_func_def_pos != DUMB_PROG_POS)
             // Свободная функция с затребованной сигнатурой найдена. Создаёи бряк на её декларацию и возвращаем его индекс.
             return AddBreakpoint(free_func_def_pos);
         else    // Свободную функцию с указанными именными характеристиками найти не удалось.

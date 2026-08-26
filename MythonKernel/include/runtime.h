@@ -19,6 +19,7 @@
 
 namespace ast
 {
+    class ProgramCompound;
     class CoYield;
     class ClassDefinition;
     class FreeFunctionDefinition;
@@ -38,6 +39,7 @@ namespace runtime
     };
 
     // Контекст исполнения инструкций Mython.
+    class Executable;
     class Context
     {
     public:
@@ -86,6 +88,7 @@ namespace runtime
         virtual void Clear() = 0;
         virtual LinkageValue GetOption(OptionType ask_option) = 0;
 
+        // Функции-члены отслеживания хода исполнения программы (положения в исходном тексте исполняемой в данной момент её инструкции).
         ProgramCommandDescriptor GetLastCommandDesc() const
         {
             return last_command_desc_;
@@ -96,6 +99,18 @@ namespace runtime
             last_command_desc_ = last_command_desc;
         }
 
+        // Сохранение/получение указателя на корневой узел АСД исполняемой программы. Этот узел содержит некоторую информацию, полученную
+        // при синтаксическом анализе программы и необходимую для работы некоторых вспомогательных классов исполняющей программу среды.
+        Executable* GetProgramRoot() const
+        {
+            return root_program_statement_;
+        }
+
+        void SetProgramRoot(Executable* program_root)
+        {
+            root_program_statement_ = program_root;
+        }
+
     private:
         // Дескриптор последней корректной исполненной команды.
         #ifdef MYTHON_UNITHREAD
@@ -103,6 +118,8 @@ namespace runtime
         #else
             std::atomic<ProgramCommandDescriptor> last_command_desc_;
         #endif
+        // Указатель на корневой узел (типа ast::ProgramCompound) исполняющейся программы.
+        Executable* root_program_statement_ = nullptr;
     };
 
     // Базовый класс для всех объектов языка Mython.
@@ -364,10 +381,25 @@ namespace runtime
             return GetValue().data();
         }
 
-        size_t SizeOf() const
+        size_t SizeOf() const           // Возврат длины строки в байтах (то есть фактической емкости контейнера).
         {
             return GetValue().size();
         }
+
+        size_t SymbolSizeOf() const;       // Возврат действительной длины строки в символах.
+        size_t BytePosAfterEnd() const;    // Получение байтовой позицию сразу за концом корректной UTF-8-строки.        
+        size_t SymbolBytePos(size_t symb_index) const;  // Возвращает байтовую позицию символа с индексом symb_index.        
+        size_t SymbolByteSize(size_t symb_index) const; // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
+        // --------
+        // Несколько перегрузок метода поиска некоторого символа в данной строке. Отличаются способами задания кода искомого символа.
+        // Во всех случаях поиск начинается с позиции start_pos (СИМВОЛЬНЫЙ индекс первого символа данной строки, с которого начинается
+        // поиск), а возвращают они его СИМВОЛЬНОЕ положение (индекс символа в данной строке) при нахождении и std::string::npos при
+        // отсутствии такого символа.
+        // --------        
+        // Поиск символа с кодом длиной symb_code_size, размещённым в строке symb_code_str в позиции symb_code_pos.
+        size_t FindSymbol(const std::string& symb_code_str, size_t symb_code_pos, size_t symb_code_size, size_t start_pos = 0) const;
+        // Поиск символа с кодом symb_code.
+        size_t FindSymbol(uint32_t symb_code, size_t start_pos = 0) const;
 
         const std::vector<std::pair<char, char>>& GetUpcaseTable() const;
         const std::string& GetCollate() const;

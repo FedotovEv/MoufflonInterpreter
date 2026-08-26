@@ -292,6 +292,38 @@ std::vector<SingleByteEncodingDesc> encodings_data
 	CP1251_ENC
 };
 
+// Определения методов типа UTF8Map.
+	// Функция-член возвращает байтовую позицию сразу за концом корректной UTF-8-строки.
+size_t UTF8Map::BytePosAfterEnd() const
+{
+	if (begin_map.empty())
+		return 0;
+	else
+		return begin_map.back() + last_symbol_size;
+}
+
+// Возвращает байтовую позицию символа с индексом symb_index.
+size_t UTF8Map::SymbolBytePos(size_t symb_index) const
+{
+	if (symb_index < begin_map.size())
+		return begin_map[symb_index];
+	else if (symb_index == begin_map.size())
+		return BytePosAfterEnd();
+	else
+		return std::string::npos;
+}
+
+// Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
+size_t UTF8Map::SymbolByteSize(size_t symb_index) const
+{
+	if ((symb_index + 1) < begin_map.size())  // Существуют символы symb_index и следующий за ним.
+		return begin_map[symb_index + 1] - begin_map[symb_index];
+	else if (symb_index < begin_map.size()) // Существует только символ symb_index.
+		return BytePosAfterEnd() - begin_map[symb_index];
+	else
+		return 0;
+}
+
 // Поиск в таблице регистрового спаривания upcase_table записи (пары) для символа scan_c верхнего (при scan_for_up == true) или нижнего
 // (при scan_for_up == false) регистров.
 std::optional<std::pair<char, char>> FindRegisterPair(char scan_c, bool scan_for_up, const std::vector<std::pair<char, char>>& upcase_table)
@@ -376,11 +408,15 @@ int CompareCollate(const std::string& op_str_1, const std::string& op_str_2, con
 		return static_cast<int>(op_str_2.size() + 1);	// Второй аргумент короче и, следовательно, меньше первого.
 }
 
-// Функция сравнения UTF-8-кодированных строк.
-int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2)
+// Функция сравнения подстрок UTF-8 кодированных строк. Начальные позиции подстрок и их размеры являются байтовыми.
+int CompareUTF8Substr(const std::string& op_str_1, size_t start_op_pos_1, size_t op_size_1,
+					  const std::string& op_str_2, size_t start_op_pos_2, size_t op_size_2)
 {
-	size_t op_pos_1 = 0, op_pos_2 = 0;
-	while (op_pos_1 < op_str_1.size() && op_pos_2 < op_str_2.size())
+	size_t op_pos_1 = start_op_pos_1, op_pos_2 = start_op_pos_2;
+	size_t op_use_size_1 = min(op_str_1.size(), op_size_1);
+	size_t op_use_size_2 = min(op_str_2.size(), op_size_2);
+
+	while (op_pos_1 < op_use_size_1 && op_pos_2 < op_use_size_2)
 	{
 		std::pair<uint32_t, size_t> current_symb_1 = ConvSymbFromUTF8(op_str_1, op_pos_1);
 		std::pair<uint32_t, size_t> current_symb_2 = ConvSymbFromUTF8(op_str_2, op_pos_2);
@@ -388,7 +424,7 @@ int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2)
 			op_pos_1 = (std::numeric_limits<size_t>::max)();
 		if (current_symb_2.second == 0)
 			op_pos_2 = (std::numeric_limits<size_t>::max)();
-		if (op_pos_1 >= op_str_1.size() || op_pos_2 >= op_str_2.size())
+		if (op_pos_1 >= op_use_size_1 || op_pos_2 >= op_use_size_2)
 			break;
 		// Очередные легитимные Юникоды выделены из обоих строк.
 		if (current_symb_1.first < current_symb_2.first) // Первая строка op_str_1 "меньше" второй строки op_str_2.
@@ -400,12 +436,18 @@ int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2)
 		op_pos_2 += current_symb_2.second;
 	}
 	// Выясняем и возвращаем результат сравнения для строк с равными префиксами, так как он не был выяснен ранее, внутри цикла.
-	if (op_pos_1 < op_str_1.size())			// Строка op_str_1 длиннее (и, следовательно, будет считаться "больше") строки op_str_2.
+	if (op_pos_1 < op_use_size_1)			// Строка op_str_1 длиннее (и, следовательно, будет считаться "больше") строки op_str_2.
 		return static_cast<int>(op_pos_1 + 1);
-	else if (op_pos_2 < op_str_2.size())	// Строка op_str_2 длиннее (и, следовательно, будет считаться "больше") строки op_str_1.
-		return -static_cast<int>(op_str_1.size() + 1);
+	else if (op_pos_2 < op_use_size_2)		// Строка op_str_2 длиннее (и, следовательно, будет считаться "больше") строки op_str_1.
+		return -static_cast<int>(op_use_size_1 + 1);
 	else									// Обе строки одинаковы.
 		return 0;
+}
+
+// Функция сравнения полных UTF-8-кодированных строк.
+int CompareUTF8(const std::string& op_str_1, const std::string& op_str_2)
+{
+	return CompareUTF8Substr(op_str_1, 0, op_str_1.size(), op_str_2, 0, op_str_2.size());
 }
 
 // Преобразование символа с UNCODE-кодом unicode_symb в набор байт в UTF-8 представлении.

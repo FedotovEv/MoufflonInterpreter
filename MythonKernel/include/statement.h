@@ -662,6 +662,42 @@ namespace ast
             return plugines_;
         }
 
+        void SetSourceEncoding(const SingleByteEncodingDesc* source_encoding)
+        {
+            source_encoding_ = source_encoding;
+        }
+
+        const SingleByteEncodingDesc* GetSourceEncoding() const
+        {
+            return source_encoding_;
+        }
+
+        bool IsSourceInUTF8() const
+        {
+            return source_encoding_ == UTF_8_ENCODING;
+        }
+
+        // Функции пополнения коллекций ссылок (указателей) на внутренние и внешние классы создаваемой программы,
+        // а также на её свободные функции.
+        void AppendInternalClassId(const std::string& class_name, int class_id);
+        void AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def);
+        void AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def);
+        // Возвращение ссылок на коллекционные накопители различных сущностей программы, которую представляет данный корень.
+        const std::unordered_map<std::string, int>& GetInternalClassesIds() const
+        {
+            return internal_classes_ids_;
+        }
+
+        const std::unordered_map<std::string, ast::ClassDefinition*>& GetDeclaredClassesDef() const
+        {
+            return declared_classes_def_;
+        }
+
+        const std::unordered_map<std::string, ast::FreeFunctionDefinition*>& GetDeclaredFreeFunctionsDef() const
+        {
+            return declared_free_functions_def_;
+        }
+
     private:
         // Метаданные, связанные с программой, которую содержит эта сплотка (составная инструкция) в своём поле comp_body_.
         // Список системно-зависимых обработчиков динамических библиотек, загруженных при импорте файлово-организованных втыкал.
@@ -672,6 +708,15 @@ namespace ast
         #endif
         // Описание втыкал, подключённых к программе директивами import в процессе её синтаксического анализа.
         std::unordered_map<std::string, ast::PluginDescData> plugines_;
+        // Тип кодировки исходных текстов программы.
+        const SingleByteEncodingDesc* source_encoding_ = NO_ENCODING;
+        // Словарь хранения идентов встроенных фиксированных классов инсполнительской среды.
+        std::unordered_map<std::string, int> internal_classes_ids_;
+        // Словарь связи имени класса и его объекта-дескриптора типа ClassDefinition.
+        std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;
+        // Словарь сохранения связи между сигнатурой (расширенным именем) свободной функции и её объектом-дескриптором
+        // типа FreeFunctionDefinition.
+        std::unordered_map<std::string, ast::FreeFunctionDefinition*> declared_free_functions_def_;
     };
 
     // Тело метода. Как правило, содержит составную инструкцию ast::Compound.

@@ -147,19 +147,25 @@ private:
     uint32_t last_unicode_ = 0;         // Последний Юникод, полученный при выполнении некоторых операций над многобайтовыми строками.
 
     // Вспомогательные приватные методы.
-    // Функция извлечения пары параметров подстроки - начального её индекса и длины.
+    // Функция извлечения пары параметров подстроки, принадлежащей строке arg_str - начального её индекса и длины - из списка фактических
+    // аргументов actual_args некоторого метода. Искомый начальный индекс первого символа подстроки содержится в элементе
+    // actual_args[arg_start_pos], а длина подстроки - в элементе actual_args[arg_start_pos + 1]. Функция проверяет типовую и количественную
+    // корректность обоих параметров, при ошибках исправляет значения к допустимым или выбрасывает исключения.
     std::pair<size_t, size_t> ExtractPosSize
         (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str, Context& context);
     // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
     int CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const;
     // Строит карту расположения UTF-8-кодов в строке parse_str.
     UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
+    // Метод извлечения стандартного набора аргументов функции поиска, у всех разновидностей которого этот набор одинаков.
+    using FindArgsT = std::tuple <runtime::String*, runtime::String*, size_t>;
+    FindArgsT ExtractFindParams
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos) const;
     // Функция обобщённого поиска подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
     // поисковой функцией find_func.
     using CommonFindFunc = std::string::size_type(std::string::*)(const std::string& str, const std::string::size_type pos) const;
-    ObjectHolder MethodCommonFind
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos,
-         CommonFindFunc find_func);
+    ObjectHolder MethodCommonFindUnibyte
+        (const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func, Context& context) const;
 
     // Функции-члены, представляющие собой реализацию внешних методов класса StringOpsInstance для МУФЛОН-программы.
     ObjectHolder MethodSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

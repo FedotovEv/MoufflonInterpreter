@@ -20,6 +20,80 @@ extern const std::string empty_collate;
 
 namespace runtime
 {
+    // Возврат действительной длины строки в символах.
+    size_t String::SymbolSizeOf() const
+    {
+        if (encoding == UTF_8_ENCODING)
+            return utf8_map.SymbolSizeOf();
+        else
+            return GetValue().size();
+    }
+
+    // Функция возврата байтовой позицию сразу за концом корректной части UTF-8-строки.
+    size_t String::BytePosAfterEnd() const
+    {
+        return utf8_map.BytePosAfterEnd();
+    }
+
+    // Возвращает байтовую позицию символа с индексом symb_index.        
+    size_t String::SymbolBytePos(size_t symb_index) const
+    {
+        return utf8_map.SymbolBytePos(symb_index);
+    }
+
+    // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
+    size_t String::SymbolByteSize(size_t symb_index) const
+    {
+        return utf8_map.SymbolByteSize(symb_index);
+    }
+
+    // Поиск символа с кодом длиной symb_code_size, размещённым в строке symb_code_str в позиции symb_code_pos.
+    size_t String::FindSymbol(const std::string& symb_code_str, size_t symb_code_pos, size_t symb_code_size, size_t start_pos) const
+    {
+        if (encoding != UTF_8_ENCODING)
+        { // Поиск символа для однобайтовой кодировки.
+            if (symb_code_size != 1 || symb_code_pos >= symb_code_str.size())
+                return std::string::npos;   // Для однобайтовых кодировок символы тоже могут быть только длиной в 1 байт.
+            return GetValue().find(symb_code_str[symb_code_pos], start_pos);
+        }
+        else
+        { // Поиск символа для многобайтовой кодировки UTF-8.
+            if (symb_code_size == 0 || symb_code_size > MAX_UNICODE_LENGTH || symb_code_pos >= symb_code_str.size())
+                // Недопустимая длина UTF-8-кода или некорректно указано положение искомого символа в строке symb_code_str.
+                return std::string::npos;
+            const std::string& current_str_value = GetValue();
+            for (size_t test_symb_index = start_pos; test_symb_index < SymbolSizeOf(); ++test_symb_index)
+            {
+                if (current_str_value.compare(SymbolBytePos(test_symb_index), SymbolByteSize(test_symb_index),
+                                              symb_code_str, symb_code_pos, symb_code_size) == 0)
+                    return test_symb_index;
+            }
+            return std::string::npos;
+        }
+    }
+
+    // Поиск символа symb_code в данной строке и возврат его СИМВОЛЬНОГО положения (порядкового индекса как символа).
+    size_t String::FindSymbol(uint32_t symb_code, size_t start_pos) const
+    {
+        if (encoding != UTF_8_ENCODING)
+        { // Поиск символа для однобайтовой кодировки.
+            if (symb_code > 0xffu)
+                return std::string::npos;
+            return GetValue().find(*reinterpret_cast<char*>(&symb_code), start_pos);
+        }
+        else
+        { // Поиск символа для многобайтовой кодировки UTF-8.
+            std::string symb_code_str = ConvSymbToUTF8(symb_code);
+            const std::string& current_str_value = GetValue();
+            for (size_t test_symb_index = start_pos; test_symb_index < SymbolSizeOf(); ++test_symb_index)
+            {
+                if (current_str_value.compare(SymbolBytePos(test_symb_index), SymbolByteSize(test_symb_index), symb_code_str) == 0)
+                    return test_symb_index;
+            }
+            return std::string::npos;
+        }
+    }
+
     const std::vector<std::pair<char, char>>& String::GetUpcaseTable() const
     {
         if (encoding != NO_ENCODING && encoding != UTF_8_ENCODING)
