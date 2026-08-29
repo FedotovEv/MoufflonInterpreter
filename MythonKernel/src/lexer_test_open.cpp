@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "test_runner_p.h"
+#include "encodings.h"
 
 #include <sstream>
 #include <string>
@@ -64,7 +65,7 @@ namespace parse
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"_42"s}));
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"big_number"s}));
             ASSERT_EQUAL(lexer.NextToken(),
-                         Token(token_type::Id{"Return"s}));  // keywords are case-sensitive
+                         Token(token_type::Id{"Return"s}));  // Ключевые слова чувствительны к регистру.
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"Class"s}));
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"dEf"s}));
         }
@@ -81,6 +82,50 @@ namespace parse
                          Token(token_type::String{"long string with a double quote \" inside"s}));
             ASSERT_EQUAL(lexer.NextToken(),
                          Token(token_type::String{"another long string with single quote ' inside"s}));
+
+            // Проверка обработки строк с префиксами.
+            std::vector<std::string> test_strings
+            {
+                "word"s,
+                "two words"s,
+                "Символы lat кириллицы"s,
+                "\x8a\xa8\xe0\xa8\xab\xab\xa8\xe6\xa0\x20\xa2\x20\x44\x4f\x53\x2d\xaa\xae\xa4\xa8\xe0\xae\xa2\xaa\xa5"s
+            };
+
+            std::vector<std::string> prefixed_strings
+            {
+                "n'"s + test_strings[0] + "'"s,
+                "u8\"" + test_strings[1] + "\""s,
+                "u8'" + test_strings[2] + "'"s,
+                "enc_CP866\"" + test_strings[3] + "\""s
+            };
+
+            istringstream prefixed_input(prefixed_strings[0] + ' ' + prefixed_strings[1] + ' ' + prefixed_strings[2] + ' ' + prefixed_strings[3]);
+            Lexer prefixed_lexer(prefixed_input);
+            Token n_word_token = prefixed_lexer.CurrentToken();  // "word" без указания кодировки.
+            Token utf_lat_token = prefixed_lexer.NextToken();    // "two words" в UTF-8-Юникоде.
+            Token utf_cyr_token = prefixed_lexer.NextToken();    // Кириллица в Юникоде.
+            Token cp866_cyr_token = prefixed_lexer.NextToken();  // Кириллица в DOS-кодировке CP866.
+
+            const token_type::String& n_word_token_str = n_word_token.As<token_type::String>();
+            ASSERT_EQUAL(n_word_token_str.encoding, NO_ENCODING);
+            ASSERT_EQUAL(n_word_token, Token(token_type::String{test_strings[0]}));
+
+            const token_type::String& utf_lat_token_str = utf_lat_token.As<token_type::String>();
+            ASSERT_EQUAL(utf_lat_token_str.encoding, UTF_8_ENCODING);
+            ASSERT_EQUAL(utf_lat_token,
+                Token(token_type::String{.value = test_strings[1], .encoding = UTF_8_ENCODING, .utf8_map = BuildUTF8Map(test_strings[1]).first}));
+
+            const token_type::String& utf_cyr_token_str = utf_cyr_token.As<token_type::String>();
+            ASSERT_EQUAL(utf_cyr_token_str.encoding, UTF_8_ENCODING);
+            ASSERT_EQUAL(utf_cyr_token,
+                Token(token_type::String{.value = test_strings[2], .encoding = UTF_8_ENCODING, .utf8_map = BuildUTF8Map(test_strings[2]).first}));
+            
+            const token_type::String& cp866_cyr_token_str = cp866_cyr_token.As<token_type::String>();
+            const SingleByteEncodingDesc* cp866_enc_ptr = GetEncoding(FindEncoding("CP866"));
+            ASSERT(cp866_enc_ptr);
+            ASSERT_EQUAL(cp866_cyr_token_str.encoding, cp866_enc_ptr);
+            ASSERT_EQUAL(utf_lat_token, Token(token_type::String{.value = test_strings[1], .encoding = cp866_enc_ptr}));
         }
 
         void TestOperations()

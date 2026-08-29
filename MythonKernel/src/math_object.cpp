@@ -482,7 +482,7 @@ namespace runtime
     // Считывание идента (номера) кодировки из контейнера encoding_holder с последующей проверкой его корректности.
     int StringOpsInstance::CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const
     {
-        const runtime::Number* arg_encoding = encoding_holder.TryAs<runtime::Number>(); // Массив-источник данных строки.
+        const runtime::Number* arg_encoding = encoding_holder.TryAs<runtime::Number>(); // Индент желаемой кодировки.
         if (!arg_encoding)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Индекс кодировки должен быть численным");
         int encoding_id = arg_encoding->GetIntValue();
@@ -494,25 +494,25 @@ namespace runtime
         return encoding_id;
     }
 
+    // Считывание имени кодировки из контейнера encoding_holder и его дальнейший поиск среди кодировок, существующих в системе.
+    int StringOpsInstance::CheckEncodingName(const ObjectHolder& encoding_holder, Context& context) const
+    {
+        const runtime::String* arg_encoding_name = encoding_holder.TryAs<runtime::String>(); // Имя требуемой кодировки.
+        if (!arg_encoding_name)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Имя кодировки должен быть строковым");
+
+        int set_enc_id = FindEncoding(arg_encoding_name->GetValue());
+        if (set_enc_id == NON_INDEXED_ENCODING_ID)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Кодировка с указанным именем не найдена");
+        return set_enc_id;
+    }
+
     // Генерация карты размещения многобайтовых UTF-8-кодов в пределах однобайтовой строки (потока байтов) parse_str.
     UTF8Map StringOpsInstance::BuildUTF8Map(const std::string& parse_str, size_t max_elem_count) const
     {
-        UTF8Map result_map;
-        size_t symb_pos = 0;
-        while (symb_pos < parse_str.size())
-        {
-            result_map.begin_map.push_back(symb_pos);
-            std::pair<uint32_t, size_t> conv_result = ConvSymbFromUTF8(parse_str, symb_pos);
-            const_cast<StringOpsInstance*>(this)->last_unicode_ = conv_result.first;
-            result_map.last_symbol_size = conv_result.second;
-
-            if (!conv_result.second || result_map.begin_map.size() >= max_elem_count)
-                break;  // Ошибка при выделении очередного UTF-8-кода или нужный символ при построении ограниченной карты достигнут.
-
-            symb_pos += conv_result.second;
-        }
-
-        return result_map;
+        std::pair<UTF8Map, uint32_t> build_map_result = ::BuildUTF8Map(parse_str, max_elem_count);
+        const_cast<StringOpsInstance*>(this)->last_unicode_ = build_map_result.second;
+        return move(build_map_result.first);
     }
 
     // Перекодировка МУФЛОН-строки src_string в целевую кодировку dest_encoding.
@@ -1466,24 +1466,25 @@ namespace runtime
         runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
         int set_encoding_id = NO_ENCODING_ID;
         if (actual_args.size() > 1)
-            set_encoding_id = CheckEncodingID(actual_args[1], context);
+        {
+            const ObjectHolder& encoding_holder = actual_args[1];
+            if (encoding_holder.TryAs<runtime::Number>())
+                set_encoding_id = CheckEncodingID(encoding_holder, context);
+            else if (encoding_holder.TryAs<runtime::String>())
+                set_encoding_id = CheckEncodingName(encoding_holder, context);
+            else
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Кодировка может быть задана либо числовым индексом, либо строковым именем");
+        }
 
-        if (set_encoding_id == NON_INDEXED_ENCODING_ID || set_encoding_id == NO_ENCODING_ID)
-        { // Устанавливается бескодировочный режим.
-            arg_input_str->encoding = nullptr;
-            arg_input_str->utf8_map.Clear();
+        if (set_encoding_id == NON_INDEXED_ENCODING_ID)
             set_encoding_id = NO_ENCODING_ID;
-        }
-        else if (set_encoding_id == UTF_8_ENCODING_ID)
-        { // Включается многобайтовое представление UTF-8.
-            arg_input_str->encoding = UTF_8_ENCODING;
+        arg_input_str->encoding = GetEncoding(set_encoding_id);
+        if (set_encoding_id == UTF_8_ENCODING_ID) 
+            // Включается многобайтовое представление UTF-8, требуется составить карту размещения символов в строке.
             arg_input_str->utf8_map = BuildUTF8Map(arg_input_str->GetValue());
-        }
         else
-        { // Назначается некоторая однобайтовая кодировка.
-            arg_input_str->encoding = &::encodings_data[static_cast<size_t>(set_encoding_id - 1)];
+            // Устанавливается бескодировочный режим или назначается некоторая однобайтовая кодировка - карта расположения символов здесь не определена.
             arg_input_str->utf8_map.Clear();
-        }
 
         return ObjectHolder::Own(runtime::Number(set_encoding_id));
     }

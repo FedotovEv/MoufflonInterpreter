@@ -67,7 +67,7 @@ string ConvertLinkageToString(const runtime::LinkageValue& link_val)
 }
 
 class LexerInputExImpl : public parse::LexerInputEx
-{ // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных
+{ // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных.
 public:
     struct ModuleDescType
     {
@@ -109,7 +109,7 @@ public:
     void IncludeSwitchTo(std::string include_arg) override
     {
         if (!include_arg.size())
-        { // Инициализирующий вызов IncludeSwitchTo()
+        { // Инициализирующий вызов IncludeSwitchTo().
             eof_bit_ = false;
             last_read_symb_ = std::char_traits<char>::eof();
             unget_symb_ = std::char_traits<char>::eof();
@@ -2223,15 +2223,69 @@ def CoroFunction_1(g, h) :                              # Строка 1
 # Создаём объект сопрограммы. Здесь он не выполняется.    Строка 9
 coro_variable = CoroFunction_1(1, 2)                    # Строка 10
 print 2 + 3                                             # Строка 11
-resume_result_1 = coro_variable.resume()                # Строка 12
-print resume_result_1                                   # Строка 13
-resume_result_2 = coro_variable.resume()                # Строка 14
-print resume_result_2                                   # Строка 15
-resume_result_3 = coro_variable.resume()                # Строка 16
-print resume_result_3                                   # Строка 17
-# Завершаем выполнение программы.                         Строка 18
-print resume_result_1, resume_result_2, resume_result_3 # Строка 19
+coro_variable.resume()                                  # Строка 12
+resume_result_1 = coro_variable.resume()                # Строка 13
+print resume_result_1                                   # Строка 14
+resume_result_2 = coro_variable.resume()                # Строка 15
+print resume_result_2                                   # Строка 16
+resume_result_3 = coro_variable.resume()                # Строка 17
+print resume_result_3                                   # Строка 18
+# Завершаем выполнение программы.                         Строка 19
+print resume_result_1, resume_result_2, resume_result_3 # Строка 20
 )--");
+        { // Пошаговое исполнение с заходом и обходом сопрограмм.
+            istringstream input(coro_program_free_func);
+            DebugExecutionModeV what_return_arr
+            {
+                DebugExecutionMode::DEBUG_STEP_IN,      // Вызов в процессе инициализации программы.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Перед созданием объекта сопрограммы в строке 10.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Перед print в строке 11.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Заход внутри сопрограммы при её возобновлении в строке 12.
+                // Исполнение тела сопрограммы CoroFunction_1 сначала, со строки 2.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Внутри сопрограммы перед строкой 2.
+                DebugExecutionMode::DEBUG_EXIT_METHOD,  // Внутри сопрограммы перед строкой 3. Далее ожидаем выход из функции.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Возникает перед co_yield в строке 6, далее выполняется возврат из функции.
+                // Вернулись на модульный уровень.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Перед следующим возобновлением сопрограммы в строке 13. В тело тут не заходим.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Перед print в строке 14.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Перед очередным возобновлением сопрограммы в строке 15. Вновь в тело не заходим.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Перед print в строке 16.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Перед возобновлением сопрограммы в строке 17. На этот раз делаем заход вовнутрь.
+                // Внутри тела сопрограммы после возобновления со строки 5.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Итерация цикла while в строке 5.
+                DebugExecutionMode::DEBUG_STEP_IN,      // Перед завершением сопрограммы по co_yield в строке 6.
+                // Вновь на модульном уровне кода со строки 18.
+                DebugExecutionMode::DEBUG_STEP_OUT,     // Перед print в строке 18.
+                DebugExecutionMode::DEBUG_STEP_OUT      // Перед print в строке 20. Завершение работы программы.
+            };
+
+            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            // Выводим трассу исполнения в консоль.
+            // std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+                {
+                    {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 10},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 11},
+                    {DebugCallbackReason::DEBUG_CALLBACK_CALL_METHOD, 12},      // Явное возобновление сопрограммы в строке 12.
+                    // Сокращённая трасса исполнения тела функции CoroFunction_1().
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 2},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 3},
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 6},       // Выход из сопрограммы по co_yield в строке 6.
+                    // Исполнение модульного кода от строки 13 до 17.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 13},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 14},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 15},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 16},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 17},             // Возобновление сопрограммы по присваиванию в строке 17.
+                    // Трасса исполнения тела функции CoroFunction_1() при возобновлении после приостановки.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 5},
+                    {DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD, 6},       // Выход из сопрограммы по co_yield в строке 6.
+                    // Завершение программы на модульном уровне.
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 18},
+                    {DebugCallbackReason::DEBUG_CALLBACK_STEP, 20}
+                }));
+        }
 
         { // Точки останова внутри сопрограмм.
             istringstream input(coro_program_free_func);
@@ -2244,15 +2298,17 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 19
             std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
             // Выведем в консоль результаты трассировки.
-            // std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
+            // std::cout << "7. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
             ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 12.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
-                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 14.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 13.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
-                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 16.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 15.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
+                    {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 17.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 6},        // Приостановка сопрограммы по co_yield в строке 6.
                 }));
         }
@@ -2306,13 +2362,24 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 19
     }
 }  // namespace
 
-bool ScanArgvForString(int argc, char* argv[], const char* scan_row)
+std::optional<std::string> ScanArgvForString(int argc, char* argv[], const char* scan_row)
 {
     for (int param_index = 1; param_index < argc; ++param_index)
-        if (strcmp(argv[param_index], scan_row) == 0)
-            return true;
+    {
+        size_t scan_row_len = strlen(scan_row),
+               test_row_len = strlen(argv[param_index]);
+        if (test_row_len < scan_row_len || strncmp(argv[param_index], scan_row, scan_row_len) != 0)
+            continue;
+        if (test_row_len == scan_row_len)
+            return std::string();   // Существует параметр-переключатель с указанным именем без дополнительного значения.
+        if (*(argv[param_index] + scan_row_len) != '=')
+            continue;   // В действительности имя проверяемого аргумента более длинное и не равно scan_row.
+        // Проверяемый аргумент командной строки имеет вид scan_row=... . Следовательно, это нужный нам аргумент, но с
+        // дополнительным строковым значением, которые мы сейчас и возвратим.
+        return std::string(argv[param_index] + scan_row_len + 1);
+    }
 
-    return false;
+    return {};
 }
 
 int main(int argc, char* argv[])

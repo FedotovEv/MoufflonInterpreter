@@ -1113,31 +1113,6 @@ namespace runtime
         }
     }
 
-    // Группа методов обслуживания статических хранилищ-накопителей информации о различных сущностях, определеяемых в ходе разбора МУФЛОН-программы.
-    /*
-    void TypeTraitsInstance::ClearAllStaticStorages()
-    {
-        internal_classes_ids_.clear();
-        declared_classes_def_.clear();
-        declared_free_functions_def_.clear();
-    }
-
-    void TypeTraitsInstance::AppendInternalClassId(const std::string& class_name, int class_id)
-    {
-        internal_classes_ids_.emplace(std::pair{class_name, class_id});
-    }
-
-    void TypeTraitsInstance::AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def)
-    {
-        declared_classes_def_.emplace(std::pair{class_name, class_def});
-    }
-
-    void TypeTraitsInstance::AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def)
-    {
-        declared_free_functions_def_.emplace(std::pair{free_func_sign, free_func_def});
-    }
-    */
-
     // Поиск класса с заданным именем class_name среди всех объявленных в программе сущностей.
     ProgramCommandDescriptor TypeTraitsInstance::ScanForClass
         (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& class_name)

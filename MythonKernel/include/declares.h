@@ -58,6 +58,10 @@ const std::string AWAITABLE_SUSPEND_METHOD = "AwaitSuspend";
 const std::string AWAITABLE_RESUME_METHOD = "AwaitResume";
 // Имя класса типового отпечатка (типовых характеристик, TypeTraits).
 const std::string TYPE_TRAITS_CLASS_NAME = "TypeTraits";
+// Префиксы строковых литералов с указанием некоторых особенностей.
+const std::string UTF_8_STRING_LITERAL = "u8";       // Строковый литерал в UTF-8-представлении.
+const std::string NARROW_STRING_LITERAL = "n";       // "Узкий" (однобайтовый) строковый литерал без указания кодировки.
+const std::string NAMED_ENC_STRING_LITERAL = "enc_"; // Строковый литерал с указанием конкретной его кодировки по имени.
 // Иденты встроенных типов.
 constexpr int INVALID_TYPE_IDENT = -1;      // Несостоятельный идент, не соответствующий какому-либо реально существующему типу.
 constexpr int NONE_IDENT = 0;               // Идент типа пустого выражения None.
@@ -67,6 +71,20 @@ constexpr int STRING_IDENT = 3;             // Идент строкового �
 constexpr int CLASS_AREA_IDENTS = 1000;     // Начало области классовых идентов (идентификатор первого класса, определённого в
                                             // программе помимо базовых типов).
 constexpr size_t COLLATE_SIZE = 256U;       // Длина правильной строки относительных весов символов.
+
+enum EncodingCharClasses
+{
+    CHAR_CLASS_NOTHING = 0,     // Не относится ни к какому особому типу.
+    CHAR_CLASS_LETTER = 1,      // Буква.
+    CHAR_CLASS_DIGIT = 2,       // Десятичная цифра.
+    CHAR_CLASS_XDIGIT = 4,      // Шестнадцатиричная цифра.
+    CHAR_CLASS_CONTROL = 8,     // Управляющий символ.
+    CHAR_CLASS_SPACE = 16,      // Пробел.
+    CHAR_CLASS_BLANK = 32,      // Пробельные разделители слов.
+    CHAR_CLASS_GRAPHIC = 64,    // Знаки с видимыми очертаниями.
+    CHAR_CLASS_PRINT = 128,     // Печатаемые знаки.
+    CHAR_CLASS_PUNCT = 256      // Знаки пунктуации.
+};
 
 // Структура, содержащая информацию о некоторой однобайтовой кодировке, необходимую для выполнения ряда операций над МУФЛОН-строками.
 struct SingleByteEncodingDesc
@@ -82,11 +100,33 @@ struct SingleByteEncodingDesc
     // Массив соответствия однобайтового кода символа в данной кодировке и его многобайтового кода в кодировке UNICODE. Также всегда
     // содержит 256 элементов.
     std::vector<uint32_t> to_utf8;
+    // Массив классификации отдельных символов в данной кодировке путём отнесения их к одному или сразу нескольким из некоторых определённых
+    // символьных классов. Также всегда состоит из 256 элементов, по одному на соответствующий код символа.
+    std::vector<EncodingCharClasses> char_classifier;
 
     bool IsCollateValid() const
     {
         return collate.size() == COLLATE_SIZE;
     }
+
+    bool IsClassifierValid() const
+    {
+        return char_classifier.size() == COLLATE_SIZE;  // По одному элементу на каждый возможный однобайтовый код.
+    }
+
+    // Функции-члены классификации символа test_char, то есть проверки его принадлежности одному или нескольким символьным классам.
+    bool IsAlpha(int test_char) const;
+    bool IsAlNum(int test_char) const;
+    bool IsDigit(int test_char) const;
+    bool IsXDigit(int test_char) const;
+    bool IsLower(int test_char) const;
+    bool IsUpper(int test_char) const;
+    bool IsCntrl(int test_char) const;
+    bool IsGraph(int test_char) const;
+    bool IsSpace(int test_char) const;
+    bool IsBlank(int test_char) const;
+    bool IsPrint(int test_char) const;
+    bool IsPunct(int test_char) const;
 };
 
 struct UTF8Map
@@ -128,7 +168,7 @@ constexpr const SingleByteEncodingDesc* NO_ENCODING = nullptr;
 // Числовой идентификатор отсутствия кодировки.
 constexpr const int NO_ENCODING_ID = 0;
 // Зарезервированное имя для сброса кодировки (отключения кодировочных механизмов при обработке строки).
-const std::string NO_ENCODING_NAME = "NoEnc";
+const std::string NO_ENCODING_NAME = "NoEncoding";
 // Константы для многобайтовой кодировки UTF-8.
 // Указатель, обозначающий применение многобайтовой кодировки UTF-8 для некоторой строки.
 const SingleByteEncodingDesc * const UTF_8_ENCODING = reinterpret_cast<const SingleByteEncodingDesc*>(intptr_t(-1));
@@ -180,6 +220,7 @@ namespace runtime
     // Зарезервированное некорректное (невалидное) значение позиционного описателя программной инструкции.
     constexpr ProgramCommandDescriptor DUMB_PROG_POS{.module_id = -1, .module_string_number = -1};
 
+    std::string CommandDescToString(const ProgramCommandDescriptor& command_desc, int module_id_width = -1, int module_string_number_width = -1);
     std::ostream& operator<<(std::ostream& ostr, const ProgramCommandDescriptor& command_desc);
 
     enum class CoroutineSuspendType

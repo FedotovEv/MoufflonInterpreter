@@ -8,6 +8,22 @@
 
 namespace runtime
 {
+    std::string CommandDescToString(const ProgramCommandDescriptor& command_desc, int module_id_width, int module_string_number_width)
+    {
+        std::ostringstream ostr;
+        if (module_id_width >= 0)
+            ostr << "Module : " << std::setw(module_id_width) << command_desc.module_id;
+        else 
+            ostr << "Module : " << command_desc.module_id;
+
+        if (module_string_number_width >= 0)
+             ostr << " : String : " << std::setw(module_string_number_width) << command_desc.module_string_number;
+        else
+            ostr << " : String : " << command_desc.module_string_number;
+
+        return ostr.str();
+    }
+
     std::ostream& operator<<(std::ostream& ostr, const ProgramCommandDescriptor& command_desc)
     {
         static constexpr int MODULE_ID_WIDTH = 4, MODULE_STRING_NUMBER_WIDTH = 5;
@@ -23,8 +39,16 @@ namespace runtime
         {
         case DebugCallbackReason::DEBUG_CALLBACK_INIT:
             return "Инициализация";
+        case DebugCallbackReason::DEBUG_CALLBACK_DECLARATIVE:
+            return "Декларация";
+        case DebugCallbackReason::DEBUG_CALLBACK_PRE_CALL_METHOD:
+            return "Открывающая рамка";
+        case DebugCallbackReason::DEBUG_CALLBACK_AFTER_CALL_METHOD:
+            return "Закрывающая рамка";
         case DebugCallbackReason::DEBUG_CALLBACK_STEP:
             return "Обычный шаг";
+        case DebugCallbackReason::DEBUG_CALLBACK_CALL_METHOD:
+            return "Вызов метода";
         case DebugCallbackReason::DEBUG_CALLBACK_EXIT_METHOD:
             return "Выход из метода";
         case DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT:

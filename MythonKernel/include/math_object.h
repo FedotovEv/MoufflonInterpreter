@@ -155,6 +155,8 @@ private:
         (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str, Context& context);
     // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
     int CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const;
+    // Получение имени кодировки из контейнера encoding_holder и дальнейший поиск такой кодировки среди зарегистрированных.
+    int CheckEncodingName(const ObjectHolder& encoding_holder, Context& context) const;
     // Строит карту расположения UTF-8-кодов в строке parse_str.
     UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
     // Метод извлечения стандартного набора аргументов функции поиска, у всех разновидностей которого этот набор одинаков.

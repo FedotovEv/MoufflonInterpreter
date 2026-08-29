@@ -628,9 +628,12 @@ namespace
 
             if (const auto* str = lexer_.CurrentToken().TryAs<ITokenType::String>())
             {
-                string result = str->value;
+                runtime::String string_from_token(str->value);
+                string_from_token.encoding = str->encoding;
+                string_from_token.utf8_map = str->utf8_map;
+
                 lexer_.NextToken();
-                return exec_factory_.Create(ast::StringConst(std::move(result)));
+                return exec_factory_.Create(ast::StringConst(move(string_from_token)));
             }
 
             if (lexer_.CurrentToken().Is<ITokenType::True>())

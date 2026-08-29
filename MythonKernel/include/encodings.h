@@ -40,6 +40,11 @@ struct UTF8Error
 
 using TranscodeResult = std::pair<std::string, UTF8Error>;
 
+// Поиск зарегистрированной кодировки с именем encoding_name. Возвращает идент (числовой идентификатор) найденной кодировки либо
+// NON_INDEXED_ENCODING_ID, если кодировка с таким именем не найдена.
+int FindEncoding(const std::string& encoding_name);
+// Получение указателя на запись внутренней базы данных, описывающей свойства определённой кодировки с идентом encoding_id.
+const SingleByteEncodingDesc* GetEncoding(int encoding_id);
 // Поиск в таблице регистрового спаривания upcase_table записи (пары) для символа scan_c верхнего (при scan_for_up == true) или нижнего
 // (при scan_for_up == false) регистров.
 std::optional<std::pair<char, char>> FindRegisterPair(char scan_c, bool scan_for_up, const std::vector<std::pair<char, char>>& upcase_table);
@@ -66,3 +71,6 @@ TranscodeResult TranscodeFromUTF8(const std::string& utf8_source_str, const std:
 // Транскодирование между двумя однобайтовыми кодировками, определяемыми массивами src_to_utf8 (исходная) и dest_to_utf8 (целевая).
 TranscodeResult TranscodeBetweenUnibytes
 	(const std::string& unibyte_source_str, const std::vector<uint32_t>& src_to_utf8, const std::vector<uint32_t>& dest_to_utf8);
+// Генерация карты размещения многобайтовых UTF-8-кодов в пределах однобайтовой строки (потока байтов) parse_str.
+// Также возвращает юникод последнего символа, полученного в процессе работы функции.
+std::pair<UTF8Map, uint32_t> BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)());

@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "encodings.h"
 
 #include <algorithm>
 #include <charconv>
@@ -85,23 +86,42 @@ namespace parse
             }
     }
     
-    unsigned char DblHexToChar(char l_symb, char h_symb = '0')
+    unsigned char DblHexToChar(Lexer* lexer, char l_symb, char h_symb = '0')
     {
         unsigned char result = 0;
         if (isdigit(h_symb))
             result += (h_symb - 0x30) * 16;
         else if (isxdigit(h_symb))
             result += (toupper(h_symb) - 'A' + 10) * 16;
+        else
+            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::HEX_DIGIT_AWAIT);
 
         if (isdigit(l_symb))
             result += l_symb - 0x30;
         else if (isxdigit(l_symb))
             result += toupper(l_symb) - 'A' + 10;
+        else
+            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::HEX_DIGIT_AWAIT);
 
         return result;
     }
 
-    string GetStringValue(LexerInputEx& input)
+    // Извлечение из потока input широкого символа, кодированного четырёхзначным двухбайтовым шестнадцатеричным кодом.
+    uint32_t QuadHexToChar(Lexer* lexer, LexerInputEx& input)
+    {
+
+
+        return 0;
+    }
+
+    // Извлечение из потока input широкого символа, кодированного восьмизначным четырёхбайтовым шестнадцатеричным кодом.
+    uint32_t EightHexToChar(Lexer* lexer, LexerInputEx& input)
+    {
+
+        return 0;
+    }
+
+    string GetStringValue(LexerInputEx& input, bool is_utf8_string, Lexer* lexer)
     {
         string result;
         char termin_symb = input.get();
@@ -109,11 +129,11 @@ namespace parse
         {
             char ch = input.get();
             if (!input || ch == termin_symb)
-            {
+            { // Конец строковго литерала.
                 break;
             }
             else if (ch == '\n')
-            {
+            { // Также завершение тела литерала по окончанию текущей строки исходника.
                 input.unget();
                 break;
             }
@@ -137,9 +157,21 @@ namespace parse
                         case '"':
                             result += '"';
                             break;
-                        case 'x': // Символ, определённый двухзначным шестнадцатеричным кодом
+                        case 'x':   // Символ, определённый двухзначным шестнадцатеричным кодом.
                             ch1 = input.get();
-                            result += DblHexToChar(input.get(), ch1);
+                            result += DblHexToChar(lexer, input.get(), ch1);
+                            break;
+                        case 'u':   // Широкий символ, кодированный четырёхзначным двухбайтовым шестнадцатеричным кодом.
+                            if (is_utf8_string)
+                                result += ConvSymbToUTF8(QuadHexToChar(lexer, input));
+                            else
+                                throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::WIDE_CHAR_IN_NARROW_STRING);
+                            break;
+                        case 'U':   // Широкий символ, кодированный восьмизначным четырёхбайтовым шестнадцатеричным кодом.
+                            if (is_utf8_string)
+                                result += ConvSymbToUTF8(EightHexToChar(lexer, input));
+                            else
+                                throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::WIDE_CHAR_IN_NARROW_STRING);
                             break;
                         default:
                             result += '\\';
@@ -174,7 +206,14 @@ namespace parse
         return result;
     }
 
-    pair<string, TokenTypeId> GetNumberString(LexerInputEx& input)
+    struct TokenDesc
+    {
+        string body;
+        TokenTypeId id = TokenTypeId::TOKEN_UNDEFINED;
+        intptr_t int_param = 0;
+    };
+
+    TokenDesc GetNumberString(LexerInputEx& input)
     {
         string result_str;
         TokenTypeId result_token_id = TokenTypeId::TOKEN_NUMBER_INT;
@@ -222,7 +261,7 @@ namespace parse
                     input.unget();
             }
         }
-        return {result_str, result_token_id};
+        return {.body = move(result_str), .id = result_token_id};
     }
     
     string GetChardSequence(LexerInputEx& input)
@@ -249,6 +288,8 @@ namespace parse
         return result;
     }
 
+    // Функция ищет начало следующего жетона (пропуская все посторонние незначащие символы), одновременно подсчитывая
+    // количество пробелов, находящихся перед таким жетоном и началом строки, в котором он расположен.
     int GoToTokenBegin(LexerInputEx& input)
     {
         int space_counter = 0;
@@ -274,41 +315,80 @@ namespace parse
         }
         return space_counter;
     }
-    
-    pair<string, TokenTypeId> GetNextTokenPair(LexerInputEx& input)
+
+    TokenDesc GetNextTokenPair(LexerInputEx& input, Lexer* lexer)
     {
-        char ch = input.get(); // Первый символ лексемы
+        char ch = input.get(); // Первый символ лексемы.
         if (!input)
-            return {""s, TokenTypeId::TOKEN_EOF};
+            return {.id = TokenTypeId::TOKEN_EOF};
 
         if (ch == '\n')
-            return {""s, TokenTypeId::TOKEN_NEWLINE};
+            return {.id = TokenTypeId::TOKEN_NEWLINE};
 
         if (ch == '\r')
         {
-            input.get(); // После \r должна следовать \n - её нужно тоже удалить из потока
-            return {""s, TokenTypeId::TOKEN_NEWLINE};
+            input.get(); // После \r должна следовать \n - её нужно тоже удалить из потока.
+            return {.id = TokenTypeId::TOKEN_NEWLINE};
         }
 
         input.unget();
 
         if (ch == '\'' || ch == '"')
-            return {GetStringValue(input), TokenTypeId::TOKEN_STRING};  // Это строка
+        { // Это строка (закавыченный строковый литерал).
+            const SingleByteEncodingDesc* real_encoding = lexer->GetSourceEncoding();
+            if (string string_prefix = lexer->GetStringPrefix(); !string_prefix.empty())
+            {
+                if (string_prefix == UTF_8_STRING_LITERAL)
+                { // Префикс явно указывает на UTF-8-кодированную строку.
+                    real_encoding = UTF_8_ENCODING;
+                }
+                else if (string_prefix == NARROW_STRING_LITERAL)
+                { // Префикс узкой строки с неопределённой кодировкой.
+                    real_encoding = NO_ENCODING;
+                }
+                else if (string_prefix.starts_with(NAMED_ENC_STRING_LITERAL))
+                { // Префикс строки с определённой кодировкой, заданной хвостовой частью префикса.
+                    string encoding_name = string_prefix.substr(NAMED_ENC_STRING_LITERAL.size());
+                    if (int set_enc_id = FindEncoding(encoding_name); set_enc_id != NON_INDEXED_ENCODING_ID)
+                        real_encoding = GetEncoding(set_enc_id);
+                    else
+                        throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_ENC_NAME);
+                }
+                else
+                {
+                    throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_PREFIX_VALUE);
+                }
+                lexer->ClearStringPrefix();
+            }
+            
+            return {.body = GetStringValue(input, real_encoding == UTF_8_ENCODING, lexer), .id = TokenTypeId::TOKEN_STRING,
+                    .int_param = reinterpret_cast<intptr_t>(real_encoding)};
+        }
         
-        if (isalpha(ch) || ch =='_')
-            return {GetIdentString(input), TokenTypeId::TOKEN_ID};  // Это идентификатор
+        if (isalpha(ch) || ch == '_')
+        {  // Вероятно, это идентификатор. Но может быть и префиксом строкового литерала.
+            string id_name = GetIdentString(input);
+            char next_ch = input.peek();
+            if (next_ch == '\'' || next_ch == '"')
+            { // Это именно строковый префикс.
+                lexer->SetStringPrefix(move(id_name));
+                return GetNextTokenPair(input, lexer);  // Этот вызов вернёт нам строковый литерал, обработанный согласно указанному префиксу.
+            }
+            // Да, это идентификатор.
+            return {.body = move(id_name), .id = TokenTypeId::TOKEN_ID};
+        }
  
         if (isdigit(ch))
-            return GetNumberString(input);  // Это число, целое или с плавающей точкой
+            return GetNumberString(input);  // Это число, целое или с плавающей точкой.
     
         if (special_symb.find(ch) != string::npos)
-        {  // Это специальная символьная группа
+        {  // Это специальная символьная группа.
             string tst_token = GetChardSequence(input);
             if (tst_token.size())
-                return {tst_token, TokenTypeId::TOKEN_CHAR};
+                return {.body = move(tst_token), .id = TokenTypeId::TOKEN_CHAR};
         }
 
-        return {string(1, input.get()), TokenTypeId::TOKEN_UNDEFINED};
+        return {.body = string(1, input.get()), .id = TokenTypeId::TOKEN_UNDEFINED};
     }
 
     bool operator==(const Token& lhs, const Token& rhs)
@@ -324,7 +404,59 @@ namespace parse
         if (lhs.Is<NumberDouble>())
             return abs(lhs.As<NumberDouble>().value - rhs.As<NumberDouble>().value) < ZERO_TOLERANCE;
         if (lhs.Is<String>())
-            return lhs.As<String>().value == rhs.As<String>().value;
+        {
+            const String& lhs_string_token = lhs.As<String>();
+            const String& rhs_string_token = rhs.As<String>();
+            if (lhs_string_token.encoding == rhs_string_token.encoding)
+            { // Кодировки сравниваемых строк совпадают.
+                if (lhs_string_token.encoding == UTF_8_ENCODING)
+                { // Для Юникодных строк сравним только значащую часть их контейнеров.
+                    size_t important_len = lhs_string_token.utf8_map.BytePosAfterEnd();
+                    return important_len == rhs_string_token.utf8_map.BytePosAfterEnd() &&
+                           lhs_string_token.value.substr(0, important_len) == rhs_string_token.value.substr(0, important_len);
+                }
+                else
+                { // Для однобайтовых кодировок лексикографически сравниваем полные строки без учёта возможных отождествлений разных символов.
+                    return lhs_string_token.value == rhs_string_token.value;
+                }
+            }
+            else
+            { // Кодировки сравниваемых строк различаются. Перед сравнением транскодируем оба аргумента в Юникод.
+                if (lhs_string_token.encoding == NO_ENCODING || rhs_string_token.encoding == NO_ENCODING)
+                    return false;   // В таком случае преобразовать оба аргумента к Юникоду не получится, сравнить их невозможно, поэтому возвратим "ЛОЖЬ".
+                const string *lhs_transcoded, *rhs_transcoded;
+                const UTF8Map *lhs_utf8_map, *rhs_utf8_map;
+                tuple<string, UTF8Map, UTF8Error> lhs_transcode_tuple, rhs_transcode_tuple;
+                // Если первая из сравниваемых строк пока не Юникод, конвертируем её туда.
+                if (lhs_string_token.encoding != UTF_8_ENCODING)
+                {
+                    lhs_transcode_tuple = TranscodeToUTF8Ex(lhs_string_token.value, lhs_string_token.encoding->to_utf8);
+                    lhs_transcoded = &get<string>(lhs_transcode_tuple);
+                    lhs_utf8_map = &get<UTF8Map>(lhs_transcode_tuple);
+                }
+                else
+                {
+                    lhs_transcoded = &lhs_string_token.value;
+                    lhs_utf8_map = &lhs_string_token.utf8_map;
+                }
+                // Если вторая из сравниваемых строк не находится в Юникоде, также конвертируем её туда.
+                if (rhs_string_token.encoding != UTF_8_ENCODING)
+                {
+                    rhs_transcode_tuple = TranscodeToUTF8Ex(rhs_string_token.value, rhs_string_token.encoding->to_utf8);
+                    rhs_transcoded = &get<string>(rhs_transcode_tuple);
+                    rhs_utf8_map = &get<UTF8Map>(rhs_transcode_tuple);
+                }
+                else
+                {
+                    rhs_transcoded = &rhs_string_token.value;
+                    rhs_utf8_map = &rhs_string_token.utf8_map;
+                }
+                // При сравнении Юникодных строк учитываем только значащую часть их контейнера.
+                size_t important_len = lhs_utf8_map->BytePosAfterEnd();
+                return important_len == rhs_utf8_map->BytePosAfterEnd() &&
+                       lhs_transcoded->substr(0, important_len) == rhs_transcoded->substr(0, important_len);
+            }
+        }
         if (lhs.Is<Id>())
             return lhs.As<Id>().value == rhs.As<Id>().value;
         return true;
@@ -554,34 +686,47 @@ namespace parse
             return current_token_;
         }
      
-        auto next_token = GetNextTokenPair(input_);
+        TokenDesc next_token = GetNextTokenPair(input_, this);
     
-        switch (next_token.second)
+        switch (next_token.id)
         {
             case TokenTypeId::TOKEN_STRING: // Лексема-строка
-                current_token_ = token_type::String{next_token.first};
+            {
+                token_type::String string_token
+                {
+                    .value = next_token.body,
+                    .encoding = reinterpret_cast<const SingleByteEncodingDesc*>(next_token.int_param)
+                };
+                // Для Юникодных строк сразу составим карту размещения символов в строке.
+                if (string_token.encoding == UTF_8_ENCODING)
+                    string_token.utf8_map = BuildUTF8Map(string_token.value).first;
+                else
+                    string_token.utf8_map.Clear();
+
+                current_token_ = move(string_token);
                 break;
+            }
             case TokenTypeId::TOKEN_ID: // Идентификатор или ключевое слово
-                if (keyword_tokens.count(next_token.first))
+                if (keyword_tokens.count(next_token.body))
                     // Лексема - ключевое слово
-                    current_token_ = keyword_tokens.at(next_token.first);
+                    current_token_ = keyword_tokens.at(next_token.body);
                 else
                     // Лексема - идентификатор (имя переменной)
-                    current_token_ = token_type::Id{next_token.first};
+                    current_token_ = token_type::Id{next_token.body};
                 break;
             case TokenTypeId::TOKEN_NUMBER_INT: // Лексема-целое число
-                current_token_ = token_type::NumberInt{stoi(next_token.first)};
+                current_token_ = token_type::NumberInt{stoi(next_token.body)};
                 break;
             case TokenTypeId::TOKEN_NUMBER_DOUBLE:
-                current_token_ = token_type::NumberDouble{stod(next_token.first)};
+                current_token_ = token_type::NumberDouble{stod(next_token.body)};
                 break;
-            case TokenTypeId::TOKEN_CHAR: //Лексема - специальная символьная группа
-                if (special_tokens.count(next_token.first))
+            case TokenTypeId::TOKEN_CHAR: // Лексема - специальная символьная группа
+                if (special_tokens.count(next_token.body))
                     // Лексема - распознанный набор спецсимволов
-                    current_token_ = special_tokens.at(next_token.first);
+                    current_token_ = special_tokens.at(next_token.body);
                 else
                     // Лексема - нераспознанная комбинация из спецсимволов
-                    current_token_ = token_type::Char{next_token.first[0]};
+                    current_token_ = token_type::Char{next_token.body[0]};
                 break;        
             case TokenTypeId::TOKEN_NEWLINE: //Лексема завершения строки
                 current_token_ = token_type::Newline{};
@@ -595,7 +740,7 @@ namespace parse
                     current_token_ = token_type::Eof{};
                 break;
             default:
-                current_token_ = token_type::Char{next_token.first[0]};
+                current_token_ = token_type::Char{next_token.body[0]};
         }    
         return current_token_;
     }

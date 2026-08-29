@@ -12,6 +12,12 @@ static constexpr char CONTINUE_BYTE_DATAMASK = 0x3f;	// Маска област�
 const std::vector<std::pair<char, char>> empty_upcase_table;
 const std::string empty_collate;
 
+// "Стандартная" таблица классификации, которая соответствует минимальной C-локали библиотеки периода исполнения среды msvc.
+const std::vector<EncodingCharClasses> std_char_classifier
+{
+
+};
+
 // Тривиальная таблица сравнительных весов символов, в которой каждый символ имеет вес, равный его коду.
 const std::string std_collate
 {
@@ -292,8 +298,210 @@ std::vector<SingleByteEncodingDesc> encodings_data
 	CP1251_ENC
 };
 
+// Определение методов структуры SingleByteEncodingDesc, которые не определены несопредственно при её описании.
+// Классификация однобайтового символа test_char относительно класса букв.
+bool SingleByteEncodingDesc::IsAlpha(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_LETTER;
+	}
+	else
+	{
+		return isalpha(static_cast<unsigned char>(test_char));
+	}
+}
+
+// Проверка однобайтовго символа test_char на принадлежность классам букв или цифр.
+bool SingleByteEncodingDesc::IsAlNum(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return (char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_LETTER) ||
+			       (char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_DIGIT);
+	}
+	else
+	{
+		return isalnum(static_cast<unsigned char>(test_char));
+	}
+}
+
+// Проверка однобайтовго символа test_char на принадлежность классу цифр.
+bool SingleByteEncodingDesc::IsDigit(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_DIGIT;
+	}
+	else
+	{
+		return isdigit(static_cast<unsigned char>(test_char));
+	}
+}
+
+// Является ли одноюайтовый символ test_char шестнадцатиричной цифрой.
+bool SingleByteEncodingDesc::IsXDigit(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_XDIGIT;
+	}
+	else
+	{
+		return isxdigit(static_cast<unsigned char>(test_char));
+	}
+}
+
+// Проверка на принадлежность символа test_char к буквам нижнего регистра.
+bool SingleByteEncodingDesc::IsLower(int test_char) const
+{
+	if (IsClassifierValid())
+	{ 
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else if (!(char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_LETTER))
+			// Будем считать, что различие в регистре присуще только буквам. Если анализируемый символ не буква,
+			// то он не может быть "малой" или "большой".
+			return false;
+		return FindRegisterPair(static_cast<char>(test_char), false, upcase_table).has_value();
+	}
+	else
+	{
+		return islower(static_cast<unsigned char>(test_char));
+	}
+}
+
+// Проверка на принадлежность символа test_char к буквам верхнего регистра.
+bool SingleByteEncodingDesc::IsUpper(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else if (!(char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_LETTER))
+			// Будем считать, что различие в регистре присуще только буквам. Если анализируемый символ не буква,
+			// то он не может быть "малой" или "большой".
+			return false;
+		return FindRegisterPair(static_cast<char>(test_char), true, upcase_table).has_value();
+	}
+	else
+	{
+		return isupper(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsCntrl(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char == EOF)
+			return true;	// EOF будем относить к управляющим символам.
+		else if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_CONTROL;
+	}
+	else
+	{
+		return iscntrl(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsGraph(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_GRAPHIC;
+	}
+	else
+	{
+		return isgraph(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsSpace(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_SPACE;
+	}
+	else
+	{
+		return isspace(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsBlank(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_BLANK;
+	}
+	else
+	{
+		return isblank(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsPrint(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_PRINT;
+	}
+	else
+	{
+		return isprint(static_cast<unsigned char>(test_char));
+	}
+}
+
+//
+bool SingleByteEncodingDesc::IsPunct(int test_char) const
+{
+	if (IsClassifierValid())
+	{
+		if (test_char < 0 || test_char >= static_cast<int>(char_classifier.size()))
+			return false;
+		else
+			return char_classifier[test_char] & EncodingCharClasses::CHAR_CLASS_PUNCT;
+	}
+	else
+	{
+		return ispunct(static_cast<unsigned char>(test_char));
+	}
+}
+
 // Определения методов типа UTF8Map.
-	// Функция-член возвращает байтовую позицию сразу за концом корректной UTF-8-строки.
+// Функция-член возвращает байтовую позицию сразу за концом корректной UTF-8-строки.
 size_t UTF8Map::BytePosAfterEnd() const
 {
 	if (begin_map.empty())
@@ -322,6 +530,43 @@ size_t UTF8Map::SymbolByteSize(size_t symb_index) const
 		return BytePosAfterEnd() - begin_map[symb_index];
 	else
 		return 0;
+}
+
+// Поиск существующей кодировки по её имени.
+int FindEncoding(const std::string& encoding_name)
+{
+	if (encoding_name == NO_ENCODING_NAME)
+		return NO_ENCODING_ID;
+	if (encoding_name == UTF_8_ENCODING_NAME)
+		return UTF_8_ENCODING_ID;
+	// Имя искомой кодировки не относится к стандартным.
+	for (auto enc_data_it = encodings_data.begin(); enc_data_it != encodings_data.end(); ++enc_data_it)
+	{
+		if (enc_data_it->name == encoding_name)
+			return static_cast<int>(enc_data_it - encodings_data.begin() + 1);
+	}
+	// Кодировка с именем encoding_name среди зарегистрированных не значится.
+	return NON_INDEXED_ENCODING_ID;
+}
+
+// Получение указателя на запись с описанием кодировки с идентом encoding_id.
+const SingleByteEncodingDesc* GetEncoding(int encoding_id)
+{
+	switch (encoding_id)
+	{
+	case NON_INDEXED_ENCODING_ID:
+		[[fallthrough]];
+	case NO_ENCODING_ID:
+		return NO_ENCODING;
+	case UTF_8_ENCODING_ID:
+		return UTF_8_ENCODING;
+	default:
+		--encoding_id;
+		if (encoding_id < 0 || encoding_id >= static_cast<int>(encodings_data.size()))
+			return NO_ENCODING;
+		return &encodings_data[encoding_id];
+	}
+	return nullptr;
 }
 
 // Поиск в таблице регистрового спаривания upcase_table записи (пары) для символа scan_c верхнего (при scan_for_up == true) или нижнего
@@ -525,7 +770,7 @@ std::pair<uint32_t, size_t> ConvSymbFromUTF8(const std::string& src_utf8_string,
 	uint32_t symb_unicode = 0;
 	size_t symb_unicode_bitpos = 0,	// Текущий номер бита, который будет заполняться следующей порцией данных UTF-8-кода.
 		   real_symb_length = 0;	// Реальная длина считанного Юникода в битах (то есть номер его самого старшего единичного бита + 1).
-	for (; current_utf8_byte_pos >= symb_pos; --current_utf8_byte_pos)
+	while (true)
 	{
 		char utf8_code_char = src_utf8_string[current_utf8_byte_pos];
 		uint32_t next_data_portion;
@@ -550,14 +795,18 @@ std::pair<uint32_t, size_t> ConvSymbFromUTF8(const std::string& src_utf8_string,
 		}
 		// Заполняем данными next_data_portion длиной data_portion_length битов битовый фрагмент переменной symb_unicode,
 		// начиная с бита symb_unicode_bitpos.
-		if (symb_unicode_bitpos < sizeof(next_data_portion))
+		if (symb_unicode_bitpos < sizeof(next_data_portion) * 8)
 			next_data_portion <<= symb_unicode_bitpos;
 		else
 			next_data_portion = 0;
 		symb_unicode |= next_data_portion;
 		symb_unicode_bitpos += data_portion_length;
+
+		if (current_utf8_byte_pos == 0 || current_utf8_byte_pos <= symb_pos)
+			break;
+		--current_utf8_byte_pos;
 	}
-	if (real_symb_length > sizeof(symb_unicode))
+	if (real_symb_length > sizeof(symb_unicode) * 8)
 		// Значение Юникода, хранящееся в src_utf8_string, не помещается в выходную переменную symb_unicode.
 		return {static_cast<uint32_t>(UTF8ErrorCode::UTF8_UNICODE_TOO_LONG), 0};
 
@@ -658,4 +907,26 @@ TranscodeResult TranscodeBetweenUnibytes
 			break;
 	}
 	return {std::move(dest_cnv_result.first), {.code = dest_cnv_result.second.code, .pos = original_pos}};
+}
+
+// Генерация карты размещения многобайтовых UTF-8-кодов в пределах однобайтовой строки (потока байтов) parse_str.
+std::pair<UTF8Map, uint32_t> BuildUTF8Map(const std::string& parse_str, size_t max_elem_count)
+{
+	uint32_t last_unicode = 0;
+	UTF8Map result_map;
+	size_t symb_pos = 0;
+	while (symb_pos < parse_str.size())
+	{
+		result_map.begin_map.push_back(symb_pos);
+		std::pair<uint32_t, size_t> conv_result = ConvSymbFromUTF8(parse_str, symb_pos);
+		last_unicode = conv_result.first;
+		result_map.last_symbol_size = conv_result.second;
+
+		if (!conv_result.second || result_map.begin_map.size() >= max_elem_count)
+			break;  // Ошибка при выделении очередного UTF-8-кода или нужный символ при построении ограниченной карты достигнут.
+
+		symb_pos += conv_result.second;
+	}
+
+	return {std::move(result_map), last_unicode};
 }

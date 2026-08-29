@@ -34,7 +34,9 @@ namespace parse
 
         struct String
         {  // Лексема «строковая константа».
-            std::string value;  // Тело строки.
+            std::string value;          // Тело строки.
+            const SingleByteEncodingDesc* encoding = NO_ENCODING;   // Кодировка, в которой находится тело.
+            UTF8Map utf8_map;           // Карта расположения символов в строке для многобайтовой кодировки UTF-8.
         };
 
         struct Class {};        // Лексема «class»
@@ -204,6 +206,10 @@ namespace parse
         static constexpr char BAD_TOKEN_TYPE[] = "Недопустимый тип жетона";
         static constexpr char BAD_TOKEN_VALUE[] = "Недопустимое значение жетона";
         static constexpr char TOKEN_AWAITING[] = " - ожидается - ";
+        static constexpr char BAD_PREFIX_VALUE[] = "Недопустимое значение префикса строки";
+        static constexpr char BAD_ENC_NAME[] = "Неизвестное имя кодировки";
+        static constexpr char WIDE_CHAR_IN_NARROW_STRING[] = "Определение широкого символа для узких строк";
+        static constexpr char HEX_DIGIT_AWAIT[] = "Ожидается шестнадцатеричная цифра";
 
         explicit Lexer(LexerInputEx& input);
         explicit Lexer(std::istream& input);
@@ -230,9 +236,9 @@ namespace parse
             }
             else
             {
-                std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
-                    std::to_string(current_command_desc_.module_string_number) + "):"s;
-                throw LexerError(command_desc + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{}));
+                std::ostringstream ostr;
+                ostr << current_command_desc_;
+                throw LexerError(ostr.str() + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{}));
             }
         }
 
@@ -299,8 +305,23 @@ namespace parse
             return source_encoding_ == UTF_8_ENCODING;
         }
 
-    private:
+        // Операции работы со строковым префиксом (префиксом строкового литерала).
+        std::string GetStringPrefix() const
+        {
+            return string_prefix_;
+        }
 
+        void SetStringPrefix(std::string string_prefix)
+        {
+            string_prefix_ = std::move(string_prefix);
+        }
+
+        void ClearStringPrefix()
+        {
+            string_prefix_.clear();
+        }
+
+    private:
         static constexpr int SPACES_PER_INDENT_STEP = 2;
 
         LexerInputEx& input_;
@@ -311,5 +332,6 @@ namespace parse
         bool is_input_need_delete_;
         // Информация о строковой кодировке исходных текстов разбираемой программы.
         const SingleByteEncodingDesc* source_encoding_ = NO_ENCODING;
+        std::string string_prefix_;     // Строковый префикс следующего строкового литерала.
     };
 }  // namespace parse
