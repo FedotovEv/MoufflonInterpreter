@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.28803.202
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12120.119 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MythonKernel", "MythonKernel\MythonKernel.vcxproj", "{52A14600-38C7-4421-870F-60A39D31C4E0}"
 EndProject
@@ -21,6 +21,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MythonDebugger", "MythonDebugger\MythonDebugger.vcxproj", "{E5ACD959-2165-41F0-9623-DBB8A392D991}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestFilePlugin", "TestFilePlugin\TestFilePlugin.vcxproj", "{21450EB9-6D00-4B42-A040-C532707A8CD0}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExtractEncodingInfo", "ExtractEncodingInfo\ExtractEncodingInfo.vcxproj", "{3F76B02F-2327-4974-B8B6-5F04ED027200}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -94,6 +96,14 @@ Global
 		{21450EB9-6D00-4B42-A040-C532707A8CD0}.Release|x64.Build.0 = Release|x64
 		{21450EB9-6D00-4B42-A040-C532707A8CD0}.Release|x86.ActiveCfg = Release|Win32
 		{21450EB9-6D00-4B42-A040-C532707A8CD0}.Release|x86.Build.0 = Release|Win32
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Debug|x64.ActiveCfg = Debug|x64
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Debug|x64.Build.0 = Debug|x64
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Debug|x86.ActiveCfg = Debug|Win32
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Debug|x86.Build.0 = Debug|Win32
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Release|x64.ActiveCfg = Release|x64
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Release|x64.Build.0 = Release|x64
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Release|x86.ActiveCfg = Release|Win32
+		{3F76B02F-2327-4974-B8B6-5F04ED027200}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

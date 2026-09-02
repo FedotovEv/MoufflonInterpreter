@@ -85,40 +85,30 @@ namespace parse
                 break;
             }
     }
-    
-    unsigned char DblHexToChar(Lexer* lexer, char l_symb, char h_symb = '0')
+
+    // Извлечение из потока input широкого символа, кодированного symb_count-значным (symb_count / 2)-байтовым шестнадцатеричным кодом.
+    uint32_t HexSetToCharCode(Lexer* lexer, LexerInputEx& input, uint32_t symb_count)
     {
-        unsigned char result = 0;
-        if (isdigit(h_symb))
-            result += (h_symb - 0x30) * 16;
-        else if (isxdigit(h_symb))
-            result += (toupper(h_symb) - 'A' + 10) * 16;
-        else
-            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::HEX_DIGIT_AWAIT);
+        static constexpr uint32_t BITS_PER_HEX_DIGIT = 4;
 
-        if (isdigit(l_symb))
-            result += l_symb - 0x30;
-        else if (isxdigit(l_symb))
-            result += toupper(l_symb) - 'A' + 10;
-        else
-            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::HEX_DIGIT_AWAIT);
+        uint32_t result = 0;
+        uint32_t shift_factor = symb_count * BITS_PER_HEX_DIGIT;
+        while (shift_factor > 0)
+        {
+            shift_factor -= BITS_PER_HEX_DIGIT;
+            input.peek();
+            if (!input.good())
+                throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::LEXEM_PREMATURE_TERMINATED);
 
+            char next_symb = input.get();
+            if (isdigit(next_symb))
+                result += (next_symb - 0x30) << shift_factor;
+            else if (isxdigit(next_symb))
+                result += (toupper(next_symb) - 'A' + 10) << shift_factor;
+            else
+                throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::HEX_DIGIT_AWAIT);
+        }
         return result;
-    }
-
-    // Извлечение из потока input широкого символа, кодированного четырёхзначным двухбайтовым шестнадцатеричным кодом.
-    uint32_t QuadHexToChar(Lexer* lexer, LexerInputEx& input)
-    {
-
-
-        return 0;
-    }
-
-    // Извлечение из потока input широкого символа, кодированного восьмизначным четырёхбайтовым шестнадцатеричным кодом.
-    uint32_t EightHexToChar(Lexer* lexer, LexerInputEx& input)
-    {
-
-        return 0;
     }
 
     string GetStringValue(LexerInputEx& input, bool is_utf8_string, Lexer* lexer)
@@ -158,18 +148,17 @@ namespace parse
                             result += '"';
                             break;
                         case 'x':   // Символ, определённый двухзначным шестнадцатеричным кодом.
-                            ch1 = input.get();
-                            result += DblHexToChar(lexer, input.get(), ch1);
+                            result += static_cast<unsigned char>(HexSetToCharCode(lexer, input, 2));
                             break;
                         case 'u':   // Широкий символ, кодированный четырёхзначным двухбайтовым шестнадцатеричным кодом.
                             if (is_utf8_string)
-                                result += ConvSymbToUTF8(QuadHexToChar(lexer, input));
+                                result += ConvSymbToUTF8(HexSetToCharCode(lexer, input, 4));
                             else
                                 throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::WIDE_CHAR_IN_NARROW_STRING);
                             break;
                         case 'U':   // Широкий символ, кодированный восьмизначным четырёхбайтовым шестнадцатеричным кодом.
                             if (is_utf8_string)
-                                result += ConvSymbToUTF8(EightHexToChar(lexer, input));
+                                result += ConvSymbToUTF8(HexSetToCharCode(lexer, input, 8));
                             else
                                 throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::WIDE_CHAR_IN_NARROW_STRING);
                             break;

@@ -12,14 +12,16 @@ namespace runtime
     {
         std::ostringstream ostr;
         if (module_id_width >= 0)
-            ostr << "Module : " << std::setw(module_id_width) << command_desc.module_id;
+            ostr << std::setw(module_id_width) << command_desc.module_id;
         else 
-            ostr << "Module : " << command_desc.module_id;
+            ostr << command_desc.module_id;
 
+        ostr << '(';
         if (module_string_number_width >= 0)
-             ostr << " : String : " << std::setw(module_string_number_width) << command_desc.module_string_number;
+            ostr << std::setw(module_string_number_width) << command_desc.module_string_number;
         else
-            ostr << " : String : " << command_desc.module_string_number;
+            ostr << command_desc.module_string_number;
+        ostr << "):";
 
         return ostr.str();
     }
@@ -28,8 +30,7 @@ namespace runtime
     {
         static constexpr int MODULE_ID_WIDTH = 4, MODULE_STRING_NUMBER_WIDTH = 5;
 
-        ostr << "Module : " << std::setw(MODULE_ID_WIDTH) << command_desc.module_id
-             << " : String : " << std::setw(MODULE_STRING_NUMBER_WIDTH) << command_desc.module_string_number;
+        ostr << CommandDescToString(command_desc, MODULE_ID_WIDTH, MODULE_STRING_NUMBER_WIDTH);
         return ostr;
     }
 

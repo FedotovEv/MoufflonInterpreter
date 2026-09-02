@@ -1,7 +1,6 @@
 #pragma once
 
 #include "declares.h"
-#include <iosfwd>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -210,7 +209,8 @@ namespace parse
         static constexpr char BAD_ENC_NAME[] = "Неизвестное имя кодировки";
         static constexpr char WIDE_CHAR_IN_NARROW_STRING[] = "Определение широкого символа для узких строк";
         static constexpr char HEX_DIGIT_AWAIT[] = "Ожидается шестнадцатеричная цифра";
-
+        static constexpr char LEXEM_PREMATURE_TERMINATED[] = "Преждевременный обрыв лексемы";
+        
         explicit Lexer(LexerInputEx& input);
         explicit Lexer(std::istream& input);
         Lexer(const Lexer& other);
@@ -231,15 +231,9 @@ namespace parse
         {
             using namespace std::literals;
             if (current_token_.Is<T>())
-            {
                 return current_token_.As<T>();
-            }
             else
-            {
-                std::ostringstream ostr;
-                ostr << current_command_desc_;
-                throw LexerError(ostr.str() + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{}));
-            }
+                throw LexerError(CommandDescToString(current_command_desc_) + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{}));
         }
 
         // Метод проверяет, что текущий токен имеет тип T, а сам токен содержит значение value.
@@ -250,13 +244,7 @@ namespace parse
             using namespace std::literals;
             Expect<T>();
             if (current_token_ != T{value})
-            {
-                std::string command_desc = std::to_string(current_command_desc_.module_id) + "("s +
-                    std::to_string(current_command_desc_.module_string_number) + "):"s;
-                std::ostringstream token_await_str;
-                token_await_str << T{value};
-                throw LexerError(command_desc + BAD_TOKEN_VALUE + TOKEN_AWAITING + token_await_str.str());
-            }
+                throw LexerError(CommandDescToString(current_command_desc_) + BAD_TOKEN_TYPE + TOKEN_AWAITING + TokenTypeToString(T{value}));
         }
 
         // Если следующий токен имеет тип T, метод возвращает ссылку на него.

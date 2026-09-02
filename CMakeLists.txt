@@ -16,6 +16,7 @@ add_subdirectory(NonStdPrint)
 add_subdirectory(MythonTestPlugin)
 add_subdirectory(MythonFilePlugin)
 add_subdirectory(TestFilePlugin)
+add_subdirectory(ExtractEncodingInfo)
 
 # Отладчик на данный момент успешно не собирается, поэтому пока директива его сборки отключена
 #add_subdirectory(MythonDebugger)
