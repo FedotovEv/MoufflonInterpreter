@@ -12,6 +12,7 @@
 #include <vector>
 #include <functional>
 #include <map>
+#include <set>
 #include <variant>
 #include <atomic>
 #include <mutex>
@@ -38,91 +39,8 @@ namespace runtime
         CMD_GENUS_INITIALIZE                // (Псевдо)инструкция общей инициализации программы (ProgramCompound).
     };
 
-    // Контекст исполнения инструкций Mython.
-    class Executable;
-    class Context
-    {
-    public:
-        enum class OptionType
-        { // Тип опции, запрашиваемой у функции-члена GetOption().
-            CONTEXT_OPT_UNKNOWN = 0,
-            CONTEXT_OPT_DESTRUCT_AT_FINISH,     // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
-            CONTEXT_OPT_SKIP_DECLARATIVE,       // Пропускать в пошаговом режиме (не совершать отладочных звонков) декларативные узлы АСД.
-            CONTEXT_OPT_SKIP_CALL_FRAME,        // Пропускать в пошаговом режиме рамочные (ограничительные) узлы вызова функций и методов.
-            // Режимы ограничения количества звонков на одну строку исходника.
-            CONTEXT_OPT_ONCE_ANY_CALL,          // Только один ЛЮБОЙ (любого рода) отладочный звонок на каждую следующую строку исходника.
-                                                // В таком режиме на каждую очередную строку исходника (то есть при переходе к новой его строке
-                                                // в процессе выполнения программы) всегда совершается максимум один отладочный звонок вне
-                                                // зависимости от его типа (или не совершается ни одного, если для каких-либо звонков нет причин).
-            CONTEXT_OPT_ONCE_NONEXEC_CALL,      // Только один НЕИСПОЛНИМЫЙ (относящийся к неисполняемым инструкциям) звонок на каждую очередную
-                                                // строку исходника. При наличии только такой опции все "исполняемые" звонки совершаются в полном
-                                                // объёме, а неисполняемый звонок будет сделан только один (первый по порядку).
-            CONTEXT_OPT_ONCE_EXEC_CALL,         // Только один ИСПОЛНИМЫЙ (относящийся к исполняемым инструкциям) звонок на каждую очередную строку
-                                                // исходника. В этом режиме все незаблокированные другими опциями неисполняемые звонки передаются
-                                                // внешнему отладчику безо всяких ограничений, а вот исполнимый звонок (звонок для какого-либо
-                                                // исполнимого узла строки) в таком случае совершается всегда только один.
-            // Следующая ниже группа опций управляет обработкой точек останова. Все назначенные ими ограничения накладывается как дополнительные
-            // (сужающие) дополнительно к ограничениям, введённым определёнными выше опциями.
-            CONTEXT_OPT_ONCE_BREAKPOINT_CALL,   // Совершать звонок только от первой точки останова, сработавшей на данной исходной строке.
-            CONTEXT_OPT_BREAK_SKIP_DECLARATIVE, // Пропускать при обработке точек останова декларативные узлы АСД (не совершать отладочных звонков
-                                                // от таких узлов, даже если они соответствуют условию бряка).
-            CONTEXT_OPT_BREAK_SKIP_CALL_FRAME,  // Пропускать при обработке точек останова рамочные (ограничительные) узлы вызова функций и методов
-                                                // (не совершать отладочных звонков от таких узлов, даже если они соответствуют условию бряка).
-            CONTEXT_OPT_BREAK_PREFER_EXEC       // Предпочитать исполняемый узел для совершения звонков по поводу срабатывания бряков в данной строке.
-                                                // При наличии данной опции звонки о бряках будут совершаться от первого исполняемого узла данной строки.
-                                                // Иначе (при отсутствии опции) - от первого узла строки вне зависимости от его категории. Если исполняемых
-                                                // узлов в строке нет совсем, звонки также совершаются от имени первого встретившегося узла, который в
-                                                // данном случае будет неисполнимым.
-        };
-
-        Context()
-        {
-            last_command_desc_ = {.module_id  = -1, .module_string_number  = -1};
-        }
-        virtual ~Context() = default;
-        // Возвращает поток вывода для команд print.
-        virtual std::ostream& GetOutputStream() = 0;
-        virtual LinkageFunction& GetExternalLinkage() = 0;
-        virtual bool IsTerminated() = 0;
-        virtual void SetTerminate() = 0;
-        virtual void Clear() = 0;
-        virtual LinkageValue GetOption(OptionType ask_option) = 0;
-
-        // Функции-члены отслеживания хода исполнения программы (положения в исходном тексте исполняемой в данной момент её инструкции).
-        ProgramCommandDescriptor GetLastCommandDesc() const
-        {
-            return last_command_desc_;
-        }
-
-        void SetLastCommandDesc(const ProgramCommandDescriptor& last_command_desc)
-        {
-            last_command_desc_ = last_command_desc;
-        }
-
-        // Сохранение/получение указателя на корневой узел АСД исполняемой программы. Этот узел содержит некоторую информацию, полученную
-        // при синтаксическом анализе программы и необходимую для работы некоторых вспомогательных классов исполняющей программу среды.
-        Executable* GetProgramRoot() const
-        {
-            return root_program_statement_;
-        }
-
-        void SetProgramRoot(Executable* program_root)
-        {
-            root_program_statement_ = program_root;
-        }
-
-    private:
-        // Дескриптор последней корректной исполненной команды.
-        #ifdef MYTHON_UNITHREAD
-            ProgramCommandDescriptor last_command_desc_;
-        #else
-            std::atomic<ProgramCommandDescriptor> last_command_desc_;
-        #endif
-        // Указатель на корневой узел (типа ast::ProgramCompound) исполняющейся программы.
-        Executable* root_program_statement_ = nullptr;
-    };
-
     // Базовый класс для всех объектов языка Mython.
+    class Context;
     class Object
     {
     public:
@@ -134,13 +52,22 @@ namespace runtime
     };
 
     class CommonClassInstance;
+    class PointerObject;
     // Специальный класс-обёртка, предназначенный для хранения объекта в Mython-программе.
     // Все хранимые объекты полагаются потомками Object.
     class ObjectHolder
     {
     public:
-        // Создаёт пустое значение
+        // Создаёт пустое значение.
         ObjectHolder() = default;
+        // Конструкторы копирования и перемещения.
+        ObjectHolder(const ObjectHolder& other);
+        ObjectHolder(ObjectHolder&& other) noexcept;
+        // Операторы присваивания.
+        ObjectHolder& operator=(const ObjectHolder& other);
+        ObjectHolder& operator=(ObjectHolder&& other) noexcept;
+        //
+        ~ObjectHolder();
 
         // Возвращает ObjectHolder, владеющий объектом типа T.
         // Тип T - конкретный класс-наследник Object.
@@ -181,10 +108,17 @@ namespace runtime
         // Модифицирует содержимое объекта, перенацеливая указатель data_ на тот объект,
         // на который указывает data_ внутри аргумента object_holder.
         void ModifyData(const ObjectHolder& object_holder);
+        void ModifyData(ObjectHolder&& object_holder);
 
         // Возврат количества ссылок на объект, указатель на который хранится в данном вместилище.
         long UseCount() const noexcept;
-        
+        // Добавить новую ссылку на данный контейнер в содержащее их хранилице.
+        bool AddPointer(PointerObject* new_pointer);
+        // Удалить ссылку из хранилища.
+        bool RemovePointer(PointerObject* del_pointer);
+        // Проверить наличие ссылки в хранилище.
+        bool IsPointerExists(PointerObject* test_pointer) const;
+
     private:
         explicit ObjectHolder(std::shared_ptr<Object> data);
         bool IsOwning(const std::shared_ptr<Object>& test_ptr) const noexcept;
@@ -195,6 +129,109 @@ namespace runtime
         {}  // Не делает ничего. Абсолютно ничего.
 
         std::shared_ptr<Object> data_;
+        // Множество ссылок на данное вместилище. Позволяет отслеживать их существование и изменения.
+        std::set<PointerObject*> references_;
+        bool in_destructor_ = false;    // Флаг исполнения кода деструктора контейнера.
+    };
+
+    // Таблица символов, связывающая имя объекта с его значением.
+    using Closure = std::unordered_map<std::string, ObjectHolder>;
+
+    // Контекст исполнения инструкций Mython.
+    class Executable;
+    class Context
+    {
+    public:
+        enum class OptionType
+        { // Тип опции, запрашиваемой у функции-члена GetOption().
+            CONTEXT_OPT_UNKNOWN = 0,
+            CONTEXT_OPT_DESTRUCT_AT_FINISH,     // Требуется ли разрушать сохранившиеся объекты в таблице символов при завершении программы.
+            CONTEXT_OPT_SKIP_DECLARATIVE,       // Пропускать в пошаговом режиме (не совершать отладочных звонков) декларативные узлы АСД.
+            CONTEXT_OPT_SKIP_CALL_FRAME,        // Пропускать в пошаговом режиме рамочные (ограничительные) узлы вызова функций и методов.
+            // Режимы ограничения количества звонков на одну строку исходника.
+            CONTEXT_OPT_ONCE_ANY_CALL,          // Только один ЛЮБОЙ (любого рода) отладочный звонок на каждую следующую строку исходника.
+            // В таком режиме на каждую очередную строку исходника (то есть при переходе к новой его строке
+            // в процессе выполнения программы) всегда совершается максимум один отладочный звонок вне
+            // зависимости от его типа (или не совершается ни одного, если для каких-либо звонков нет причин).
+            CONTEXT_OPT_ONCE_NONEXEC_CALL,      // Только один НЕИСПОЛНИМЫЙ (относящийся к неисполняемым инструкциям) звонок на каждую очередную
+            // строку исходника. При наличии только такой опции все "исполняемые" звонки совершаются в полном
+            // объёме, а неисполняемый звонок будет сделан только один (первый по порядку).
+            CONTEXT_OPT_ONCE_EXEC_CALL,         // Только один ИСПОЛНИМЫЙ (относящийся к исполняемым инструкциям) звонок на каждую очередную строку
+            // исходника. В этом режиме все незаблокированные другими опциями неисполняемые звонки передаются
+            // внешнему отладчику безо всяких ограничений, а вот исполнимый звонок (звонок для какого-либо
+            // исполнимого узла строки) в таком случае совершается всегда только один.
+            // Следующая ниже группа опций управляет обработкой точек останова. Все назначенные ими ограничения накладывается как дополнительные
+            // (сужающие) дополнительно к ограничениям, введённым определёнными выше опциями.
+            CONTEXT_OPT_ONCE_BREAKPOINT_CALL,   // Совершать звонок только от первой точки останова, сработавшей на данной исходной строке.
+            CONTEXT_OPT_BREAK_SKIP_DECLARATIVE, // Пропускать при обработке точек останова декларативные узлы АСД (не совершать отладочных звонков
+            // от таких узлов, даже если они соответствуют условию бряка).
+            CONTEXT_OPT_BREAK_SKIP_CALL_FRAME,  // Пропускать при обработке точек останова рамочные (ограничительные) узлы вызова функций и методов
+            // (не совершать отладочных звонков от таких узлов, даже если они соответствуют условию бряка).
+            CONTEXT_OPT_BREAK_PREFER_EXEC       // Предпочитать исполняемый узел для совершения звонков по поводу срабатывания бряков в данной строке.
+                                                // При наличии данной опции звонки о бряках будут совершаться от первого исполняемого узла данной строки.
+                                                // Иначе (при отсутствии опции) - от первого узла строки вне зависимости от его категории. Если исполняемых
+                                                // узлов в строке нет совсем, звонки также совершаются от имени первого встретившегося узла, который в
+                                                // данном случае будет неисполнимым.
+        };
+
+        Context()
+        {
+            last_command_desc_ = { .module_id = -1, .module_string_number = -1 };
+        }
+        virtual ~Context() = default;
+        // Возвращает поток вывода для команд print.
+        virtual std::ostream& GetOutputStream() = 0;
+        virtual LinkageFunction& GetExternalLinkage() = 0;
+        virtual bool IsTerminated() = 0;
+        virtual void SetTerminate() = 0;
+        virtual void Clear() = 0;
+        virtual LinkageValue GetOption(OptionType ask_option) = 0;
+
+        // Функции-члены отслеживания хода исполнения программы (положения в исходном тексте исполняемой в данной момент её инструкции).
+        ProgramCommandDescriptor GetLastCommandDesc() const
+        {
+            return last_command_desc_;
+        }
+
+        void SetLastCommandDesc(const ProgramCommandDescriptor& last_command_desc)
+        {
+            last_command_desc_ = last_command_desc;
+        }
+
+        // Сохранение/получение указателя на корневой узел АСД исполняемой программы. Этот узел содержит некоторую информацию, полученную
+        // при синтаксическом анализе программы и необходимую для работы некоторых вспомогательных классов исполняющей программу среды.
+        Executable* GetProgramRoot() const
+        {
+            return root_program_statement_;
+        }
+
+        void SetProgramRoot(Executable* program_root)
+        {
+            root_program_statement_ = program_root;
+        }
+
+        // Сохранение/получение указателя на глобальную таблицу символов программы.
+        Closure* GetGlobalClosure() const
+        {
+            return global_closure_;
+        }
+
+        void SetGlobalClosure(Closure* global_closure)
+        {
+            global_closure_ = global_closure;
+        }
+
+    private:
+        // Дескриптор последней корректной исполненной команды.
+        #ifdef MYTHON_UNITHREAD
+            ProgramCommandDescriptor last_command_desc_;
+        #else
+            std::atomic<ProgramCommandDescriptor> last_command_desc_;
+        #endif
+        // Указатель на корневой узел (типа ast::ProgramCompound) исполняющейся программы.
+        Executable* root_program_statement_ = nullptr;
+        // Указатель на "корневую" таблицу смиволов, в которой будут содержаться все глобальные символы программы.
+        Closure* global_closure_;
     };
 
     // Объект-контейнер, предназначенный для хранения внутри себя одного из конкретных классов ошибки (CommonError или его наследники).
@@ -258,7 +295,16 @@ namespace runtime
         {}
 
         PointerObject(ObjectHolder* object_ptr) : object_ptr_(object_ptr)
-        {}
+        {
+            if (object_ptr_)
+                object_ptr_->AddPointer(this);
+        }
+
+        ~PointerObject()
+        {
+            if (object_ptr_)
+                object_ptr_->RemovePointer(this);
+        }
 
         void Print(std::ostream& os, [[maybe_unused]] Context& context) override
         {
@@ -280,12 +326,11 @@ namespace runtime
             return sizeof(object_ptr_);
         }
 
+        void SetPointer(ObjectHolder* object_ptr);
+
     private:
         ObjectHolder* object_ptr_;
     };
-
-    // Таблица символов, связывающая имя объекта с его значением
-    using Closure = std::unordered_map<std::string, ObjectHolder>;
 
     // Проверяет, содержится ли в object значение, приводимое к True.
     // Для отличных от нуля чисел, True и непустых строк возвращается true. В остальных случаях - false.
@@ -387,9 +432,13 @@ namespace runtime
         }
 
         size_t SymbolSizeOf() const;       // Возврат действительной длины строки в символах.
+        size_t ByteSizeOf() const;         // Возврат действительной длины строки в байтах.
         size_t BytePosAfterEnd() const;    // Получение байтовой позицию сразу за концом корректной UTF-8-строки.        
         size_t SymbolBytePos(size_t symb_index) const;  // Возвращает байтовую позицию символа с индексом symb_index.        
-        size_t SymbolByteSize(size_t symb_index) const; // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
+        size_t SymbolByteSize(size_t symb_index) const; // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.        
+        std::string_view SymbolView(size_t symb_index) const;   // Возвращает вид на символ с индексом symb_index.
+        // Возвращает значащую часть строки (для UTF-8 может быть только префиксом всего содержимого контейнера).
+        std::string_view MeaningPart() const;
         // --------
         // Несколько перегрузок метода поиска некоторого символа в данной строке. Отличаются способами задания кода искомого символа.
         // Во всех случаях поиск начинается с позиции start_pos (СИМВОЛЬНЫЙ индекс первого символа данной строки, с которого начинается
@@ -403,10 +452,12 @@ namespace runtime
 
         const std::vector<std::pair<char, char>>& GetUpcaseTable() const;
         const std::string& GetCollate() const;
+        const SingleByteEncodingDesc* GetEncoding() const;
+        bool IsUTF8() const;
 
         // Расширенные атрибуты текстовой строки, обеспечивающие поддержку работу со строковыми кодировками.
         // Указатель на информацию о кодировке данной строки.
-        const SingleByteEncodingDesc* encoding = nullptr;
+        const SingleByteEncodingDesc* encoding = NO_ENCODING;
         // Карта индексов, по которым размещаются многобайтовые UTF-8-коды символов строки, если она использует
         // именно UTF-8-кодировку.
         UTF8Map utf8_map;
@@ -525,7 +576,9 @@ namespace runtime
         // актуальная ссылка на саму структуру Method, которой он принадлежит. И эти специальные методы как раз и будут
         // такую ссылку обновлять.
         Method() = default;
-        Method(std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body, bool p_is_coroutine = false);
+        Method
+            (std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body,
+             bool p_is_coroutine = false, std::vector<std::string> p_global_vars = {});
         Method(const Method& other) = delete;
         Method(Method&& other) noexcept;
         // Операторы присваивания.
@@ -540,6 +593,8 @@ namespace runtime
         std::unique_ptr<Executable> body;
         // Признак того, что данный метод является сопрограммой (крутиной).
         bool is_coroutine = false;
+        // Список глобальных переменных, используемых данным методом (свободной функцией).
+        std::vector<std::string> global_vars;
 
         void TuneBodyReference();
     };

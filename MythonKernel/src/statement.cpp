@@ -647,7 +647,27 @@ namespace ast
     runtime::ObjectHolder Assignment::ExecuteLeft
         (runtime::ObjectHolder&& right_result, runtime::Closure& closure, runtime::Context& context)
     {
-        CallDestroyIfNeed(closure, var_, context);
+        // Если closure[var_] существует и является объектом-ссылкой, то присваивание будет выполняться не непосредственно
+        // самой переменной var_, а той переменной, на которую она ссылается.
+        auto var_closure_it = closure.find(var_);
+        if (var_closure_it != closure.end())
+        {
+            if (runtime::PointerObject* target_ptr = var_closure_it->second.TryAs<runtime::PointerObject>())
+            { // Это объект-ссылка.
+                if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
+                { // Она ненулевая и указывает на какую-то иную существующую переменную. Присваиваем новое значение этой переменной,
+                  // перенацеливая внутренний указатель контейнера, соответствующий этой переменной, на новое значение right_result.
+                    CallDestroyIfNeed(*deref_ptr, context);
+                    deref_ptr->ModifyData(move(right_result));
+                }
+                return var_closure_it->second;
+            }
+            // Переменная var_ существует, но ссылкой не является.
+            CallDestroyIfNeed(var_closure_it->second, context); // Возможный вызов деструктора объекта, на который указывает переменная var_.
+            var_closure_it->second = move(right_result);
+            return var_closure_it->second;
+        }
+        // Переменной var_ пока не существует, она будет создана.
         return closure[var_] = move(right_result);
     }
 
@@ -709,9 +729,20 @@ namespace ast
             if (!cur_closure_ptr->count(id_name))
                 ThrowRuntimeError(this, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
 
+            ObjectHolder* cur_object_holder = &cur_closure_ptr->at(id_name);
+            // Если на данном этапе в соответствующем элементе текущей символьной таблицы хранится ссылка, то разыменуем её.
+            if (runtime::PointerObject* target_ptr = cur_object_holder->TryAs<runtime::PointerObject>())
+            { // Это объект-ссылка.
+                if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
+                    // Она ненулевая и указывает на какую-то иную существующую переменную.
+                    cur_object_holder = deref_ptr;
+                else // Ссылка нулевая, никуда не указывает, так что дальнейшее следование по компонентам цепочки полей dotted_ids_ невозможно.
+                    return {};
+            }
+
             if (i++ < dotted_ids_.size())
             {
-                cur_class_instance_ptr = cur_closure_ptr->at(id_name).TryAs<runtime::ClassInstance>();
+                cur_class_instance_ptr = cur_object_holder->TryAs<runtime::ClassInstance>();
                 cur_closure_ptr = &(cur_class_instance_ptr->Fields());
             }
             else
@@ -724,7 +755,7 @@ namespace ast
                 }
                 else
                 {
-                    return cur_closure_ptr->at(id_name);
+                    return *cur_object_holder;
                 }
             }
         }
@@ -1107,8 +1138,10 @@ namespace ast
 
     runtime::ObjectHolder ProgramCompound::Execute(runtime::Closure& closure, runtime::Context& context)
     {
-        // Привяжем контекст context к нашей программе, сохранив в нём указатель на этот корневой узел её АСД.
+        // Привяжем контекст context к нашей программе, сохранив в нём указатель на этот корневой узел её АСД, а также на
+        // основную таблицу символов, которая будет содержать глобальные символы программы.
         context.SetProgramRoot(this);
+        context.SetGlobalClosure(&closure);
         // Исполним программу.
         runtime::ObjectHolder ret_value = Compound::Execute(closure, context);
         // Если это не запрещено соответствующей опцией контекста, после завершения программы корректно удаляем все объекты,

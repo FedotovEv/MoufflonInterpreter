@@ -29,46 +29,92 @@ namespace runtime
             return GetValue().size();
     }
 
-    // Функция возврата байтовой позицию сразу за концом корректной части UTF-8-строки.
+    // Возврат действительной длины строки в байтах.
+    size_t String::ByteSizeOf() const
+    {
+        if (encoding == UTF_8_ENCODING)
+            return utf8_map.BytePosAfterEnd();
+        else
+            return GetValue().size();
+    }
+
+    // Функция возврата байтовой позицию сразу за концом строки (всей строки для однобайтовых кодировок и
+    // корректной части для UTF-8-строки).
     size_t String::BytePosAfterEnd() const
     {
-        return utf8_map.BytePosAfterEnd();
+        if (encoding == UTF_8_ENCODING)
+            return utf8_map.BytePosAfterEnd();
+        else
+            return GetValue().size();
     }
 
     // Возвращает байтовую позицию символа с индексом symb_index.        
     size_t String::SymbolBytePos(size_t symb_index) const
     {
-        return utf8_map.SymbolBytePos(symb_index);
+        if (encoding == UTF_8_ENCODING)
+            return utf8_map.SymbolBytePos(symb_index);
+        else if (symb_index <= GetValue().size())
+            // Символ symb_index в однобайтовой строке существует. Аналогично обрабатывается вариант,
+            // если индекс symb_index указывает сразу за конец строки.
+            return symb_index;  
+        else    // Символа symb_index в однобайтовой строке не существует.
+            return string::npos;
     }
 
     // Расчёт байтовой длины (длины в байтах) кода символа с индексом symb_index.
     size_t String::SymbolByteSize(size_t symb_index) const
     {
-        return utf8_map.SymbolByteSize(symb_index);
+        if (encoding == UTF_8_ENCODING)
+            return utf8_map.SymbolByteSize(symb_index);
+        else if (symb_index < GetValue().size())    // Символ symb_index в однобайтовой строке есть.
+            return 1;
+        else  // Символа symb_index в однобайтовой строке не существует.
+            return 0;
+    }
+
+    // Получение вида на символ строки с индексом symb_index.
+    string_view String::SymbolView(size_t symb_index) const
+    {
+        if (symb_index >= SymbolSizeOf())
+            return {};  // Символа symb_index в строке не имеет места быть.
+
+        string_view result(GetValue());
+        result = result.substr(SymbolBytePos(symb_index), SymbolByteSize(symb_index));
+        return result;
+    }
+
+    // Возвращает вид на значащую часть строки, которое для UTF-8-представления может отличаться от её полного содержимого.
+    string_view String::MeaningPart() const
+    {
+        string_view ret_view(GetValue());
+        if (encoding == UTF_8_ENCODING)
+            ret_view = ret_view.substr(0, ByteSizeOf());
+
+        return ret_view;
     }
 
     // Поиск символа с кодом длиной symb_code_size, размещённым в строке symb_code_str в позиции symb_code_pos.
-    size_t String::FindSymbol(const std::string& symb_code_str, size_t symb_code_pos, size_t symb_code_size, size_t start_pos) const
+    size_t String::FindSymbol(const string& symb_code_str, size_t symb_code_pos, size_t symb_code_size, size_t start_pos) const
     {
         if (encoding != UTF_8_ENCODING)
         { // Поиск символа для однобайтовой кодировки.
             if (symb_code_size != 1 || symb_code_pos >= symb_code_str.size())
-                return std::string::npos;   // Для однобайтовых кодировок символы тоже могут быть только длиной в 1 байт.
+                return string::npos;   // Для однобайтовых кодировок символы тоже могут быть только длиной в 1 байт.
             return GetValue().find(symb_code_str[symb_code_pos], start_pos);
         }
         else
         { // Поиск символа для многобайтовой кодировки UTF-8.
             if (symb_code_size == 0 || symb_code_size > MAX_UNICODE_LENGTH || symb_code_pos >= symb_code_str.size())
                 // Недопустимая длина UTF-8-кода или некорректно указано положение искомого символа в строке symb_code_str.
-                return std::string::npos;
-            const std::string& current_str_value = GetValue();
+                return string::npos;
+            const string& current_str_value = GetValue();
             for (size_t test_symb_index = start_pos; test_symb_index < SymbolSizeOf(); ++test_symb_index)
             {
                 if (current_str_value.compare(SymbolBytePos(test_symb_index), SymbolByteSize(test_symb_index),
                                               symb_code_str, symb_code_pos, symb_code_size) == 0)
                     return test_symb_index;
             }
-            return std::string::npos;
+            return string::npos;
         }
     }
 
@@ -78,30 +124,30 @@ namespace runtime
         if (encoding != UTF_8_ENCODING)
         { // Поиск символа для однобайтовой кодировки.
             if (symb_code > 0xffu)
-                return std::string::npos;
+                return string::npos;
             return GetValue().find(*reinterpret_cast<char*>(&symb_code), start_pos);
         }
         else
         { // Поиск символа для многобайтовой кодировки UTF-8.
-            std::string symb_code_str = ConvSymbToUTF8(symb_code);
-            const std::string& current_str_value = GetValue();
+            string symb_code_str = ConvSymbToUTF8(symb_code);
+            const string& current_str_value = GetValue();
             for (size_t test_symb_index = start_pos; test_symb_index < SymbolSizeOf(); ++test_symb_index)
             {
                 if (current_str_value.compare(SymbolBytePos(test_symb_index), SymbolByteSize(test_symb_index), symb_code_str) == 0)
                     return test_symb_index;
             }
-            return std::string::npos;
+            return string::npos;
         }
     }
 
-    const std::vector<std::pair<char, char>>& String::GetUpcaseTable() const
+    const vector<pair<char, char>>& String::GetUpcaseTable() const
     {
         if (encoding != NO_ENCODING && encoding != UTF_8_ENCODING)
             return encoding->upcase_table;
         return empty_upcase_table;
     }
 
-    const std::string& String::GetCollate() const
+    const string& String::GetCollate() const
     {
         // Локальная взвешивающая строка имеет преимущество над кодировочно-специфичной.
         if (collate.size() == COLLATE_SIZE)
@@ -116,6 +162,16 @@ namespace runtime
         return empty_collate;
     }
 
+    const SingleByteEncodingDesc* String::GetEncoding() const
+    {
+        return encoding;
+    }
+    
+    bool String::IsUTF8() const
+    {
+        return encoding == UTF_8_ENCODING;
+    }
+
     std::string RuntimeError::ExtractMessage(const runtime::ObjectHolder& error_object)
     {
         if (const runtime::CommonClassInstance* error_class_ptr = error_object.TryAs<runtime::CommonClassInstance>())
@@ -128,6 +184,38 @@ namespace runtime
 
     ObjectHolder::ObjectHolder(std::shared_ptr<Object> data) : data_(std::move(data))
     {}
+
+    // Общее правило работы со ссылками: ссылки на контейнер-источник из other.references_ всегда привязаны к своему оригиналу
+    // и никогда не связываются (следовательно, не копируются и не переносятся) с новым целевым контейнером.
+    ObjectHolder::ObjectHolder(const ObjectHolder& other) : data_(other.data_)
+    {}
+    
+    ObjectHolder::ObjectHolder(ObjectHolder&& other) noexcept : data_(move(other.data_))
+    {}
+    
+    ObjectHolder& ObjectHolder::operator=(const ObjectHolder& other)
+    {
+        if (&other != this)
+            data_ = other.data_;
+
+        return (*this);
+    }
+    
+    ObjectHolder& ObjectHolder::operator=(ObjectHolder&& other) noexcept
+    {
+        if (&other != this)
+            data_ = move(other.data_);
+
+        return (*this);
+    }
+
+    ObjectHolder::~ObjectHolder()
+    {
+        in_destructor_ = true;
+        // Оповестим все ссылающиеся на нас объекты-ссылки о нашем предстоящем исчезновении.
+        for (PointerObject* ref_pointer : references_)
+            ref_pointer->SetPointer(nullptr);
+    }
 
     void ObjectHolder::AssertIsValid() const
     {
@@ -167,9 +255,40 @@ namespace runtime
         data_ = object_holder.data_;
     }
 
+    void ObjectHolder::ModifyData(ObjectHolder&& object_holder)
+    {
+        data_ = move(object_holder.data_);
+    }
+
     long ObjectHolder::UseCount() const noexcept
     {
         return data_.use_count();
+    }
+
+    // Добавить новую ссылку на данный контейнер в содержащее их хранилице.
+    bool ObjectHolder::AddPointer(runtime::PointerObject* new_pointer)
+    {
+        if (!in_destructor_)
+            return references_.insert(new_pointer).second;
+        else
+            return false;
+    }
+    
+    // Удалить ссылку из хранилища.
+    bool ObjectHolder::RemovePointer(runtime::PointerObject* del_pointer)
+    {
+        if (!in_destructor_)
+            return references_.erase(del_pointer);
+        else
+            return false;
+    }
+    
+    // Проверить наличие ссылки в хранилище.
+    bool ObjectHolder::IsPointerExists(runtime::PointerObject* test_pointer) const
+    {
+        if (in_destructor_)
+            return false;
+        return references_.contains(test_pointer);
     }
 
     ObjectHolder::operator bool() const noexcept
@@ -190,6 +309,15 @@ namespace runtime
             return *data_del_p != EmptyDeleter;
         else
             return true;
+    }
+
+    void PointerObject::SetPointer(ObjectHolder* object_ptr)
+    {
+        if (object_ptr_)
+            object_ptr_->RemovePointer(this);
+        object_ptr_ = object_ptr;
+        if (object_ptr_)
+            object_ptr_->AddPointer(this);
     }
 
     bool IsTrue(const ObjectHolder& object)
@@ -497,6 +625,13 @@ namespace runtime
         // Добавляем в эту таблицу ссылку на наш собственный класс под именем SELF_FIELD_NAME("self"), что обеспечивает коду метода
         // доступ к текущим полям объекта.
         method_closure[SELF_FIELD_NAME] = ObjectHolder::Share(*this);
+        // Создаём во временной таблице указатели на требуемые глобальные переменные.
+        if (Closure* global_closure = context.GetGlobalClosure(); global_closure && get_method.method->global_vars.size())
+        {
+            for (const std::string& global_var_name : get_method.method->global_vars)
+                // Создаём объекты-ссылки на все указанные глобальные переменные.
+                method_closure[global_var_name] = ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name]));
+        }
         // Кроме того, создаём в этой временной таблице переменные с именами формальных и значениями фактических параметров метода.
         // Такая подстановка делает передаваемые аргументы доступными исполняемому коду метода.
         auto actual_args_it = actual_args.begin();
@@ -687,11 +822,14 @@ namespace runtime
         os << (GetValue() ? "True"sv : "False"sv);
     }
     
-    Method::Method(std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body, bool p_is_coroutine) :
+    Method::Method
+        (std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body,
+         bool p_is_coroutine, std::vector<std::string> p_global_vars) :
         name(move(p_name)),
         formal_params(move(p_formal_params)),
         body(move(p_body)),
-        is_coroutine(p_is_coroutine)
+        is_coroutine(p_is_coroutine),
+        global_vars(move(p_global_vars))
     {
         TuneBodyReference();
     }
@@ -700,7 +838,8 @@ namespace runtime
         name(move(other.name)),
         formal_params(move(other.formal_params)),
         body(move(other.body)),
-        is_coroutine(other.is_coroutine)
+        is_coroutine(other.is_coroutine),
+        global_vars(move(other.global_vars))
     {
         TuneBodyReference();
     }
@@ -713,6 +852,7 @@ namespace runtime
             formal_params = move(other.formal_params);
             body = move(other.body);
             is_coroutine = other.is_coroutine;
+            global_vars = move(other.global_vars);
             TuneBodyReference();
         }
         return *this;
@@ -836,7 +976,7 @@ namespace runtime
         ObjectHolder cnv_rhs;
         if (lhs_str->encoding != rhs_str->encoding)
         { // Если кодировки сравниваемых строк не совпадают, приведём вторую строку к кодировке первой.
-            cnv_rhs = StringOpsInstance::ConvertTranscodeTo(rhs, context, lhs_str->encoding);
+            cnv_rhs = StringOpsInstance::ConvertTranscodeTo("StrCompare", rhs, context, lhs_str->encoding);
             rhs_str = cnv_rhs.TryAs<String>();
         }
 

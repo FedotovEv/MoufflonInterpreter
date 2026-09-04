@@ -41,6 +41,7 @@ namespace parse
             {"print"s, token_type::Print{}},
             {"import"s, token_type::Import{}},
             {"include"s, token_type::Include{}},
+            {"global"s, token_type::Global{}},
             {"and"s, token_type::And{}},
             {"or"s, token_type::Or{}},
             {"not"s, token_type::Not{}},
@@ -497,6 +498,7 @@ namespace parse
         UNVALUED_OUTPUT(Print);
         UNVALUED_OUTPUT(Import);
         UNVALUED_OUTPUT(Include);
+        UNVALUED_OUTPUT(Global);
         UNVALUED_OUTPUT(Indent);
         UNVALUED_OUTPUT(Dedent);
         UNVALUED_OUTPUT(And);
@@ -554,6 +556,7 @@ namespace parse
         STRINGIZE_TOKEN_TYPE(Print);
         STRINGIZE_TOKEN_TYPE(Import);
         STRINGIZE_TOKEN_TYPE(Include);
+        STRINGIZE_TOKEN_TYPE(Global);
         STRINGIZE_TOKEN_TYPE(Indent);
         STRINGIZE_TOKEN_TYPE(Dedent);
         STRINGIZE_TOKEN_TYPE(And);

@@ -217,9 +217,9 @@ namespace
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
             // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
             std::vector<runtime::Method> methods;
-            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, { "coro_instance"s },
+            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, {"coro_instance"s},
                 std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
-            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, { "coro_instance"s, "suspend_value"s },
+            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, {"coro_instance"s, "suspend_value"s},
                 std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
             declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), {}));
         }
@@ -297,6 +297,19 @@ namespace
             return result;
         }
 
+        // Функция анализа и извлечения содержимого списка идентификаторов, то есть набора некоторых жетонов-имён, перечисленных через запятую.
+        std::vector<std::string> ParseIdList()
+        {
+            std::vector<std::string> parsed_list;
+            if (lexer_.NextToken().Is<ITokenType::Id>())
+            {
+                parsed_list.push_back(lexer_.Expect<ITokenType::Id>().value);
+                while (lexer_.NextToken() == ',')
+                    parsed_list.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
+            }
+            return parsed_list;
+        }
+
         // Функция выделяет и разбирает описание метода или свободной функции.
         runtime::Method ParseMethodDef()
         {
@@ -309,12 +322,7 @@ namespace
             parsed_method.name = lexer_.ExpectNext<ITokenType::Id>().value;
             lexer_.ExpectNext<ITokenType::Char>('(');  // Открывающая скобка, начинающая список формальных параметров метода (функции).
 
-            if (lexer_.NextToken().Is<ITokenType::Id>())
-            {
-                parsed_method.formal_params.push_back(lexer_.Expect<ITokenType::Id>().value);
-                while (lexer_.NextToken() == ',')
-                    parsed_method.formal_params.push_back(lexer_.ExpectNext<ITokenType::Id>().value);
-            }
+            parsed_method.formal_params = ParseIdList();
 
             lexer_.Expect<ITokenType::Char>(')');
             lexer_.ExpectNext<ITokenType::Char>(':');
@@ -1025,7 +1033,7 @@ namespace
             {
                 const auto& tok = lexer_.CurrentToken();
 
-                if (tok.Is<ITokenType::Class>())  // Это определение класса.
+                if (tok.Is<ITokenType::Class>())     // Это определение класса.
                     return ParseClassDefinition();
                 else if (tok.Is<ITokenType::Def>())  // Это определение свободной функции, не являющейся методом класса.
                     return ParseFreeFunction();
@@ -1407,7 +1415,7 @@ namespace
         }
 
         // Кроме команд периода исполнения (print, break, и. т. д.), здесь также
-        // обрабатываются директивы времени трансляции (например, import).
+        // обрабатываются директивы времени трансляции (например import, include и global).
         // StatementBody -> return Expression
         //               | co_yield Expression
         //               | return_ref VariableValue
@@ -1444,6 +1452,17 @@ namespace
                 if (args.size() != 1 || !args[0].Is<ITokenType::String>())
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS);
                 lexer_.IncludeSwitchTo(args[0].As<ITokenType::String>().value);
+                return nullopt;
+            }
+
+            if (tok.Is<ITokenType::Global>())
+            {
+                runtime::Method* current_method = exec_factory_.CurrentMethod();
+                if (!current_method)
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_GLOBAL_IN_METHOD_ONLY);
+
+                current_method->global_vars = ParseIdList();
+                lexer_.Expect<ITokenType::Newline>();
                 return nullopt;
             }
 
@@ -1550,10 +1569,13 @@ namespace
             return ParseAssignmentOrCall();
         }
 
+        // Функция разбора списка жетонов, состоящего из лексем, соответствующих значениям различных допустимых поддерживаемых
+        // типов (численного, строкового, логического или пустого).
         vector<parse::Token> ParseTokenList()
         {
             vector<parse::Token> result;
-            parse::Token previous_token = parse::token_type::None{}, current_token;
+            parse::Token previous_token = parse::token_type::None{},
+                         current_token;
 
             while (true)
             {

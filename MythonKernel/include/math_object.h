@@ -136,7 +136,7 @@ public:
     // Вспомогательные статические методы (используются как в данном классе, так и, возможно, в некоторых иных местах).
     // Перекодировка МУФЛОН-строки src_string в целевую кодировку dest_encoding.
     static ObjectHolder ConvertTranscodeTo
-        (const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding = nullptr);
+        (const std::string& method, const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding = nullptr);
 
 private:
     static const std::unordered_map<std::string_view, StringOpsCallMethod> string_ops_method_table_;
@@ -147,27 +147,48 @@ private:
     uint32_t last_unicode_ = 0;         // Последний Юникод, полученный при выполнении некоторых операций над многобайтовыми строками.
 
     // Вспомогательные приватные методы.
+    // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
+    int CheckEncodingID(const std::string& method, const ObjectHolder& encoding_holder, Context& context) const;
+    // Получение имени кодировки из контейнера encoding_holder и дальнейший поиск такой кодировки среди зарегистрированных.
+    int CheckEncodingName(const std::string& method, const ObjectHolder& encoding_holder, Context& context) const;
+    // Строит карту расположения UTF-8-кодов в строке parse_str.
+    UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
+    // Извлечение из списка параметров actual_args целочисленного неотрицательного аргумента с индексом arg_index.
+    std::pair<size_t, bool> ExtractPositiveIntParam
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, size_t arg_index, Context& context,
+         size_t default_value) const;
     // Функция извлечения пары параметров подстроки, принадлежащей строке arg_str - начального её индекса и длины - из списка фактических
     // аргументов actual_args некоторого метода. Искомый начальный индекс первого символа подстроки содержится в элементе
     // actual_args[arg_start_pos], а длина подстроки - в элементе actual_args[arg_start_pos + 1]. Функция проверяет типовую и количественную
-    // корректность обоих параметров, при ошибках исправляет значения к допустимым или выбрасывает исключения.
+    // корректность обоих параметров, при ошибках исправляет значения к допустимым или выбрасывает исключения. Начало подстроки и её длина
+    // возвращаются как байтовые величины - байтовый индекс её первого символа и байтовая длина.
     std::pair<size_t, size_t> ExtractPosSize
-        (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str, Context& context);
-    // Извлекает и проверяет корректность условного номера кодировки, хранящегося во вместилище encoding_holder.
-    int CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const;
-    // Получение имени кодировки из контейнера encoding_holder и дальнейший поиск такой кодировки среди зарегистрированных.
-    int CheckEncodingName(const ObjectHolder& encoding_holder, Context& context) const;
-    // Строит карту расположения UTF-8-кодов в строке parse_str.
-    UTF8Map BuildUTF8Map(const std::string& parse_str, size_t max_elem_count = (std::numeric_limits<size_t>::max)()) const;
-    // Метод извлечения стандартного набора аргументов функции поиска, у всех разновидностей которого этот набор одинаков.
-    using FindArgsT = std::tuple <runtime::String*, runtime::String*, size_t>;
-    FindArgsT ExtractFindParams
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos) const;
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str,
+         Context& context) const;
+    // Извлечение из элемента arg_pos_index массива actual_args и проверка корректности значения символьной позиции для строки arg_str.
+    // Позиция возвращается как байтовая - байтовый индекс в пределах строки arg_str.
+    std::pair<size_t, bool> ExtractPosParam
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, size_t arg_pos_index,
+         const runtime::String* arg_str, Context& context, size_t default_pos) const;
+    // Методы обслуживания различных операций поиска подстрок в строке.
+    using CommonFindFunc = std::string::size_type(std::string::*)(const std::string& str, const std::string::size_type pos) const;
+    struct FindArgsT
+    {
+        ObjectHolder arg_needle_holder;
+        runtime::String* arg_haystack;
+        runtime::String* arg_needle;
+        size_t arg_pos;
+    };
+    // Метод совершения предварительных действий для операций поиска подстрок, у всех разновидностей которого этот действия одинаковы и
+    // различаются только используемой поисковой функцией find_func.
+    std::variant<FindArgsT, ObjectHolder> ProcessFindPrologue
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, CommonFindFunc find_func,
+         size_t default_pos, Context& context) const;
     // Функция обобщённого поиска подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
     // поисковой функцией find_func.
-    using CommonFindFunc = std::string::size_type(std::string::*)(const std::string& str, const std::string::size_type pos) const;
     ObjectHolder MethodCommonFindUnibyte
-        (const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func, Context& context) const;
+        (const std::string& method, const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func,
+         Context& context) const;
 
     // Функции-члены, представляющие собой реализацию внешних методов класса StringOpsInstance для МУФЛОН-программы.
     ObjectHolder MethodSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);

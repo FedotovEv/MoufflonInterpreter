@@ -64,7 +64,8 @@ namespace parse
         struct Print {};        // Лексема «print»
         struct Import {};       // Лексема «import»
         struct Include {};      // Лексема «include»
-        struct Indent {};       // Лексема «увеличение отступа», соответствует двум пробелам
+        struct Global {};       // Лексема «global»
+        struct Indent {};       // Лексема «увеличение отступа», соответствует двум пробелам.
         struct Dedent {};       // Лексема «уменьшение отступа»
         struct Eof {};          // Лексема «конец файла»
         struct And {};          // Лексема «and»
@@ -90,7 +91,7 @@ namespace parse
                        token_type::While, token_type::Break, token_type::Continue, token_type::Pass, token_type::Del,
                        token_type::Try, token_type::Except, token_type::Finally, token_type::As, token_type::Raise,
                        token_type::Def, token_type::Newline,
-                       token_type::Print, token_type::Import, token_type::Include,
+                       token_type::Print, token_type::Import, token_type::Include, token_type::Global,
                        token_type::Indent, token_type::Dedent,
                        token_type::And, token_type::Or, token_type::Xor,
                        token_type::Not, token_type::Eq, token_type::NotEq, token_type::LessOrEq,

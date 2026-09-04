@@ -2314,6 +2314,42 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 20
         }
     }
 
+    void TestGlobalVariables()
+    {
+        istringstream input(R"--( 
+class TestClass:
+  def Method_1(x, y):
+    global a, b
+    a = a + x * y
+    b = 2 * b
+    c = a + b
+    a = a - (x * y / 2)
+    return c
+
+  def Method_2(z):
+    global c
+    a = c + z
+    return a
+
+a = 1
+b = 2
+c = 3
+ab = a + b
+bc = b + c
+print ab, bc
+# Создаём экземпляр TestClass.
+tst_class = TestClass()
+ret_v = tst_class.Method_1(ab, bc)
+print a, b, c, ret_v
+ret_v = tst_class.Method_2(ab)
+print a, b, c, ret_v
+)--");
+
+        ostringstream ostr;
+        RunMythonProgram(input, ostr);
+        std::cout << ostr.str() << std::endl;
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
@@ -2359,6 +2395,7 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 20
         RUN_TEST(tr, TestFreeFunction);
         RUN_TEST(tr, TestFunctorClassFunction);
         RUN_TEST(tr, TestDebugExecution);
+        RUN_TEST(tr, TestGlobalVariables);
     }
 }  // namespace
 

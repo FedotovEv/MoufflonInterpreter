@@ -393,23 +393,13 @@ namespace runtime
     };
 
     // Вспомогательная функция-член извлечения пары фактических параметров подстроки - начального её байтового индекса и байтовой длины.
-    std::pair<size_t, size_t> StringOpsInstance::ExtractPosSize
-        (const std::vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str, Context& context)
+    pair<size_t, size_t> StringOpsInstance::ExtractPosSize
+        (const string& method, const vector<ObjectHolder>& actual_args, size_t arg_start_pos, const runtime::String* arg_str,
+         Context& context) const
     {
         // Значения извлекаемых параметров подстроки по умолчанию.
-        size_t arg_pos = 0;
-        const std::string& arg_str_std = arg_str->GetValue();
-
-        if (actual_args.size() >= 2)
-        { // Явно задан arg_pos.
-            const runtime::Number* arg_pos_ptr = actual_args[arg_start_pos].TryAs<runtime::Number>();
-            if (!arg_pos_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
-            int arg_pos_int = arg_pos_ptr->GetIntValue();
-            if (arg_pos_int < 0)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Позиция в строке должна быть неотрицательной");
-            arg_pos = static_cast<size_t>(arg_pos_int);
-        }
+        const string& arg_str_std = arg_str->GetValue();
+        size_t arg_pos = ExtractPositiveIntParam(method, actual_args, arg_start_pos, context, 0).first;
 
         // Для кодировки типа UTF-8 позиция arg_pos трактуется как номер (отсчитывающийся от нуля) многобайтового символа входной строки.
         // Для однобайтовых кодировок позиция arg_pos воспринимается как индекс байта в строке.
@@ -420,17 +410,11 @@ namespace runtime
         if (arg_str->encoding == UTF_8_ENCODING)
         {
             if (arg_pos > arg_str->utf8_map.begin_map.size())
-            {
                 is_arg_pos_correct = false;
-            }
             else
-            { // Здесь рассматриваются допустимые варианты arg_pos - как меньше количества символов в UTF-8-строке, так и "закрайний" символ,
-              // для которого arg_pos == длине строки-аргумента.
-                if (arg_pos < arg_str->utf8_map.begin_map.size())
-                    arg_byte_pos = arg_str->utf8_map.begin_map[arg_pos];
-                else  // Тот самый "запредельный" символ за физическим концом строки.
-                    arg_byte_pos = arg_str->utf8_map.BytePosAfterEnd();
-            }
+                // Здесь обрабатываются допустимые варианты arg_pos - как меньше количества символов в UTF-8-строке, так и
+                // "закрайний" символ, для которого arg_pos == длине строки-аргумента.
+                arg_byte_pos = arg_str->SymbolBytePos(arg_pos);
         }
         else
         { // Имеем дело с однобайтовой кодировкой.
@@ -440,20 +424,10 @@ namespace runtime
                 arg_byte_pos = arg_pos;
         }
         if (!is_arg_pos_correct)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Указанная позиция в строке недопустима");
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Указанная позиция в строке недопустима");
 
         // Обработка аргумента, указывающего длину требуемой подстроки.
-        size_t arg_count = arg_str_std.size();
-        if (actual_args.size() >= 3)
-        { // Явно указан arg_count.
-            const runtime::Number* arg_count_ptr = actual_args[arg_start_pos + 1].TryAs<runtime::Number>();
-            if (!arg_count_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Длина подстроки должна быть числом");
-            int arg_count_int = arg_count_ptr->GetIntValue();
-            if (arg_count_int < 0)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Длина подстроки должна быть неотрицательной");
-            arg_count = static_cast<size_t>(arg_count_int);
-        }
+        size_t arg_count = ExtractPositiveIntParam(method, actual_args, arg_start_pos + 1, context, arg_str_std.size()).first;
         // Рассчитаем допустимое значение длины подстроки arg_byte_count, которая может быть менее указанной, если строка arg_str слишком коротка.
         size_t arg_byte_count = 0;
         if (arg_str->encoding == UTF_8_ENCODING)
@@ -461,12 +435,8 @@ namespace runtime
             size_t max_arg_count = arg_str->utf8_map.begin_map.size() - arg_pos;
             arg_count = min(arg_count, max_arg_count);
             // Вычислим положение конца требуемой подстроки - UTF-8-символа, следующего за концом выделяемой подстроки.
-            size_t after_substr_pos = arg_pos + arg_count;   // UTF-8-позиция этого символа.
-            size_t after_substr_byte_pos;                    // Байтовый индекс этого символа.
-            if (after_substr_pos < arg_str->utf8_map.begin_map.size())
-                after_substr_byte_pos = arg_str->utf8_map.begin_map[after_substr_pos];
-            else  // Если этот символ "запредельный".
-                after_substr_byte_pos = arg_str->utf8_map.BytePosAfterEnd();
+            size_t after_substr_pos = arg_pos + arg_count;                           // UTF-8-позиция этого символа.
+            size_t after_substr_byte_pos = arg_str->SymbolBytePos(after_substr_pos); // Байтовый индекс этого символа.
             arg_byte_count = after_substr_byte_pos - arg_byte_pos;
         }
         else
@@ -480,30 +450,30 @@ namespace runtime
     }
 
     // Считывание идента (номера) кодировки из контейнера encoding_holder с последующей проверкой его корректности.
-    int StringOpsInstance::CheckEncodingID(const ObjectHolder& encoding_holder, Context& context) const
+    int StringOpsInstance::CheckEncodingID(const string& method, const ObjectHolder& encoding_holder, Context& context) const
     {
         const runtime::Number* arg_encoding = encoding_holder.TryAs<runtime::Number>(); // Индент желаемой кодировки.
         if (!arg_encoding)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Индекс кодировки должен быть численным");
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, method + " : Индекс кодировки должен быть численным");
         int encoding_id = arg_encoding->GetIntValue();
         if (encoding_id != NON_INDEXED_ENCODING_ID && encoding_id != NO_ENCODING_ID && encoding_id != UTF_8_ENCODING_ID)
         {
             if (encoding_id < 1 || encoding_id > static_cast<int>(::encodings_data.size()))
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Индекс кодировки вне допустимого диапазона");
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Индекс кодировки вне допустимого диапазона");
         }
         return encoding_id;
     }
 
     // Считывание имени кодировки из контейнера encoding_holder и его дальнейший поиск среди кодировок, существующих в системе.
-    int StringOpsInstance::CheckEncodingName(const ObjectHolder& encoding_holder, Context& context) const
+    int StringOpsInstance::CheckEncodingName(const string& method, const ObjectHolder& encoding_holder, Context& context) const
     {
         const runtime::String* arg_encoding_name = encoding_holder.TryAs<runtime::String>(); // Имя требуемой кодировки.
         if (!arg_encoding_name)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Имя кодировки должен быть строковым");
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, method + " : Имя кодировки должен быть строковым");
 
         int set_enc_id = FindEncoding(arg_encoding_name->GetValue());
         if (set_enc_id == NON_INDEXED_ENCODING_ID)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Кодировка с указанным именем не найдена");
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Кодировка с указанным именем не найдена");
         return set_enc_id;
     }
 
@@ -517,14 +487,14 @@ namespace runtime
 
     // Перекодировка МУФЛОН-строки src_string в целевую кодировку dest_encoding.
     ObjectHolder StringOpsInstance::ConvertTranscodeTo
-        (const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding)
+        (const string& method, const ObjectHolder& string_holder, Context& context, const SingleByteEncodingDesc* dest_encoding)
     {
         const runtime::String* src_string = string_holder.TryAs<runtime::String>();
         if (!src_string)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Аргумент должен быть строковым");
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, method + " : Аргумент должен быть строковым");
 
         // Выберем вид перекодировочной таблицы для исходной кодировки, в которой находится строка-аргумент.
-        const std::vector<uint32_t>* src_to_utf8;       // Указатель на перекодировочную таблицу для исходной кодировки.
+        const vector<uint32_t>* src_to_utf8;       // Указатель на перекодировочную таблицу для исходной кодировки.
         if (src_string->encoding == NO_ENCODING)
             src_to_utf8 = &std_to_utf8;
         else if (src_string->encoding == UTF_8_ENCODING)
@@ -533,7 +503,7 @@ namespace runtime
             src_to_utf8 = &(src_string->encoding->to_utf8);
 
         // Выберем вид перекодировочной таблицы для целевой кодировки, которую требуется получить на выходе.
-        const std::vector<uint32_t>* dest_to_utf8;      // Указатель на перекодировочную таблицу для целевой кодировки.
+        const vector<uint32_t>* dest_to_utf8;      // Указатель на перекодировочную таблицу для целевой кодировки.
         if (dest_encoding == NO_ENCODING)
             dest_to_utf8 = &std_to_utf8;
         else if (dest_encoding == UTF_8_ENCODING)
@@ -546,7 +516,7 @@ namespace runtime
             return string_holder;
 
         // Нужно действительное конвертирование кодировок. Выберем надлежащий тип такой конверсии.
-        const std::string& src_string_std = src_string->GetValue();
+        const string& src_string_std = src_string->GetValue();
         TranscodeResult conv_result;
         UTF8Map utf8_map;
         if (!src_to_utf8)
@@ -555,7 +525,7 @@ namespace runtime
         }
         else if (!dest_to_utf8)
         { // На входе однобайтовое представление, а на выходе нужно получить UTF-8.
-            std::tuple<std::string, UTF8Map, UTF8Error> convex_result = TranscodeToUTF8Ex(src_string_std, *src_to_utf8);
+            tuple<string, UTF8Map, UTF8Error> convex_result = TranscodeToUTF8Ex(src_string_std, *src_to_utf8);
             conv_result = {move(get<0>(convex_result)), get<2>(convex_result)};
             utf8_map = move(get<1>(convex_result));
         }
@@ -565,7 +535,7 @@ namespace runtime
         }
         if (conv_result.second.code != UTF8ErrorCode::UTF8_NO_ERROR)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR,
-                              "Ошибка перекодирования в положении "s + to_string(conv_result.second.pos));
+                              method + " : Ошибка перекодирования в положении "s + to_string(conv_result.second.pos));
 
         // Перекодировка прошла нормально, формируем и возвращаем полученный результат.
         runtime::String result_string(move(conv_result.first));
@@ -578,26 +548,46 @@ namespace runtime
     // Обобщённый поиск подстроки в строке, который для каждого конкретной разновидности отличается только передаваемой
     // поисковой функцией find_func. Эта функция применяется только для обработки строк в однобайтовых кодировках.
     ObjectHolder StringOpsInstance::MethodCommonFindUnibyte
-        (const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func, Context& context) const
+        (const string& method, const FindArgsT& args_values, ObjectHolder needle_holder, CommonFindFunc find_func,
+         Context& context) const
     {
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding == UTF_8_ENCODING)
+        if (args_values.arg_haystack->encoding == UTF_8_ENCODING)
             return {};  // Для многобайтовых строк эту функцию применять невозможно.
 
         // Перекодируем искомую подстроку в ту же кодировку, которую имеет строка-аргумент, в которой будет производиться поиск.
-        needle_holder = ConvertTranscodeTo(needle_holder, context, arg_str_haystack->encoding);
-        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+        needle_holder = ConvertTranscodeTo(method, needle_holder, context, args_values.arg_haystack->encoding);
+        const std::string &arg_str_haystack_std = args_values.arg_haystack->GetValue(),
                           &arg_str_needle_std = needle_holder.TryAs<runtime::String>()->GetValue();
-        size_t arg_pos = std::get<2>(args_values);
 
         // Все параметры предстоящей операции определены и проверены. Можно выполнять.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>((arg_str_haystack_std.*find_func)(arg_str_needle_std, arg_pos))));
+        return ObjectHolder::Own(runtime::Number(static_cast<int>((arg_str_haystack_std.*find_func)(arg_str_needle_std, args_values.arg_pos))));
+    }
+
+    std::pair<size_t, bool> StringOpsInstance::ExtractPositiveIntParam
+        (const std::string& method, const std::vector<ObjectHolder>& actual_args, size_t arg_index, Context& context,
+         size_t default_value) const
+    {
+        size_t arg_value = default_value; // Значение параметра по умолчанию.
+        bool arg_value_specified = arg_index < actual_args.size();
+        if (arg_value_specified)
+        { // Аргумент явно задан.
+            const runtime::Number* arg_value_ptr = actual_args[arg_index].TryAs<runtime::Number>();
+            if (!arg_value_ptr)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, method + " : Значение должно быть числом");
+            int arg_value_int = arg_value_ptr->GetIntValue();
+            if (arg_value_int < 0)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Значение должно быть неотрицательным");
+            arg_value = static_cast<size_t>(arg_value_int);
+        }
+        return {arg_value, arg_value_specified};
     }
 
     // Метод извлечения стандартного набора аргументов функции поиска, у всех разновидностей которого этот набор одинаков
     // ("стог", "иголка" и начальная/конечная позиция поиска).
-    StringOpsInstance::FindArgsT StringOpsInstance::ExtractFindParams
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context, size_t default_pos) const
+    // Начальные операции поиска подстроки, которые одинаковы для всех типов поиска и различаются только исполняемой поисковой функцией.
+    // 
+    variant<StringOpsInstance::FindArgsT, ObjectHolder> StringOpsInstance::ProcessFindPrologue
+        (const string& method, const vector<ObjectHolder>& actual_args, CommonFindFunc find_func, size_t default_pos, Context& context) const
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -605,22 +595,41 @@ namespace runtime
         if (actual_args.size() > 3) // Допускается от 2 до 3 параметров (включительно).
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод " + method + " может принимать 2 или 3 параметра");
 
-        size_t arg_pos = default_pos; // Значение начальной (или конечной) позиции поиска по умолчанию.
-        if (actual_args.size() >= 3)
-        { // Явно задан arg_pos.
-            const runtime::Number* arg_pos_ptr = actual_args[2].TryAs<runtime::Number>();
-            if (!arg_pos_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
-            int arg_pos_int = arg_pos_ptr->GetIntValue();
-            if (arg_pos_int < 0)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Позиция в строке должна быть неотрицательной");
-            arg_pos = static_cast<size_t>(arg_pos_int);
+        FindArgsT args_result;
+        args_result.arg_haystack = actual_args[0].TryAs<runtime::String>();
+        args_result.arg_needle = actual_args[1].TryAs<runtime::String>();
+        args_result.arg_pos = ExtractPositiveIntParam(method, actual_args, 2, context, default_pos).first;
+        if (args_result.arg_haystack->encoding != UTF_8_ENCODING)
+        { // Для однобайтовых строк используем соответствующую функцию из STL std::string.
+            return MethodCommonFindUnibyte(method, args_result, actual_args[1], find_func, context);
         }
-
-        return {actual_args[0].TryAs<runtime::String>(), actual_args[1].TryAs<runtime::String>(), arg_pos};
+        else
+        { // Если строка-"стог" закодирована в UTF-8, то содержательную часть поиска выполнит непосредственно сама специальная процедура.
+          // А здесь мы только перекодируем, если нужно, строку-"иголку" также в UTF-8.
+            args_result.arg_needle_holder = ConvertTranscodeTo(method, actual_args[1], context, args_result.arg_haystack->encoding);
+            args_result.arg_needle = args_result.arg_needle_holder.TryAs<runtime::String>();
+            return args_result;
+        }
     }
 
-    ObjectHolder StringOpsInstance::MethodSize(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    // Извлечение из вместилища pos_arg и проверка корректности значения символьной позиции в строке arg_str. Результат, при необходимости,
+    // конвертируется и возвращается в виде байтовой позиции внутри этой строки.
+    pair<size_t, bool> StringOpsInstance::ExtractPosParam
+        (const string& method, const vector<ObjectHolder>& actual_args, size_t arg_pos_index, const runtime::String* arg_str,
+         Context& context, size_t default_pos) const
+    {
+        pair<size_t, bool> arg_pos_pair = ExtractPositiveIntParam(method, actual_args, arg_pos_index, context, default_pos);
+        if (arg_pos_pair.second || arg_pos_pair.first != string::npos)
+        { // Параметр arg_pos_index либо указан явно, либо не относится к зарезервированному значению npos, корректность которого
+          // мы также не проверяем. В таких случаях корректная позиция должна принадлежать диапазону от 0 до размера строки arg_str,
+          // положение в которой она указывает.
+            if (arg_pos_pair.first > arg_str->SymbolSizeOf())
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Указанная позиция находится за пределами строки");
+        }
+        return {arg_str->SymbolBytePos(arg_pos_pair.first), arg_pos_pair.second};
+    }
+
+    ObjectHolder StringOpsInstance::MethodSize(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -628,7 +637,7 @@ namespace runtime
         if (actual_args.size() > 2) // Допускается 1 или 2 параметра метода.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод size может принимать 1 или 2 параметра");
         const runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
-        const std::string& arg_str_std = arg_str->GetValue();
+        const string& arg_str_std = arg_str->GetValue();
 
         // Опциональный второй параметр (если он есть) явно указывает способ вычисления длины строки-аргумента. Если он оценивается как "ИСТИНА",
         // то длина строки всегда вычисляется в многобайтовых UTF-8-кодах. Если оценка приводит к "ЛОЖЬ", то расчёт длины  выполняется в любом случае
@@ -654,16 +663,16 @@ namespace runtime
         }
     }
     
-    ObjectHolder StringOpsInstance::MethodConcat(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodConcat(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Concat"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         // Целевую кодировку формируемой суммарной строки примем равной той, которая применяется для первого аргумента метода.
         const SingleByteEncodingDesc* dest_encoding = actual_args[0].TryAs<runtime::String>()->encoding;
-        std::string result_string;
+        string result_string;
         for (const ObjectHolder& arg_string_holder : actual_args)
-            result_string += ConvertTranscodeTo(arg_string_holder, context, dest_encoding).TryAs<runtime::String>()->GetValue();
+            result_string += ConvertTranscodeTo(method, arg_string_holder, context, dest_encoding).TryAs<runtime::String>()->GetValue();
 
         runtime::String return_string(move(result_string));
         return_string.encoding = dest_encoding;
@@ -675,7 +684,7 @@ namespace runtime
     
     // append(arg_str_to, arg_str_what, arg_pos, arg_count) - присоединение к строке arg_str_to arg_count символов строки arg_str_what,
     // начиная с позиции arg_pos в ней.
-    ObjectHolder StringOpsInstance::MethodAppend(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodAppend(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -685,13 +694,13 @@ namespace runtime
         
         // Выделяем из входных аргументов строку, к которой будет выполняться присоединение.
         const runtime::String* arg_str_to = actual_args[0].TryAs<runtime::String>();
-        std::string arg_str_to_std = arg_str_to->GetValue();
+        string arg_str_to_std = arg_str_to->GetValue();
         // Выделяем из входных аргументов строку, подстрока которой будет присоединяться к первому параметру метода,
         // а затем конвертируем её в ту же кодировку, что и строка-приёмник arg_str_to.
-        ObjectHolder cnv_str_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_to->encoding);
+        ObjectHolder cnv_str_holder = ConvertTranscodeTo(method, actual_args[1], context, arg_str_to->encoding);
         const runtime::String* cnv_str_what = cnv_str_holder.TryAs<runtime::String>();        
         // Считываем положение и размер добавляемой подстроки.
-        auto [arg_byte_pos, arg_byte_count] = ExtractPosSize(actual_args, 2, cnv_str_what, context);
+        auto [arg_byte_pos, arg_byte_count] = ExtractPosSize(method, actual_args, 2, cnv_str_what, context);
 
         // Все параметры предстоящей операции определены и проверены. Можно выполнять. Если требуется, также пересоставим карту
         // распределения многобайтовых символов в полученной UTF-8-строке.
@@ -705,15 +714,15 @@ namespace runtime
 
     // substr(arg_str, arg_pos, arg_length) - извлечение подстроки из строки arg_str длиной не более arg_length символов,
     // начиная с символа с индексом arg_pos.
-    ObjectHolder StringOpsInstance::MethodSubstr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodSubstr(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
         CheckMethodParams(context, "Substr"s, param_check_mode, MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         const runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
-        const std::string& arg_str_std = arg_str->GetValue();
-        auto [arg_pos, arg_count] = ExtractPosSize(actual_args, 1, arg_str, context);
+        const string& arg_str_std = arg_str->GetValue();
+        auto [arg_pos, arg_count] = ExtractPosSize(method, actual_args, 1, arg_str, context);
 
         // Все параметры предстоящей операции определены и проверены. Можно выполнять. Для UTF-8-строки также составим для выделенной
         // из неё подстроки карту расположения UTF-8-символов в ней.
@@ -727,37 +736,33 @@ namespace runtime
 
     // find(arg_str_haystack, arg_str_needle, arg_pos) - поиск первого вхождения подстроки arg_str_needle в строку arg_str_haystack,
     // начиная с позиции arg_pos.
-    ObjectHolder StringOpsInstance::MethodFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodFind(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find, context);
+        variant<FindArgsT, ObjectHolder> prologue_result = ProcessFindPrologue(method, actual_args, &string::find, 0, context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
         // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
-        // выполняем поисковую операцию самостоятельно. Сначала перекодируем искомую подстроку ("иголку") также в UTF-8,
-        // а затем проверяем возможное наличие "иголки" по всем возможным начальным позициям в "стоге", начиная с arg_pos.
-        ObjectHolder needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needle = needle_holder.TryAs<runtime::String>();
-        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
-                          &arg_str_needle_std = arg_str_needle->GetValue();
-        size_t arg_pos = std::get<2>(args_values),
-               haystack_size = arg_str_haystack->SymbolSizeOf(),
-               needle_size = arg_str_needle->SymbolSizeOf();
+        // выполняем поисковую операцию самостоятельно. Проверяем возможное наличие "иголки" по всем возможным начальным позициям
+        // в "стоге", начиная с arg_pos.
+        const string &arg_str_haystack_std = arg_vals.arg_haystack->GetValue(),
+                     &arg_str_needle_std = arg_vals.arg_needle->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf(),
+               needle_size = arg_vals.arg_needle->SymbolSizeOf();
 
-        if (needle_size > haystack_size || arg_pos > (haystack_size - needle_size))
+        if (needle_size > haystack_size || arg_vals.arg_pos > (haystack_size - needle_size))
             // Подстроку нужной длины с такой позиции arg_pos найти заведомо невозможно.
-            return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(string::npos)));
         if (needle_size == 0)
             // Считаем, что пустая подстрока существует всегда и везде, то есть у любой строки с любой её существующей позиции.
-            return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_pos)));
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_vals.arg_pos)));
 
-        size_t needle_byte_size = arg_str_needle->BytePosAfterEnd();
-        for (size_t i = arg_pos; i <= haystack_size - needle_size; ++i)
+        size_t needle_byte_size = arg_vals.arg_needle->ByteSizeOf();
+        for (size_t i = arg_vals.arg_pos; i <= haystack_size - needle_size; ++i)
         {
             // Проверяем наличие подстроки arg_str_needle_std в строке arg_str_haystack_std, начиная с UTF-8-символа с индексом i.
-            size_t haystack_substr_pos = arg_str_haystack->SymbolBytePos(i);
+            size_t haystack_substr_pos = arg_vals.arg_haystack->SymbolBytePos(i);
             if (CompareUTF8Substr(arg_str_haystack_std, haystack_substr_pos, needle_byte_size,
                                   arg_str_needle_std, 0, needle_byte_size) == 0)
                 // Подстрока "иголка" обнаружилась в "стогу".
@@ -769,192 +774,181 @@ namespace runtime
     
     // rfind(arg_str_haystack, arg_str_needle, arg_pos) - поиск последнего вхождения подстроки arg_str_needle в строку arg_str_haystack,
     // заканчивая поиск позицией arg_pos (то есть поиск проводится внутри префикса arg_str_haystack до символа arg_pos включительно).
-    ObjectHolder StringOpsInstance::MethodRFind(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodRFind(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, (std::numeric_limits<size_t>::max)());
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую готовую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::rfind, context);
+        variant<FindArgsT, ObjectHolder> prologue_result =
+            ProcessFindPrologue(method, actual_args, &string::rfind, (numeric_limits<size_t>::max)(), context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
         // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
-        // используем другой способ выполнения операции. Сначала перекодируем искомую подстроку также в UTF-8, а затем сканируем "стог"
-        // на предмет поиска символов из "иголки" своими собственными средствами.
-        ObjectHolder needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needle = needle_holder.TryAs<runtime::String>();
-        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
-                          &arg_str_needle_std = arg_str_needle->GetValue();
-        size_t haystack_size = arg_str_haystack->SymbolSizeOf(),
-               needle_size = arg_str_needle->SymbolSizeOf(),
-               arg_pos = std::get<2>(args_values);
+        // используем другой способ выполнения операции. Сканируем "стог" на предмет поиска символов из "иголки" своими
+        // собственными средствами.
+        const string &arg_str_haystack_std = arg_vals.arg_haystack->GetValue(),
+                     &arg_str_needle_std = arg_vals.arg_needle->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf(),
+               needle_size = arg_vals.arg_needle->SymbolSizeOf();
 
         if (needle_size == 0)
             // Считаем, что пустая подстрока существует всегда и везде, то есть у любой строки с любой её существующей позиции.
-            return ObjectHolder::Own(runtime::Number(static_cast<int>(min(arg_pos, haystack_size))));
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(min(arg_vals.arg_pos, haystack_size))));
         if (needle_size > haystack_size)
             // Строка слишком короткая, в такой строке требуемой подстроки явно не существует.
             return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
 
         size_t min_arg_pos = haystack_size - needle_size;
-        if (arg_pos > min_arg_pos)
-            arg_pos = min_arg_pos;
-        size_t needle_byte_size = arg_str_needle->BytePosAfterEnd();
+        if (arg_vals.arg_pos > min_arg_pos)
+            arg_vals.arg_pos = min_arg_pos;
+        size_t needle_byte_size = arg_vals.arg_needle->ByteSizeOf();
         while (true)
         {
-            size_t haystack_substr_pos = arg_str_haystack->SymbolBytePos(arg_pos);
+            size_t haystack_substr_pos = arg_vals.arg_haystack->SymbolBytePos(arg_vals.arg_pos);
             if (CompareUTF8Substr(arg_str_haystack_std, haystack_substr_pos, needle_byte_size,
                 arg_str_needle_std, 0, needle_byte_size) == 0)
                 // Подстрока "иголка" обнаружилась в "стогу".
-                return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_pos)));
+                return ObjectHolder::Own(runtime::Number(static_cast<int>(arg_vals.arg_pos)));
 
-            if (arg_pos == 0)
+            if (arg_vals.arg_pos == 0)
                 break;
-            --arg_pos;
+            --arg_vals.arg_pos;
         }
         // Найти требуемую подстроку в указанной строке не удалось.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(string::npos)));
     }
     
     // find_first_of(arg_str_haystack, arg_str_needles, arg_pos) - поиск первого вхождения любого символа строки arg_str_needles в
     // строку arg_str_haystack, начиная с позиции arg_pos.
-    ObjectHolder StringOpsInstance::MethodFindFirstOf
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodFindFirstOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_first_of, context);
+        variant<FindArgsT, ObjectHolder> prologue_result = ProcessFindPrologue(method, actual_args, &string::find_first_of, 0, context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
         // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
-        // используем другой способ выполнения операции. Сначала перекодируем искомую подстроку также в UTF-8, а затем сканируем "стог"
-        // на предмет поиска символов из "иголки" своими собственными средствами.
-        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
-        const std::string& haystack_std = arg_str_haystack->GetValue();
-        size_t arg_pos = std::get<2>(args_values),
-               haystack_size = arg_str_haystack->SymbolSizeOf();
+        // используем иной способ выполнения операции. Сканируем "стог" на предмет поиска символов из "иголки"
+        // своими собственными средствами.
+        const string& haystack_std = arg_vals.arg_haystack->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf();
 
-        for (size_t i = arg_pos; i < haystack_size; ++i)
+        for (size_t i = arg_vals.arg_pos; i < haystack_size; ++i)
         {
-            if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) != std::string::npos)
-                // Символ "стога" с индексом i обнаружился среди "иголок" arg_str_needles.
+            if (arg_vals.arg_needle->FindSymbol
+                    (haystack_std, arg_vals.arg_haystack->SymbolBytePos(i), arg_vals.arg_haystack->SymbolByteSize(i)) != string::npos)
+                // Символ "стога" с индексом i обнаружился среди "иголок" arg_vals.arg_needle.
                 return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
         }
-        // Ни один символ из набора "иголок" arg_str_needles не найден в arg_str_haystack.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        // Ни один символ из набора "иголок" arg_str_needles не найден в arg_vals.arg_haystack.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(string::npos)));
     }
     
     // find_first_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск первого вхождения любого символа не из строки arg_str_needle в
     // строку arg_str_haystack, начиная с позиции arg_pos.
-    ObjectHolder StringOpsInstance::MethodFindFirstNotOf
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodFindFirstNotOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_first_not_of, context);
+        variant<FindArgsT, ObjectHolder> prologue_result = ProcessFindPrologue(method, actual_args, &string::find_first_not_of, 0, context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
-        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
-        // используем альтернативный метод выполнения операции собственными средствами.
-        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
-        const std::string& haystack_std = arg_str_haystack->GetValue();
-        size_t arg_pos = std::get<2>(args_values),
-               haystack_size = arg_str_haystack->SymbolSizeOf();
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление, используем альтернативный
+        // метод выполнения операции собственными средствами.
+        const string& haystack_std = arg_vals.arg_haystack->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf();
 
-        for (size_t i = arg_pos; i < haystack_size; ++i)
+        for (size_t i = arg_vals.arg_pos; i < haystack_size; ++i)
         {
-            if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) == std::string::npos)
-                // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_str_needles.
+            if (arg_vals.arg_needle->FindSymbol
+                    (haystack_std, arg_vals.arg_haystack->SymbolBytePos(i), arg_vals.arg_haystack->SymbolByteSize(i)) == string::npos)
+                // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_vals.arg_needle.
                 return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
         }
-        // В "стогу" arg_str_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_str_needles.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        // В "стогу" arg_vals.arg_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_vals.arg_needle.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(string::npos)));
     }
     
-    // find_last_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа строки arg_str_needle в
-    // строку arg_str_haystack, заканчивая поиск позицией arg_pos.
-    ObjectHolder StringOpsInstance::MethodFindLastOf
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    // find_last_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа строки
+    // arg_str_needle_list в строку arg_str_haystack, начиная поиск от её начала и заканчивая позицией arg_pos.
+    ObjectHolder StringOpsInstance::MethodFindLastOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_last_of, context);
+        variant<FindArgsT, ObjectHolder> prologue_result =
+            ProcessFindPrologue(method, actual_args, &string::find_last_of, (numeric_limits<size_t>::max)(), context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
         // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление, используем другой способ
         // выполнения поисковой операции.
-        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
-        const std::string& haystack_std = arg_str_haystack->GetValue();
-        size_t arg_pos = std::get<2>(args_values),
-               haystack_size = arg_str_haystack->SymbolSizeOf();
+        const string& haystack_std = arg_vals.arg_haystack->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf();
 
         if (haystack_size > 0)
         {
-            for (size_t i = haystack_size - 1; i >= arg_pos; --i)
+            size_t i = min(arg_vals.arg_pos, haystack_size - 1);
+            while (true)
             {
-                if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) != std::string::npos)
-                    // Символ "стога" с индексом i обнаружился среди "иголок" arg_str_needles.
+                if (arg_vals.arg_needle->FindSymbol
+                        (haystack_std, arg_vals.arg_haystack->SymbolBytePos(i), arg_vals.arg_haystack->SymbolByteSize(i)) != string::npos)
+                    // Символ "стога" с индексом i обнаружился среди "иголок" arg_vals.arg_needle.
                     return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+
                 if (i == 0)
                     break;
+                --i;
             }
         }
-        // Ни один символ из набора "иголок" arg_str_needles не найден в arg_str_haystack.
-        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        // Ни один символ из набора "иголок" arg_vals.arg_needle не найден в arg_vals.arg_haystack.
+        return ObjectHolder::Own(runtime::Number(static_cast<int>(string::npos)));
     }
 
-    // find_last_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа не из строки arg_str_needle в
-    // строку arg_str_haystack, заканчивая поиск позицией arg_pos.
-    ObjectHolder StringOpsInstance::MethodFindLastNotOf
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    // find_last_not_of(arg_str_haystack, arg_str_needle_list, arg_pos) - поиск последнего вхождения любого символа не из строки
+    // arg_str_needle_list в строку arg_str_haystack, начиная от её старта и заканчивая поиск позицией arg_pos.
+    ObjectHolder StringOpsInstance::MethodFindLastNotOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
-        FindArgsT args_values = ExtractFindParams(method, actual_args, context, 0);
-        runtime::String* arg_str_haystack = std::get<0>(args_values);
-        if (arg_str_haystack->encoding != UTF_8_ENCODING)
-            // Для однобайтовых строк используем соответствующую функцию из STL std::string.
-            return MethodCommonFindUnibyte(args_values, actual_args[1], &std::string::find_last_not_of, context);
+        variant<FindArgsT, ObjectHolder> prologue_result =
+            ProcessFindPrologue(method, actual_args, &string::find_last_not_of, (numeric_limits<size_t>::max)(), context);
+        if (holds_alternative<ObjectHolder>(prologue_result))
+            return get<ObjectHolder>(prologue_result);  // Поисковая операция полностью выполнена - выходим и возвращаем результат.
 
-        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление,
-        // используем альтернативный метод выполнения операции собственными средствами.
-        ObjectHolder needles_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        runtime::String* arg_str_needles = needles_holder.TryAs<runtime::String>();
-        const std::string& haystack_std = arg_str_haystack->GetValue();
-        size_t arg_pos = std::get<2>(args_values),
-               haystack_size = arg_str_haystack->SymbolSizeOf();
+        FindArgsT& arg_vals = get<FindArgsT>(prologue_result);
+        // Если аргумент arg_str_haystack (в котором будет производиться поиск) имеет UTF-8-представление, реализуем поисковую
+        // операцию собственноручно.
+        const string& haystack_std = arg_vals.arg_haystack->GetValue();
+        size_t haystack_size = arg_vals.arg_haystack->SymbolSizeOf();
 
         if (haystack_size > 0)
         {
-            for (size_t i = haystack_size - 1; i >= arg_pos; --i)
+            size_t i = min(arg_vals.arg_pos, haystack_size - 1);
+            while (true)
             {
-                if (arg_str_needles->FindSymbol(haystack_std, arg_str_haystack->SymbolBytePos(i), arg_str_haystack->SymbolByteSize(i)) == std::string::npos)
-                    // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_str_needles.
+                if (arg_vals.arg_needle->FindSymbol
+                        (haystack_std, arg_vals.arg_haystack->SymbolBytePos(i), arg_vals.arg_haystack->SymbolByteSize(i)) == string::npos)
+                    // Обнаружен символ "стога" с индексом i, которого нет среди "иголок" arg_vals.arg_needle.
                     return ObjectHolder::Own(runtime::Number(static_cast<int>(i)));
+
                 if (i == 0)
                     break;
+                --i;
             }
         }
-        // В "стогу" arg_str_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_str_needles.
+        // В "стогу" arg_str_haystack нет ни одного символа, которого бы не было в наборе "иголок" arg_str_needle_list.
         return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
     
     // starts_with(arg_str_test, arg_str_start) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test начинается с подстроки arg_str_start.
-    ObjectHolder StringOpsInstance::MethodStartsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodStartsWith(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "StartsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
         runtime::String* arg_str_haystack = actual_args[0].TryAs<runtime::String>();
         // Если требуется, транскодируем "иголку" в кодировку "стога".
-        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
-                          &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
-        // Для однобайтовых кодировок используем стандартный starts_with и всё содержимое строк (их контейнеров). Для многобайтовых UTF-8 строк
-        // используем только их начальные UTF-8-корректные части.
+        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(method, actual_args[1], context, arg_str_haystack->encoding);
+        const string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                     &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
+        // Для однобайтовых кодировок используем стандартный starts_with и всё содержимое строк (их контейнеров). Для многобайтовых
+        // UTF-8 строк используем только их начальные UTF-8-корректные части.
         bool starts_with_result;
         if (arg_str_haystack->encoding != UTF_8_ENCODING)
         {
@@ -964,8 +958,9 @@ namespace runtime
         {
             runtime::String* arg_str_needle = arg_str_needle_holder.TryAs<runtime::String>();
             if (arg_str_needle->SymbolSizeOf() > arg_str_haystack->SymbolSizeOf())
-                return ObjectHolder::Own(runtime::Bool(false)); // Предполагаемый префикс слишком длинный, так что началом "стога" он быть явно не может.
-            size_t needle_byte_length = arg_str_needle->BytePosAfterEnd();
+                // Предполагаемый префикс слишком длинный, так что началом "стога" он быть явно не может.
+                return ObjectHolder::Own(runtime::Bool(false));
+            size_t needle_byte_length = arg_str_needle->ByteSizeOf();
 
             starts_with_result = (arg_str_haystack_std.compare(0, needle_byte_length, arg_str_needle_std, 0, needle_byte_length) == 0);
         }
@@ -973,16 +968,16 @@ namespace runtime
     }
     
     // ends_with(arg_str_test, arg_str_end) - предикат, возвращающий "ИСТИНУ", если строка arg_str_test заканчиватеся подстрокой arg_str_end.
-    ObjectHolder StringOpsInstance::MethodEndsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodEndsWith(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "EndsWith"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
         runtime::String* arg_str_haystack = actual_args[0].TryAs<runtime::String>();
         // Если требуется, транскодируем "иголку" в кодировку "стога".
-        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(actual_args[1], context, arg_str_haystack->encoding);
-        const std::string &arg_str_haystack_std = arg_str_haystack->GetValue(),
-                          &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
+        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(method, actual_args[1], context, arg_str_haystack->encoding);
+        const string &arg_str_haystack_std = arg_str_haystack->GetValue(),
+                     &arg_str_needle_std = arg_str_needle_holder.TryAs<runtime::String>()->GetValue();
         // Для однобайтовых кодировок используем стандартный ends_with и всё содержимое строк (их контейнеров). Для многобайтовых UTF-8 строк
         // используем только их начальные UTF-8-корректные части.
         bool ends_with_result;
@@ -993,10 +988,10 @@ namespace runtime
         else
         {
             runtime::String* arg_str_needle = arg_str_needle_holder.TryAs<runtime::String>();
-            size_t haystack_byte_length = arg_str_haystack->BytePosAfterEnd(),                
-                   needle_byte_length = arg_str_needle->BytePosAfterEnd();
+            size_t haystack_byte_length = arg_str_haystack->ByteSizeOf(),
+                   needle_byte_length = arg_str_needle->ByteSizeOf();
             if (arg_str_needle->SymbolSizeOf() > arg_str_haystack->SymbolSizeOf() || needle_byte_length > haystack_byte_length)
-                return ObjectHolder::Own(runtime::Bool(false)); // Предполагаемый суффикс слишком длинный, так что началом "стога" он быть явно не может.
+                return ObjectHolder::Own(runtime::Bool(false)); // Предполагаемый суффикс слишком длинный, так что концом "стога" он быть явно не может.
 
             size_t haystack_suffix_pos = haystack_byte_length - needle_byte_length;
             ends_with_result = (arg_str_haystack_std.compare(haystack_suffix_pos, needle_byte_length, arg_str_needle_std, 0, needle_byte_length) == 0);
@@ -1005,14 +1000,32 @@ namespace runtime
     }
     
     // contains(arg_str_haystack, arg_str_needle) - предикат, возвращающий "ИСТИНУ", если подстрока arg_str_needle входит в строку arg_str_haystack.
-    ObjectHolder StringOpsInstance::MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodContains(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Contains"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 2, actual_args);
 
-        std::string arg_str_haystack = actual_args[0].TryAs<runtime::String>()->GetValue(),
-                    arg_str_needle = actual_args[1].TryAs<runtime::String>()->GetValue();
-        return ObjectHolder::Own(runtime::Bool(arg_str_haystack.find(arg_str_needle) != std::string::npos));
+        runtime::String* arg_str_haystack = actual_args[0].TryAs<runtime::String>();
+        // Если требуется, транскодируем "иголку" в кодировку "стога". При совпадении кодировок ConvertTranscodeTo() возвращает свой первый аргумент в
+        // новом контейнере (то есть, просто создавая на него новый разделяемый указатель) как есть, без изменений.
+        ObjectHolder arg_str_needle_holder = ConvertTranscodeTo(method, actual_args[1], context, arg_str_haystack->encoding);
+        runtime::String* arg_str_needle = arg_str_needle_holder.TryAs<runtime::String>();
+
+        // Для однобайтовых кодировок используем всё содержимое строк (их контейнеров). Для многобайтовых UTF-8 строк используем только их начальные
+        // UTF-8-корректные части.
+        if (arg_str_haystack->encoding != UTF_8_ENCODING)
+        {
+            const string &arg_haystack_std = arg_str_haystack->GetValue(),
+                         &arg_needle_std = arg_str_needle->GetValue();
+            return ObjectHolder::Own(runtime::Bool(arg_haystack_std.find(arg_needle_std) != string::npos));
+        }
+        else
+        {
+            // Выделяем значащие части UTF-8-строк "стога" и "иголки".
+            string_view arg_haystack_mean = arg_str_haystack->MeaningPart(),
+                        arg_needle_mean = arg_str_needle->MeaningPart();
+            return ObjectHolder::Own(runtime::Bool(arg_haystack_mean.find(arg_needle_mean) != string::npos));
+        }
     }
     
     // not_found() - возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске (если найти искомый образец не удалось).
@@ -1033,38 +1046,28 @@ namespace runtime
         if (actual_args.size() > 4) // Допускается от 3 до 4 параметров (включительно). Только arg_count может быть опущен.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Insert может принимать от 3 до 4 параметров");
 
-        runtime::String* arg_str_ptr = actual_args[0].TryAs<runtime::String>();
-        runtime::Number* arg_pos_ptr = actual_args[1].TryAs<runtime::Number>();
-        runtime::String* arg_str_ins_ptr = actual_args[2].TryAs<runtime::String>();
+        runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        if (!arg_str)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метода Insert не задана исходная строка");
+        // Если требуется, транскодируем вставляемую строку arg_str_ins в кодировку целевой arg_str.
+        ObjectHolder arg_str_ins_holder = ConvertTranscodeTo(method, actual_args[2], context, arg_str->encoding);
+        runtime::String* arg_str_ins = arg_str_ins_holder.TryAs<runtime::String>();
+        size_t arg_byte_pos = ExtractPosParam(method, actual_args, 1, arg_str, context, string::npos).first;
+        size_t arg_count = ExtractPositiveIntParam(method, actual_args, 3, context, 1).first; // По умолчанию вставляется один экземпляр arg_str_ins.
 
-        if (!arg_str_ptr || !arg_str_ins_ptr)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метод Insert не заданы исходная или вставляемая строка");
-        if (!arg_pos_ptr)
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метод Insert не задан индекс точки вставки");
-
-        std::string arg_str = arg_str_ptr->GetValue();
-        std::string arg_str_ins = arg_str_ins_ptr->GetValue();
-        size_t arg_pos = arg_pos_ptr->GetIntValue();
-        if (arg_pos < 0 || arg_pos > arg_str.size())
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Insert : указанная позиция в строке недопустима");
-
-        size_t arg_count = 1; // По умолчанию вставляется один экземпляр arg_str_ins.
-        if (actual_args.size() >= 4)
-        { // Явно задан arg_count.
-            const runtime::Number* arg_count_ptr = actual_args[3].TryAs<runtime::Number>();
-            if (!arg_count_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Количество экземпляров должно быть числом");
-            int arg_count_int = arg_count_ptr->GetIntValue();
-            if (arg_count_int < 0)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Количество копий должно быть неотрицательным");
-            arg_count = static_cast<size_t>(arg_count_int);
-        }
-
+        std::string arg_std = arg_str->GetValue();
+        std::string_view arg_ins_view = arg_str_ins->MeaningPart();
+        // Формируем вставляемую строку из arg_count экземпляров строки arg_ins_view.
         std::string summ_insert_str;
         for (size_t i = 1; i <= arg_count; ++i)
-            summ_insert_str += arg_str_ins;
+            summ_insert_str += arg_ins_view;
+        // Порождаем строку-результат, выполняя вставку summ_insert_str в байтовую позицию arg_byte_pos строки-аргумента.
+        runtime::String result_str(move(arg_std.insert(arg_byte_pos, summ_insert_str)));
+        result_str.encoding = arg_str->encoding;
+        if (result_str.encoding == UTF_8_ENCODING)    // Для кодировки UTF-8 также составим карту размещения символов.
+            result_str.utf8_map = BuildUTF8Map(result_str.GetValue());
 
-        return ObjectHolder::Own(runtime::String(arg_str.insert(arg_pos, summ_insert_str)));
+        return ObjectHolder::Own(move(result_str));
     }
     
     // erase(arg_str, arg_pos, arg_length) - удаление arg_length символов из строки arg_str, начиная с положения arg_pos в ней.
@@ -1077,12 +1080,15 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Erase может принимать от 1 до 3 параметров");
 
         runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        if (!arg_str)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метода Erase не задана исходная строка");
         std::string arg_str_std = arg_str->GetValue();
         // Считываем байтовое положение и байтовую длину удаляемой подстроки с учётом типа используемой в строке-аргументе кодировки.
-        auto [arg_byte_pos, arg_byte_length] = ExtractPosSize(actual_args, 1, arg_str, context);
+        auto [arg_byte_pos, arg_byte_length] = ExtractPosSize(method, actual_args, 1, arg_str, context);
         // Выполняем операцию. Если требуется, также пересоставим карту распределения многобайтовых символов в UTF-8-строке.
         runtime::String erased_str(move(arg_str_std.erase(arg_byte_pos, arg_byte_length)));
-        if (arg_str->encoding == UTF_8_ENCODING)
+        erased_str.encoding = arg_str->encoding;
+        if (erased_str.encoding == UTF_8_ENCODING)
             erased_str.utf8_map = BuildUTF8Map(erased_str.GetValue());
 
         return ObjectHolder::Own(move(erased_str));
@@ -1090,7 +1096,7 @@ namespace runtime
     
     // replace(arg_str, arg_pos, arg_count, arg_str_ins, arg_pos_ins, arg_count_ins) - замена arg_count символов строки arg_str, начиная с
     // положения arg_pos, на arg_count_ins символов строки arg_str_ins, взятых с позиции arg_pos_ins в ней.
-    ObjectHolder StringOpsInstance::MethodReplace(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodReplace(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Replace"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ,
                           MethodParamType::PARAM_TYPE_ANY, 4, actual_args);
@@ -1098,27 +1104,30 @@ namespace runtime
             // Допускается от 4 до 6 аргументов. arg_pos_ins и arg_count_ins могут не указаны явно и быть приняты по умолчанию.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Replace может принимать от 4 до 6 параметров");
 
-        runtime::String* arg_str_ptr = actual_args[0].TryAs<runtime::String>();
-        if (!arg_str_ptr)
+        runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        if (!arg_str)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метод Replace не заданы исходная строка");
         // Считываем из параметров и перекодируем заменяющую строку в кодировку принимающей.
-        runtime::String* arg_str_ins_ptr = ConvertTranscodeTo(actual_args[3], context, arg_str_ptr->encoding).TryAs<runtime::String>();
+        ObjectHolder arg_str_repl_holder = ConvertTranscodeTo(method, actual_args[3], context, arg_str->encoding);
+        runtime::String* arg_str_repl = arg_str_repl_holder.TryAs<runtime::String>();
+
         // Извлекаем из аргументов метода позиции и длины оперативных подстрок - удаляемой и заменяющей.
-        auto [arg_pos, arg_count] = ExtractPosSize(actual_args, 1, arg_str_ptr, context);
-        auto [arg_pos_ins, arg_count_ins] = ExtractPosSize(actual_args, 4, arg_str_ins_ptr, context);
+        auto [arg_pos, arg_count] = ExtractPosSize(method, actual_args, 1, arg_str, context);
+        auto [arg_pos_ins, arg_count_ins] = ExtractPosSize(method, actual_args, 4, arg_str_repl, context);
+
         // Все параметры извлечены и проверены - можно выполнять операцию.
-        std::string arg_str = arg_str_ptr->GetValue();
-        const std::string& arg_str_ins = arg_str_ins_ptr->GetValue();
-        runtime::String result_str(arg_str.replace(arg_pos, arg_count, arg_str_ins, arg_pos_ins, arg_count_ins));
-        result_str.encoding = arg_str_ptr->encoding;
-        if (arg_str_ptr->encoding == UTF_8_ENCODING)
+        string arg_str_std = arg_str->GetValue();
+        string_view arg_str_repl_std = arg_str_repl->MeaningPart();
+        runtime::String result_str(arg_str_std.replace(arg_pos, arg_count, arg_str_repl_std, arg_pos_ins, arg_count_ins));
+        result_str.encoding = arg_str->encoding;
+        if (result_str.encoding == UTF_8_ENCODING)
             result_str.utf8_map = BuildUTF8Map(result_str.GetValue());
 
         return ObjectHolder::Own(move(result_str));
     }
     
     // replicate(arg_str, arg_count) - конструирование строки из arg_count копий строки arg_str.
-    ObjectHolder StringOpsInstance::MethodReplicate(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodReplicate(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -1126,38 +1135,61 @@ namespace runtime
         if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Replicate может принимать 1 или 2 параметра");
 
-        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
-        int arg_count = 1; // По умолчанию создаём одну копию аргумента.
-        if (actual_args.size() >= 2)
-        { // Явно указан arg_count.
-            const runtime::Number* arg_count_ptr = actual_args[1].TryAs<runtime::Number>();
-            if (!arg_count_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Количество копий строки должно быть числом");
-            arg_count = arg_count_ptr->GetIntValue();
-            if (arg_count < 0)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Число копий должно быть неотрицательным");
-        }
+        runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        if (!arg_str)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Для метод Replicate не заданы исходная строка");
+        string_view arg_std = arg_str->MeaningPart();
+        size_t arg_count = ExtractPositiveIntParam(method, actual_args, 1, context, 1).first; // По умолчанию создаём одну копию аргумента.
 
         std::string result;
-        for (int i = 1; i <= arg_count; ++i)
-            result += arg_str;
+        for (size_t i = 1; i <= arg_count; ++i)
+            result += arg_std;
+        runtime::String result_str(move(result));
+        result_str.encoding = arg_str->encoding;
+        if (result_str.encoding == UTF_8_ENCODING)
+            result_str.utf8_map = BuildUTF8Map(result_str.GetValue());
 
-        return ObjectHolder::Own(runtime::String(move(result)));
+        return ObjectHolder::Own(move(result_str));
     }
     
     // reverse(arg_str) - обращение (реверсирование) строки-аргумента arg_str.
-    ObjectHolder StringOpsInstance::MethodReverse(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodReverse(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Reverse"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
         
-        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
-        std::reverse(arg_str.begin(), arg_str.end());
-        return ObjectHolder::Own(runtime::String(move(arg_str)));
+        runtime::String* arg_str = actual_args[0].TryAs<runtime::String>();
+        if (arg_str->IsUTF8())
+        { // UTF-8. Производим обращение сами.
+            UTF8Map result_utf8_map;
+            string result;
+            for (size_t symb_number = arg_str->SymbolSizeOf(); symb_number > 0; --symb_number)
+            {                
+                if (string_view current_symb_view = arg_str->SymbolView(symb_number - 1); !current_symb_view.empty())
+                {
+                    result_utf8_map.begin_map.push_back(result.size());
+                    result_utf8_map.last_symbol_size = current_symb_view.size();
+                    result += current_symb_view;
+                }
+            }
+            runtime::String result_str(move(result));
+            result_str.encoding = UTF_8_ENCODING;
+            result_str.utf8_map = move(result_utf8_map);
+            return ObjectHolder::Own(move(result_str));
+        }
+        else
+        { // Однобайтовая кодировка. Используем стандартный обращаюший алгоритм из STL.
+            string arg_std = arg_str->GetValue();
+            reverse(arg_std.begin(), arg_std.end());
+            runtime::String result_str(move(arg_std));
+            result_str.encoding = arg_str->encoding;
+            return ObjectHolder::Own(move(result_str));
+        }
     }
 
     // asc(arg_str, arg_pos) - получение ASCII-кода символа строки arg_str, находящегося в позиции arg_pos.
-    ObjectHolder StringOpsInstance::MethodAsc(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    // Строка вне зависимости от кодировки всегда воспринимаентся как последовательность байт (однобайтовых символов).
+    ObjectHolder StringOpsInstance::MethodAsc(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -1165,21 +1197,14 @@ namespace runtime
         if (actual_args.size() > 2) // Допускается 1 или 2 параметра.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, "Метод Asc может принимать 1 или 2 параметра");
 
-        std::string arg_str = actual_args[0].TryAs<runtime::String>()->GetValue();
-        int arg_pos = 0; // Значение начальной позиции интересующего нас символа по умолчанию.
-
-        if (actual_args.size() >= 3)
-        { // Явно задан arg_pos.
-            const runtime::Number* arg_pos_ptr = actual_args[2].TryAs<runtime::Number>();
-            if (!arg_pos_ptr)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Позиция в строке должна быть числом");
-            arg_pos = arg_pos_ptr->GetIntValue();
-            if (arg_pos < 0 || arg_pos >= static_cast<int>(arg_str.size()))
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, "Задана недопустимая позиция в строке");
-        }
+        const string& arg_std = actual_args[0].TryAs<runtime::String>()->GetValue();
+        // По умолчанию будем преобразовывать символ в начальной (нулевой) позиции строки.
+        size_t arg_pos = ExtractPositiveIntParam(method, actual_args, 1, context, 0).first;
+        if (arg_pos >= arg_std.size())
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_VALUE, method + " : Указанная позиция находится за пределами строки");
 
         // Все параметры предстоящей операции определены и проверены. Можно выполнять.
-        return ObjectHolder::Own(runtime::Number(arg_str[arg_pos]));
+        return ObjectHolder::Own(runtime::Number(arg_std[arg_pos]));
     }
     
     // chr(arg_code, arg_code, ...) - генерация строки из символов с ASCII-кодами arg_code.
@@ -1200,7 +1225,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::String(move(result)));
     }
 
-    // utf8_char(arg_code, arg_code, ...) - генерация строки из символов с многобайтовыми кодами (в формате UTF-8) arg_code.
+    // mb_chr(arg_code, arg_code, ...) - генерация строки из символов с многобайтовыми кодами (в формате UTF-8) arg_code.
     ObjectHolder StringOpsInstance::MethodMbChr(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "UTF8Chr"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ,
@@ -1213,7 +1238,7 @@ namespace runtime
             uint32_t utf8_code_value = static_cast<uint32_t>(actual_args[i].TryAs<runtime::Number>()->GetIntValue());
             std::string utf8_code_str = ConvSymbToUTF8(utf8_code_value);
             if (utf8_code_str.size() > MAX_UNICODE_LENGTH)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, "Превышена максимальная длина UTF-8-кода символа");
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, method + " : Превышена максимальная длина UTF-8-кода символа");
 
             result_utf8_map.begin_map.push_back(result_str.size());
             result_utf8_map.last_symbol_size = utf8_code_str.size();
@@ -1226,7 +1251,7 @@ namespace runtime
         return ObjectHolder::Own(move(utf8_result_str));
     }
 
-    // utf8_asc(arg_str, arg_pos) - получение целочисленного многобайтового кода символа строки arg_str, находящегося в позиции arg_pos.
+    // mb_asc(arg_str, arg_pos) - получение целочисленного многобайтового кода символа строки arg_str, находящегося в позиции arg_pos.
     // Предполагается, что строка-аргумент состоит из многобайтовых символов в кодировке UTF-8.
     // Если строка однобайтовая, позиция рассматривается как байтовый индекс (исчисляется в байтах от нуля) положения начального символа
     // гипотетического UTF-8-кода. Если же строка имеет кодировку UTF-8, то arg_pos - индекс некоторого UTF-8 (многобайтового) символа в ней,
@@ -1454,7 +1479,7 @@ namespace runtime
     }
     
     // Назначение кодировки для текстового значения.
-    ObjectHolder StringOpsInstance::MethodSetEncoding(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodSetEncoding(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -1469,9 +1494,9 @@ namespace runtime
         {
             const ObjectHolder& encoding_holder = actual_args[1];
             if (encoding_holder.TryAs<runtime::Number>())
-                set_encoding_id = CheckEncodingID(encoding_holder, context);
+                set_encoding_id = CheckEncodingID(method, encoding_holder, context);
             else if (encoding_holder.TryAs<runtime::String>())
-                set_encoding_id = CheckEncodingName(encoding_holder, context);
+                set_encoding_id = CheckEncodingName(method, encoding_holder, context);
             else
                 ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE, "Кодировка может быть задана либо числовым индексом, либо строковым именем");
         }
@@ -1512,12 +1537,12 @@ namespace runtime
 
         if (compare_mode_str->encoding != first_compare_str->encoding)
         { // Если кодировка сравнения задана в явном виде, конвертируем оба сравниваемых аргумента в неё. 
-            real_first_arg = ConvertTranscodeTo(real_first_arg, context, compare_mode_str->encoding);
+            real_first_arg = ConvertTranscodeTo(method, real_first_arg, context, compare_mode_str->encoding);
             first_compare_str = real_first_arg.TryAs<runtime::String>();
         }
         if (second_compare_str->encoding != first_compare_str->encoding)
         { // При несовпадении кодировок операндов сравнительной операции приводим второй операнд к кодировке первого.
-            real_second_arg = ConvertTranscodeTo(real_second_arg, context, first_compare_str->encoding);
+            real_second_arg = ConvertTranscodeTo(method, real_second_arg, context, first_compare_str->encoding);
             second_compare_str = real_second_arg.TryAs<runtime::String>();
         }
 
@@ -1542,7 +1567,7 @@ namespace runtime
     }
 
     // Перекодировка строк из одной кодировки в другую. Целевая кодировка выбирается указанием её условного номера вторым параметром метода.
-    ObjectHolder StringOpsInstance::MethodEncTranscode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodEncTranscode(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -1555,9 +1580,9 @@ namespace runtime
         if (const runtime::String* encode_set_str = actual_args[1].TryAs<runtime::String>())
             dest_encoding = encode_set_str->encoding;
         else
-            dest_encoding = &::encodings_data[static_cast<size_t>(CheckEncodingID(actual_args[1], context) - 1)];
+            dest_encoding = &::encodings_data[static_cast<size_t>(CheckEncodingID(method, actual_args[1], context) - 1)];
         // Наконец, сама перекодировочная процедура и возврат результата.
-        return ConvertTranscodeTo(actual_args[0], context, dest_encoding);
+        return ConvertTranscodeTo(method, actual_args[0], context, dest_encoding);
     }
 
     // Метод преобразует строку (свой первый аргумент) в массив целых чисел, каждый элемент которого равен коду соответствующего символа входной строки.
@@ -1566,7 +1591,7 @@ namespace runtime
     // Можно явно указать один из этих двух способов преобразования (независимо от кодировки входной строки) с помощью необязательного второго аргумента
     // метода. Если он имеется и равен True, то всегда применяется UTF-8-конверсия. Если же он есть и равен False, всегда используется побайтовое
     // преобразование.
-    ObjectHolder StringOpsInstance::MethodToIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodToIntArray(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         constexpr MethodParamCheckMode param_check_mode = static_cast<MethodParamCheckMode>
             (MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ | MethodParamCheckMode::PARAM_CHECK_TYPE_ONLY_FOR_MIN_ARGS);
@@ -1576,21 +1601,21 @@ namespace runtime
 
         const runtime::String* arg_input_str = actual_args[0].TryAs<runtime::String>();
         bool is_from_utf8 = arg_input_str->encoding == UTF_8_ENCODING;
-        const std::string& arg_input_std = arg_input_str->GetValue();
+        const string& arg_input_std = arg_input_str->GetValue();
 
         if (actual_args.size() > 1) // Есть аргумент, явно указывающий "кодировочный" режим работы метода.
             is_from_utf8 = runtime::IsTrue(actual_args[1]);
 
-        std::vector<uint32_t> output_codes;
+        vector<uint32_t> output_codes;
         size_t input_str_pos = 0;
         while (input_str_pos < arg_input_std.size())
         {
             if (is_from_utf8)
             { // Входная строка имеет UTF-8-кодировку.
-                std::pair<uint32_t, size_t> from_utf8_result = ConvSymbFromUTF8(arg_input_std, input_str_pos);
+                pair<uint32_t, size_t> from_utf8_result = ConvSymbFromUTF8(arg_input_std, input_str_pos);
                 if (from_utf8_result.second == 0)
                 { // Ошибка извлечения из входной строки очередного UTF-8-юникода.
-                    std::string err_mess =
+                    string err_mess =
                         ThrowMessages::ConstructThrowText("%1"s + std::to_string(input_str_pos), {ThrowMessageNumber::THRM_UTF8_EXTRACT_ERROR});
                     ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, err_mess);
                 }
@@ -1614,7 +1639,7 @@ namespace runtime
     // Конструирует строку из целочисленного массива. Второй необязательный аргумент - желаемая кодировка. Если он не указан, кодировка определяется
     // автоматически по следующему принципу: если все значения массива лежат в закрытом диапазоне [0; 255], то создаётся однобайтовая строка без назначенной
     // кодировки. Если же хоть один элемент массива выходит за этот диапазон, то сконструированная строка будет иметь многобайтовую кодировку типа UTF-8.
-    ObjectHolder StringOpsInstance::MethodFromIntArray(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder StringOpsInstance::MethodFromIntArray(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "FromIntArray"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -1630,7 +1655,7 @@ namespace runtime
         bool to_utf8_enc, enc_auto_select = actual_args.size() == 1;
         if (!enc_auto_select)
         { // Кодировка явно специфицирована вторым аргументом метода.
-            encoding_id = CheckEncodingID(actual_args[1], context);
+            encoding_id = CheckEncodingID(method, actual_args[1], context);
             if (encoding_id == NON_INDEXED_ENCODING_ID)
                 // Указанный номер кодировки == NON_INDEXED_ENCODING_ID. Это также воспримем как требование выбрать выходную кодировку самостоятельно.
                 enc_auto_select = true;
@@ -1656,7 +1681,7 @@ namespace runtime
         }
 
         // Итак, целевая кодировка выбрана. Можно перейти к непосредственной генерации строки-результата.
-        std::string result_str;
+        string result_str;
         UTF8Map utf8_map;
         for (size_t i = 0; i < arg_elems_count; ++i)
         {
@@ -1667,7 +1692,7 @@ namespace runtime
             if (to_utf8_enc)
             { // Создаём строку из многобайтовых UTF-8-кодов.
                 utf8_map.begin_map.push_back(result_str.size());  // Параллельно с формированием строки ведём также карту расположения в ней UTF-8-кодов.
-                std::string next_utf8_seq = ConvSymbToUTF8(static_cast<uint32_t>(arg_elem_value));
+                string next_utf8_seq = ConvSymbToUTF8(static_cast<uint32_t>(arg_elem_value));
                 utf8_map.last_symbol_size = next_utf8_seq.size();
                 if (next_utf8_seq.size() > MAX_UNICODE_LENGTH)
                     ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, "Код UTF-8 превышает максимальную длину");
@@ -1680,12 +1705,12 @@ namespace runtime
             }
         }
 
-        runtime::String moufflon_result_str(std::move(result_str));
+        runtime::String moufflon_result_str(move(result_str));
         // Установим для возвращаемой строки кодировочную информацию.
         if (to_utf8_enc)
         {
             moufflon_result_str.encoding = UTF_8_ENCODING;
-            moufflon_result_str.utf8_map = std::move(utf8_map);
+            moufflon_result_str.utf8_map = move(utf8_map);
         }
         else if (encoding_id)
         {
