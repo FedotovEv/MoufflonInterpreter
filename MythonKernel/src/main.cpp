@@ -2319,35 +2319,47 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 20
         istringstream input(R"--( 
 class TestClass:
   def Method_1(x, y):
-    global a, b
-    a = a + x * y
-    b = 2 * b
-    c = a + b
-    a = a - (x * y / 2)
-    return c
+    global a, b                         # Пусть a == 1, b == 2, x == 3, y == 5
+    a = a + x                           # a == 4
+    b = b + y                           # b == 7
+    c = a + b                           # c == 11
+    a = a - 2 * x                       # a == -2
+    return c                            # Возвращаем 11
 
   def Method_2(z):
-    global c
-    a = c + z
-    return a
+    global c                            # Пусть c == 3, z == 3
+    a = c + z                           # a == 6
+    c = c * 3                           # c == 9
+    return a                            # Возврат 6
+
+# Свободная функция, использующая глобальные переменные.
+def FreeFunc(z):
+  global b                              # Пусть b == 7, z == 5
+  b = b - z                             # b == 2
+  c = b + 2 * z                         # c == 12
+  return 2 * c                          # Возврат 24
 
 a = 1
 b = 2
 c = 3
-ab = a + b
-bc = b + c
-print ab, bc
+ab = a + b                              # ab == 3
+bc = b + c                              # bc == 5
+print ab, bc                            # Отправляем на печать 3, 5
 # Создаём экземпляр TestClass.
 tst_class = TestClass()
-ret_v = tst_class.Method_1(ab, bc)
-print a, b, c, ret_v
-ret_v = tst_class.Method_2(ab)
-print a, b, c, ret_v
+print a, b, c                           # Отправка на печать исходного состояния глобальных переменных - 1, 2, 3
+ret_v = tst_class.Method_1(ab, bc)      # Возвращённое значение - 11
+print a, b, c, ret_v                    # Состояние глобальных переменных после вызова Method_1() - -2, 7, 3, 11
+ret_v = tst_class.Method_2(ab)          # Возвращённое значение - 6
+print a, b, c, ret_v                    # Новое состояние глобальных переменных после работы Method_2() - -2, 7, 9, 6
+ret_v = FreeFunc(bc)                    # Возвращённое значение - 24
+print a, b, c, ret_v                    # Окончательное состояние глобальных переменных после работы FreeFunc() - -2, 2, 9, 24
 )--");
 
         ostringstream ostr;
         RunMythonProgram(input, ostr);
-        std::cout << ostr.str() << std::endl;
+        // std::cout << ostr.str() << std::endl;
+        ASSERT_EQUAL(ostr.str(), "3 5\n1 2 3\n-2 7 3 11\n-2 7 9 6\n-2 2 9 24\n");
     }
 
     void TestAll()

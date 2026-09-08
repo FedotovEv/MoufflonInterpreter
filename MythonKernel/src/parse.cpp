@@ -572,11 +572,26 @@ namespace
                 lexer_.NextToken();
 
                 if (op == '*')
+                {
                     result = exec_factory_.Create(ast::Mult(std::move(result), ParseMult()));
+                }
                 else if (op == '/')
+                { // Здесь может быть как общий случай деления, так и частный случай операции обращения,
+                  // если result есть константа - целое число, точно равное 1.
+                    if (ast::NumericConst* op_statement = dynamic_cast<ast::NumericConst*>(result.get()))
+                    { // Делимое - число, это может быть инверсией аргумента.
+                        const runtime::Number& op_number_value = op_statement->GetValue();
+                        if (op_number_value.IsInt() && op_number_value.GetIntValue() == 1)
+                            // Делимое - целое число, равное единице. Это действительно инверсия.
+                            result = exec_factory_.Create(ast::Inversion(ParseMult()));
+                    }
+                    // Это общий случай деления.
                     result = exec_factory_.Create(ast::Div(std::move(result), ParseMult()));
+                }
                 else
+                {
                     result = exec_factory_.Create(ast::ModuloDiv(std::move(result), ParseMult()));
+                }
             }
             return result;
         }
@@ -607,7 +622,8 @@ namespace
             if (lexer_.CurrentToken() == '-')
             {
                 lexer_.NextToken();
-                return exec_factory_.Create(ast::Mult(ParseMult(), exec_factory_.Create(ast::NumericConst(-1))));
+                return exec_factory_.Create(ast::Negation(ParseMult()));
+                //return exec_factory_.Create(ast::Mult(ParseMult(), exec_factory_.Create(ast::NumericConst(-1))));
             }
 
             if (lexer_.CurrentToken() == '~')

@@ -159,6 +159,8 @@
     THRM_IMPOSSIBLE_SUBTRACTION,                // Невозможно произвести такое вычитание.
     THRM_IMPOSSIBLE_MULTIPLICATION,             // Невозможно произвести указанное умножение.
     THRM_IMPOSSIBLE_DIVISION,                   // Невозможно произвести указанное деление.
+    THRM_IMPOSSIBLE_NEGATION,                   // Невозможно произвести указанную негацию аргумента (смену его знака).
+    THRM_IMPOSSIBLE_INVERSION,                  // Невозможно произвести указанное обращение аргумента (вычисление обратного значения).
     THRM_IMPOSSIBLE_COMPARE_EQUAL,              // Невозможно выполнить сравнение на равенство с такими операндами.
     THRM_IMPOSSIBLE_COMPARE_LESS,               // Невозможно выполнить сравнение на "меньше" с такими операндами.
     THRM_DIVISION_BY_ZERO,                      // Деление на нуль.

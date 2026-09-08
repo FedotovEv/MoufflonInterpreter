@@ -20,6 +20,34 @@ extern const std::string empty_collate;
 
 namespace runtime
 {
+    // Вспомогательная функция подготовки и частичного заполнения таблицы символов, которая будет применяться при исполнении
+    // различных подпрограмм - методов или свободных функций.
+    Closure FormateMethodClosure(const std::vector<ObjectHolder>& actual_args, Context& context, const Method* method)
+    {
+        if (method->formal_params.size() != actual_args.size())
+        { // Проверка соответствия количества формальных и фактических аргументов для вызываемой процедуры.
+            std::string err_mess = "Метод/Функция " + method->name + ": требуется " + std::to_string(method->formal_params.size()) +
+                                   " параметров, передано " + std::to_string(actual_args.size());
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
+        }
+
+        Closure method_closure;
+        // Сначала создаём в формируемой таблице переменные с именами формальных и значениями фактических параметров метода.
+        // Такая подстановка делает передаваемые аргументы доступными исполняемому коду метода.
+        auto actual_args_it = actual_args.begin();
+        for (const string& formal_param_name : method->formal_params)
+            method_closure[formal_param_name] = *actual_args_it++;
+        // Далее создаём в этой таблице указатели на требуемые глобальные переменные.
+        if (Closure* global_closure = context.GetGlobalClosure(); global_closure && method->global_vars.size())
+        {
+            for (const std::string& global_var_name : method->global_vars)
+                // Создаём объект-ссылку на глобальную переменную с именем global_var_name.
+                method_closure[global_var_name] = ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name]));
+        }
+
+        return method_closure;
+    }
+
     // Возврат действительной длины строки в символах.
     size_t String::SymbolSizeOf() const
     {
@@ -211,10 +239,16 @@ namespace runtime
 
     ObjectHolder::~ObjectHolder()
     {
-        in_destructor_ = true;
         // Оповестим все ссылающиеся на нас объекты-ссылки о нашем предстоящем исчезновении.
+        UnregReferences();
+    }
+
+    // Функция-член производит "разрегистрацию" данного контейнера во внешних ссылочных объектах, т. е. сообщает им, что ссылки
+    // на это вместилище далее невалидны.
+    void ObjectHolder::UnregReferences() const
+    {
         for (PointerObject* ref_pointer : references_)
-            ref_pointer->SetPointer(nullptr);
+            ref_pointer->SetPointer(nullptr, false);
     }
 
     void ObjectHolder::AssertIsValid() const
@@ -268,27 +302,31 @@ namespace runtime
     // Добавить новую ссылку на данный контейнер в содержащее их хранилице.
     bool ObjectHolder::AddPointer(runtime::PointerObject* new_pointer)
     {
-        if (!in_destructor_)
-            return references_.insert(new_pointer).second;
-        else
-            return false;
+        return references_.insert(new_pointer).second;
     }
     
     // Удалить ссылку из хранилища.
     bool ObjectHolder::RemovePointer(runtime::PointerObject* del_pointer)
     {
-        if (!in_destructor_)
-            return references_.erase(del_pointer);
-        else
-            return false;
+        return references_.erase(del_pointer);
     }
     
     // Проверить наличие ссылки в хранилище.
     bool ObjectHolder::IsPointerExists(runtime::PointerObject* test_pointer) const
     {
-        if (in_destructor_)
-            return false;
         return references_.contains(test_pointer);
+    }
+
+    // Функция выполняет изъятие из нашего владения и передачи вызывающей стороне всего хранилища ссылок на наш объект.
+    // После завершения функции поле references_ будет пустым (то есть тут мы забываем обо всех внешних сслыках на нас).
+    ObjectHolder::PointerRefStorage ObjectHolder::TakePointerRefs(bool do_unregister)
+    {
+        if (do_unregister)
+            UnregReferences();
+
+        PointerRefStorage save_refs = move(references_);
+        references_.clear();
+        return save_refs;
     }
 
     ObjectHolder::operator bool() const noexcept
@@ -311,9 +349,9 @@ namespace runtime
             return true;
     }
 
-    void PointerObject::SetPointer(ObjectHolder* object_ptr)
+    void PointerObject::SetPointer(ObjectHolder* object_ptr, bool do_unregister)
     {
-        if (object_ptr_)
+        if (object_ptr_ && do_unregister)
             object_ptr_->RemovePointer(this);
         object_ptr_ = object_ptr;
         if (object_ptr_)
@@ -508,6 +546,14 @@ namespace runtime
         }
     }
 
+    Number operator-(const Number& first_op)
+    {
+        if (first_op.IsInt())
+            return Number(-first_op.GetIntValue());
+        else
+            return Number(-first_op.GetDoubleValue());
+    }
+
     bool operator<(const Number& first_op, const Number& second_op)
     {
         if (first_op.IsInt() && second_op.IsInt())
@@ -536,28 +582,21 @@ namespace runtime
     
     ObjectHolder FreeFunction::Call(const std::vector<ObjectHolder>& actual_args, Context& context)
     {
-        Closure temp_closure;
         // Создаём для вызова свободной функции специальную версию таблицы символов.
-        // У свободной функции не будет доступа ни к каким переменным, кроме собственных локальных, которые она будет создавать
-        // сама по ходу собственного выполнения, а также фактическим её параметрам, переданным нам через массив actual_args.
-        // И именно эти фактические параметры нужно будет сейчас добавить в формируемую таблицу temp_closure.
-        if (method_func_.formal_params.size() != actual_args.size())
-        {
-            std::string err_mess = "Функция " + method_func_.name + ": требуется " + std::to_string(method_func_.formal_params.size()) +
-                                   " параметров, передано " + std::to_string(actual_args.size());
-            ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
-        }
-
-        for (size_t param_index = 0; param_index < method_func_.formal_params.size(); ++param_index)
-            temp_closure[method_func_.formal_params[param_index]] = actual_args[param_index];
+        // У свободной функции не будет доступа ни к каким переменным, кроме:
+        // 1. Фактических её параметров, переданных нам через массив actual_args.
+        // 2. Глобальных переменных, имена которых объявлены в теле функции директивой global.
+        // 3. Собственных локальных, которые она будет создавать сама по ходу собственного выполнения.
+        // Переменные из первых двух пунктов списка нужно будет сейчас добавить в формируемую таблицу function_closure.
+        Closure function_closure = FormateMethodClosure(actual_args, context, &method_func_);
         // Таблица символов подготовлена, можно обработать тело функции.
         if (method_func_.is_coroutine)
         { // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
-            return ObjectHolder::Own(move(CoroutineInstance(this, temp_closure)));
+            return ObjectHolder::Own(move(CoroutineInstance(this, function_closure)));
         }
         else
         { // Немедленное исполнение обычной функции - непосредственное исполнение и последующее возвращение результата её работы.
-            return method_func_.body->Execute(temp_closure, context);
+            return method_func_.body->Execute(function_closure, context);
         }
     }
 
@@ -621,22 +660,11 @@ namespace runtime
         if (!get_method || get_method.method->formal_params.size() != actual_args.size())
             ThrowRuntimeError(context, get_method.error, ThrowMessages::GetThrowText(get_method.error));
     
-        Closure method_closure; // Временная таблица символов, применяемая во время исполнения вызываемого метода.
-        // Добавляем в эту таблицу ссылку на наш собственный класс под именем SELF_FIELD_NAME("self"), что обеспечивает коду метода
-        // доступ к текущим полям объекта.
+        // Создадим и заполним временную таблицу символов, применяемую во время исполнения вызываемого метода.
+        Closure method_closure = FormateMethodClosure(actual_args, context, get_method.method);
+        // Также добавляем в эту таблицу ссылку на наш собственный класс под именем SELF_FIELD_NAME("self"), что обеспечивает
+        // коду метода доступ к текущим полям объекта.
         method_closure[SELF_FIELD_NAME] = ObjectHolder::Share(*this);
-        // Создаём во временной таблице указатели на требуемые глобальные переменные.
-        if (Closure* global_closure = context.GetGlobalClosure(); global_closure && get_method.method->global_vars.size())
-        {
-            for (const std::string& global_var_name : get_method.method->global_vars)
-                // Создаём объекты-ссылки на все указанные глобальные переменные.
-                method_closure[global_var_name] = ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name]));
-        }
-        // Кроме того, создаём в этой временной таблице переменные с именами формальных и значениями фактических параметров метода.
-        // Такая подстановка делает передаваемые аргументы доступными исполняемому коду метода.
-        auto actual_args_it = actual_args.begin();
-        for (const string& formal_param_name : get_method.method->formal_params)
-            method_closure[formal_param_name] = *actual_args_it++;
 
         if (get_method.method->is_coroutine)
         { // Запуск сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
@@ -787,6 +815,32 @@ namespace runtime
                 nodes_queue.push(up_parent_ref);
         }
         return false;
+    }
+
+    optional<Number> Number::Inverse() const
+    {
+        double dbl_value;
+        if (std::holds_alternative<int>(value_))
+            dbl_value = static_cast<double>(std::get<int>(value_));
+        else if (std::holds_alternative<double>(value_))
+            dbl_value = std::get<double>(value_);
+        else
+            return {};
+
+        if (fabs(dbl_value) < ZERO_TOLERANCE)
+            return {};
+
+        return 1.0 / dbl_value;
+    }
+
+    Number Number::Negate() const
+    {
+        if (std::holds_alternative<int>(value_))
+            return -std::get<int>(value_);
+        else if (std::holds_alternative<double>(value_))
+            return -std::get<double>(value_);
+        else
+            return Number(0);
     }
 
     const void* Number::GetPtr() const

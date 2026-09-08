@@ -28,6 +28,9 @@
 const std::string INIT_METHOD = "__init__";
 const std::string DESTROY_METHOD = "__destroy__";
 const std::string ADD_METHOD = "__add__";
+const std::string MULTIPLICATE_METHOD = "__mult__";
+const std::string NEGATE_METHOD = "__neg__";
+const std::string INVERSE_METHOD = "__inv__";
 const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
 const std::string EQUAL_CMP_METHOD = "__eq__";
 const std::string LESS_CMP_METHOD = "__lt__";

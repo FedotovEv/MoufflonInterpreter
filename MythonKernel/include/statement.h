@@ -65,6 +65,11 @@ namespace ast
             return runtime::ObjectHolder::Share(value_);
         }
 
+        const T& GetValue() const
+        {
+            return value_;
+        }
+
     private:
         T value_;
     };
@@ -448,6 +453,26 @@ namespace ast
         //  число % число
         // Если lhs и rhs - не числа, выбрасывается исключение runtime_error
         // Если rhs равен 0, выбрасывается исключение runtime_error
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
+    // Возвращает результат негации единственного аргумента (вычисления противоположного значения, смены знака).
+    class Negation : public UnaryOperation
+    {
+    public:
+        using UnaryOperation::UnaryOperation;
+
+        // Смена знака поддерживается для любых чисел, а также для "негатируемых" классов.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+    };
+
+    // Возвращает результат обращения единственного аргумента (вычисления обратного значения, возведения в степень -1).
+    class Inversion : public UnaryOperation
+    {
+    public:
+        using UnaryOperation::UnaryOperation;
+
+        // Обращение поддерживается для любых чисел, а также для обращаемых классов.
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
     };
 

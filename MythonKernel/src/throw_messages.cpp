@@ -32,6 +32,8 @@ namespace runtime
         {ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION, "Невозможно выполнить вычитание"s},
         {ThrowMessageNumber::THRM_IMPOSSIBLE_MULTIPLICATION, "Невозможно выполнить умножение"s},
         {ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION, "Невозможно выполнить деление"s},
+        {ThrowMessageNumber::THRM_IMPOSSIBLE_NEGATION, "Невозможно выполнить негацию"s},
+        {ThrowMessageNumber::THRM_IMPOSSIBLE_INVERSION, "Невозможно выполнить инверсию"s},
         {ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_EQUAL, "Невозможно сравнить объекты на равенство"s},
         {ThrowMessageNumber::THRM_IMPOSSIBLE_COMPARE_LESS, "Невозможно сравнить объекты на \"меньше\""s},
         {ThrowMessageNumber::THRM_DIVISION_BY_ZERO, "Деление на нуль"s},
@@ -59,6 +61,7 @@ namespace runtime
         // Ошибки при разборе директив и спецификаторов вызова методов.
         {ThrowMessageNumber::THRM_INCORRECT_TOKEN_LIST, "Ошибка в параметрах команды"s},
         {ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS, "Ошибка в параметрах директивы include"s},
+        {ThrowMessageNumber::THRM_GLOBAL_IN_METHOD_ONLY,  "Директива global допускается только внутри тела процедуры"s},
         {ThrowMessageNumber::THRM_QUALIFIER_NOT_ANCESTOR, "Объект-уточнитель не является классом-предком объекта"s},
         {ThrowMessageNumber::THRM_AMBIGUOUS_OVERLOAD, "Неоднозначность перегрузки методов"s},
         // Проблемы при загрузке динамической библиотеки с коллекцией втыкал, а также при её регистрации.

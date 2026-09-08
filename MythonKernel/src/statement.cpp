@@ -659,13 +659,26 @@ namespace ast
                   // перенацеливая внутренний указатель контейнера, соответствующий этой переменной, на новое значение right_result.
                     CallDestroyIfNeed(*deref_ptr, context);
                     deref_ptr->ModifyData(move(right_result));
+                    return *deref_ptr;  // Для валидной сслыки возвращаемым результатом присваивания будет эффект её разыменования.
                 }
-                return var_closure_it->second;
+                else
+                { // Если ссылка невалидна, вернём пустое значение.
+                    return ObjectHolder::None();
+                }
             }
             // Переменная var_ существует, но ссылкой не является.
             CallDestroyIfNeed(var_closure_it->second, context); // Возможный вызов деструктора объекта, на который указывает переменная var_.
-            var_closure_it->second = move(right_result);
-            return var_closure_it->second;
+            // Если существуют внешние ссылки на уничтожаемую переменную var_ (то есть на соответствующий ей объект вместилища
+            // var_closure_it->second) со стороны каких-то других объектов типа runtime::PointerObject, то требуется их перенацелить на
+            // новый объект-контейнер, который будет соответствовать переменной var_ после выполнения присваивания.
+            ObjectHolder::PointerRefStorage save_pointers = var_closure_it->second.TakePointerRefs();
+            ObjectHolder& new_var_holder = (var_closure_it->second = move(right_result));
+            // Все объекты-ссылки, которые ранее указывали на прежний контейнер, соответствующий var_, теперь должны будут указывать
+            // на новое вместилище этой переменной - new_var_holder.
+            for (runtime::PointerObject* pointer_object : save_pointers)
+                pointer_object->SetPointer(&new_var_holder);
+
+            return new_var_holder;
         }
         // Переменной var_ пока не существует, она будет создана.
         return closure[var_] = move(right_result);
@@ -705,9 +718,12 @@ namespace ast
         {
             CallDestroyIfNeed(*deref_ptr, context);
             deref_ptr->ModifyData(move(right_result));
+            return *deref_ptr;  // Возвращаем не саму ссылку, а результат её разыменования - объект, на который она ссылается.
         }
-
-        return target_field;
+        else
+        { // Ссылка нулевая и никуда не ведёт. Вернём пустышку.
+            return ObjectHolder::None();
+        }
     }
 
     VariableValue::VariableValue(const std::string& var_name)
@@ -957,8 +973,8 @@ namespace ast
     // Поддерживается сложение:
     //  число + число.
     //  строка + строка.
-    //  объект1 + объект2, если у объект1 - пользовательский класс с методом __add__(rhs).
-    // В противном случае при вычислении выбрасывается runtime_error.
+    //  объект1 + объект2, если объект1 - есть класс с определённым методом __add__(rhs).
+    // Во всех прочих случаях при вычислении выбрасывается runtime_error.
     ObjectHolder Add::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -975,9 +991,9 @@ namespace ast
             string result = real_lhs.TryAs<runtime::String>()->GetValue() + real_rhs.TryAs<runtime::String>()->GetValue();
             return ObjectHolder::Own<runtime::String>(result);
         }
-        else if (real_lhs.TryAs<runtime::ClassInstance>())
+        else if (real_lhs.TryAs<runtime::CommonClassInstance>())
         {
-            runtime::CommonClassInstance *lhs_class_ptr = real_lhs.TryAs<runtime::ClassInstance>();
+            runtime::CommonClassInstance *lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
             if (lhs_class_ptr->HasMethod(ADD_METHOD, 1))
                 return lhs_class_ptr->Call(ADD_METHOD, {real_rhs}, context);
             else
@@ -991,17 +1007,35 @@ namespace ast
 
     // Поддерживается вычитание:
     //  число - число.
-    // Если lhs и rhs - не числа, выбрасывается исключение runtime_error.
+    //  объект1 - сущность2, если объект1 - есть некоторый складываемый класс (с методом __add__(rhs)), а сущность2, в свою очередь,
+    // есть негатируемая сущность (поддерживающая операцию смены знака) - либо класс, имеющий метод __neg__(), либо любое число.
+    // Если ни один из этих вариантов не подходит, выбрасывается исключение runtime_error.
     ObjectHolder Sub::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+        runtime::Number* real_lhs_number_ptr = real_lhs.TryAs<runtime::Number>();
+        runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
 
-        if (real_lhs.TryAs<runtime::Number>() && real_rhs.TryAs<runtime::Number>())
-        {
-            runtime::Number result = (*real_lhs.TryAs<runtime::Number>()) - (*real_rhs.TryAs<runtime::Number>());
+        if (real_lhs_number_ptr && real_rhs_number_ptr)
+        { // Оба аргумента - числа. Имеем первый вариант комбинации операндов.
+            runtime::Number result = (*real_lhs_number_ptr) - (*real_rhs_number_ptr);
             return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
+                 lhs_class_ptr && lhs_class_ptr->HasMethod(ADD_METHOD, 1))
+        { // Левый аргумент операции - объект1 - есть складываемый класс.
+            if (real_rhs_number_ptr)
+            { // Второй аргумент операции - сущность2 - число. Его можно негатировать, а затем произвести сложение.
+                return lhs_class_ptr->Call(ADD_METHOD, {ObjectHolder::Own(real_rhs_number_ptr->Negate())}, context);
+            }
+            else if (runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
+                     real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(NEGATE_METHOD, 0))
+            { // Второй аргумент операции - сущность2 - негатируемый класс. Для него также можно сменить знак.
+                return lhs_class_ptr->Call(ADD_METHOD, {real_rhs_class_ptr->Call(NEGATE_METHOD, {}, context)}, context);
+            }
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION);
         }
         else
         {
@@ -1009,6 +1043,10 @@ namespace ast
         }
     }
 
+    // Поддерживается умножение:
+    //  число * число.
+    //  объект1 * объект2, если объект1 - есть класс с определённым методом __mult__(rhs).
+    // Во всех прочих случаях при вычислении выбрасывается runtime_error.
     ObjectHolder Mult::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
@@ -1020,25 +1058,56 @@ namespace ast
             runtime::Number result = (*real_lhs.TryAs<runtime::Number>()) * (*real_rhs.TryAs<runtime::Number>());
             return ObjectHolder::Own<runtime::Number>(move(result));
         }
+        else if (runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>())
+        {
+            if (lhs_class_ptr->HasMethod(MULTIPLICATE_METHOD, 1))
+                return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {real_rhs}, context);
+            else
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_MULTIPLICATION);
+        }
         else
         {
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_MULTIPLICATION);
         }
     }
 
+    // Поддерживается деление:
+    //  число / число.
+    //  объект1 / сущность2, если объект1 - есть некоторый умножаемый класс (с методом __mult__(rhs)), а сущность2, в свою очередь,
+    // есть обращаемая сущность (поддерживающая операцию обращения) - либо класс, имеющий метод __inv__(), либо любое число.
+    // Если ни один из этих вариантов не подходит, выбрасывается исключение runtime_error.
     ObjectHolder Div::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
         runtime::ObjectHolder real_lhs(lhs_->Execute(closure, context));
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
+        runtime::Number* real_lhs_number_ptr = real_lhs.TryAs<runtime::Number>();
         runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
 
-        if (real_lhs.TryAs<runtime::Number>() && real_rhs_number_ptr)
-        {
+        if (real_lhs_number_ptr && real_rhs_number_ptr)
+        {  // Оба аргумента - числа.
             if (real_rhs_number_ptr->IsInt() && !real_rhs_number_ptr->GetIntValue())
                 ThrowRuntimeError(this, ThrowMessageNumber::THRM_DIVISION_BY_ZERO);
-            runtime::Number result = (*real_lhs.TryAs<runtime::Number>()) / (*real_rhs_number_ptr);
+            runtime::Number result = ((*real_lhs_number_ptr) / (*real_rhs_number_ptr));
             return ObjectHolder::Own<runtime::Number>(move(result));
+        }
+        else if (runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
+                 lhs_class_ptr && lhs_class_ptr->HasMethod(MULTIPLICATE_METHOD, 1))
+        { // Левый аргумент операции - объект1 - есть умножаемый класс.
+            if (real_rhs_number_ptr)
+            { // Второй аргумент операции - сущность2 - число. Его можно обратить.
+                if (optional<runtime::Number> inv_rhs_number = real_rhs_number_ptr->Inverse(); inv_rhs_number)
+                    // Правый численный аргумент успешно обратился. Теперь можно произвести умножение.
+                    return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {ObjectHolder::Own(move(*inv_rhs_number))}, context);
+                else
+                    ThrowRuntimeError(this, ThrowMessageNumber::THRM_DIVISION_BY_ZERO);
+            }
+            else if (runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
+                     real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(INVERSE_METHOD, 0))
+            { // Второй аргумент операции - сущность2 - обращаемый класс. Его также можно обратить.
+                return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {real_rhs_class_ptr->Call(INVERSE_METHOD, {}, context)}, context);
+            }
+            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION);
         }
         else
         {
@@ -2037,6 +2106,44 @@ namespace ast
         {
             return ObjectHolder::Own(runtime::Bool(runtime::IsTrue(real_lhs) != runtime::IsTrue(real_rhs)));
         }
+    }
+
+    ObjectHolder Negation::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder real_arg = argument_->Execute(closure, context);
+
+        if (runtime::Number* real_arg_number_ptr = real_arg.TryAs<runtime::Number>())
+            return ObjectHolder::Own<runtime::Number>(-(*real_arg_number_ptr));
+
+        if (runtime::CommonClassInstance* arg_class_ptr = real_arg.TryAs<runtime::CommonClassInstance>())
+        {
+            if (arg_class_ptr->HasMethod(NEGATE_METHOD, 0))
+                return arg_class_ptr->Call(NEGATE_METHOD, {}, context);
+            else
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_NEGATION);
+        }
+
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_NEGATION);
+    }
+
+    runtime::ObjectHolder Inversion::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        PrepareExecute(this, closure, context);
+        ObjectHolder real_arg = argument_->Execute(closure, context);
+
+        if (runtime::Number* real_arg_number_ptr = real_arg.TryAs<runtime::Number>())
+            return ObjectHolder::Own<runtime::Number>(1 / (*real_arg_number_ptr));
+
+        if (runtime::CommonClassInstance* arg_class_ptr = real_arg.TryAs<runtime::CommonClassInstance>())
+        {
+            if (arg_class_ptr->HasMethod(INVERSE_METHOD, 0))
+                return arg_class_ptr->Call(INVERSE_METHOD, {}, context);
+            else
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_INVERSION);
+        }
+
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_INVERSION);
     }
 
     ObjectHolder Complement::Execute(Closure& closure, Context& context)

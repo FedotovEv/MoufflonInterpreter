@@ -269,7 +269,7 @@ namespace ast
             ASSERT(context.output.str().empty());
         }
 
-        void TestSuccessfulClassInstanceAdd()
+        void TestSuccessfulClassInstanceAddMult()
         {
             runtime::DummyContext context;
 
@@ -278,18 +278,26 @@ namespace ast
                                {"value_"s},
                                make_unique<Add>(make_unique<StringConst>("hello, "s),
                                                 make_unique<VariableValue>("value_"s))});
+            methods.push_back({"__mult__"s,
+                               {"value_"s},
+                               make_unique<Mult>(make_unique<NumericConst>(7),
+                                                 make_unique<VariableValue>("value_"s))});
 
             runtime::Class cls("BoxedValue"s, std::move(methods), {});
 
             Closure empty;
-            auto result = Add(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s))
-                              .Execute(empty, context);
-            ASSERT_OBJECT_VALUE_EQUAL(result, "hello, world"s);
+            auto add_result = Add(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s))
+                                  .Execute(empty, context);
+            ASSERT_OBJECT_VALUE_EQUAL(add_result, "hello, world"s);
+
+            auto mult_result = Mult(make_unique<NewInstance>(cls), make_unique<NumericConst>(3))
+                                    .Execute(empty, context);
+            ASSERT_OBJECT_VALUE_EQUAL(mult_result, 21);
 
             ASSERT(context.output.str().empty());
         }
 
-        void TestClassInstanceAddWithoutMethod()
+        void TestClassInstanceAddMultWithoutMethod()
         {
             runtime::DummyContext context;
 
@@ -298,6 +306,9 @@ namespace ast
             Closure empty;
             Add addition(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s));
             ASSERT_THROWS(addition.Execute(empty, context), std::runtime_error);
+
+            Mult multiplication(make_unique<NewInstance>(cls), make_unique<StringConst>("world"s));
+            ASSERT_THROWS(multiplication.Execute(empty, context), std::runtime_error);
 
             ASSERT(context.output.str().empty());
         }
@@ -671,8 +682,8 @@ namespace ast
         RUN_TEST(tr, ast::TestNumbersAddition);
         RUN_TEST(tr, ast::TestStringsAddition);
         RUN_TEST(tr, ast::TestBadAddition);
-        RUN_TEST(tr, ast::TestSuccessfulClassInstanceAdd);
-        RUN_TEST(tr, ast::TestClassInstanceAddWithoutMethod);
+        RUN_TEST(tr, ast::TestSuccessfulClassInstanceAddMult);
+        RUN_TEST(tr, ast::TestClassInstanceAddMultWithoutMethod);
         RUN_TEST(tr, ast::TestCompound);
         RUN_TEST(tr, ast::TestFields);
         RUN_TEST(tr, ast::TestBaseClass);

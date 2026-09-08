@@ -19,10 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>16.0</VCProjectVersion>
+    <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{e5acd959-2165-41f0-9623-dbb8a392d991}</ProjectGuid>
-    <RootNamespace>MythonDebugger</RootNamespace>
+    <ProjectGuid>{3f76b02f-2327-4974-b8b6-5f04ed027200}</ProjectGuid>
+    <RootNamespace>ExtractEncodingInfo</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -70,37 +70,24 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\wxWidgets_3_0_5\include\msvc;C:\wxWidgets_3_0_5\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\wxWidgets_3_0_5\lib\vc_lib;$(LibraryPath)</LibraryPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-    <ExternalIncludePath>$(WXWIN)\include\;$(ExternalIncludePath)</ExternalIncludePath>
-    <IncludePath>$(ProjectDir)..\MythonKernel\include;$(ProjectDir);$(ProjectDir)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(WXWIN)\lib\vc_x64_lib;$(LibraryPath)</LibraryPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(ProjectDir)include;$(ProjectDir)include\posix;$(ProjectDir)..\MythonKernel\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;UNICODE;_UNICODE;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -108,31 +95,35 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>wxmsw32ud_core.lib;wxbase32ud.lib;wxmsw32ud_stc.lib;wxmsw32ud_html.lib;wxscintillad.lib;wxpngd.lib;wxzlibd.lib;rpcrt4.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -140,71 +131,20 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\MythonKernel\include\debug_context.h" />
-    <ClInclude Include="..\MythonKernel\include\declares.h" />
-    <ClInclude Include="..\MythonKernel\include\lexer.h" />
-    <ClInclude Include="..\MythonKernel\include\math_object.h" />
-    <ClInclude Include="..\MythonKernel\include\math_object_statement.h" />
-    <ClInclude Include="..\MythonKernel\include\parse.h" />
-    <ClInclude Include="...MythonKernel\include\runtime.h" />
-    <ClInclude Include="..\MythonKernel\include\special_objects.h" />
-    <ClInclude Include="..\MythonKernel\include\special_objects_statement.h" />
-    <ClInclude Include="..\MythonKernel\include\statement.h" />
-    <ClInclude Include="..\MythonKernel\include\throw_messages.h" />
-    <ClInclude Include="include\DebuggerDataStruct.h" />
-    <ClInclude Include="include\DebuggerExecutor.h" />
-    <ClInclude Include="GUI\ConfigDialog.h" />
-    <ClInclude Include="GUI\EditModulePropsDialog.h" />
-    <ClInclude Include="GUI\MainDebuggerWindow.h" />
-    <ClInclude Include="GUI\MythonDebuggerGui.h" />
-    <ClInclude Include="GUI\OutputDebuggerWindow.h" />
-    <ClInclude Include="include\MythonDebugger.h" />
-    <ClInclude Include="PugiXML\pugiconfig.hpp" />
-    <ClInclude Include="PugiXML\pugixml.hpp" />
-    <ClInclude Include="include\redefine_.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\MythonKernel\src\debug_context.cpp" />
-    <ClCompile Include="..\MythonKernel\src\encodings.cpp" />
-    <ClCompile Include="..\MythonKernel\src\error_classes.cpp" />
-    <ClCompile Include="..\MythonKernel\src\lexer.cpp" />
-    <ClCompile Include="..\MythonKernel\src\math_object.cpp" />
-    <ClCompile Include="..\MythonKernel\src\parse.cpp" />
-    <ClCompile Include="..\MythonKernel\src\plugin_caller.cpp" />
-    <ClCompile Include="..\MythonKernel\src\runtime.cpp" />
-    <ClCompile Include="..\MythonKernel\src\special_objects.cpp" />
-    <ClCompile Include="..\MythonKernel\src\statement.cpp" />
-    <ClCompile Include="..\MythonKernel\src\throw_messages.cpp" />
-    <ClCompile Include="src\DebuggerDataStruct.cpp" />
-    <ClCompile Include="src\DebuggerExecutor.cpp" />
-    <ClCompile Include="GUI\ConfigDialog.cpp" />
-    <ClCompile Include="GUI\EditModulePropsDialog.cpp" />
-    <ClCompile Include="GUI\MainDebuggerWindow.cpp" />
-    <ClCompile Include="GUI\MythonDebuggerGui.cpp" />
-    <ClCompile Include="GUI\OutputDebuggerWindow.cpp" />
-    <ClCompile Include="src\MythonDebugger.cpp" />
-    <ClCompile Include="PugiXML\pugixml.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="resource\MythonDebugger.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="resource\MythonDebugger.ico" />
-    <Image Include="resource\small.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="GUI\MythonDebugger.fbp" />
+    <ClCompile Include="src\ExtractEncodingInfo.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

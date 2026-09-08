@@ -58,6 +58,8 @@ namespace runtime
     class ObjectHolder
     {
     public:
+        using PointerRefStorage = std::set<PointerObject*>;
+
         // Создаёт пустое значение.
         ObjectHolder() = default;
         // Конструкторы копирования и перемещения.
@@ -118,11 +120,14 @@ namespace runtime
         bool RemovePointer(PointerObject* del_pointer);
         // Проверить наличие ссылки в хранилище.
         bool IsPointerExists(PointerObject* test_pointer) const;
+        // Изъять и передать вызывающему полное хранилище ссылок на наш объект.
+        PointerRefStorage TakePointerRefs(bool do_unregister = true);
 
     private:
         explicit ObjectHolder(std::shared_ptr<Object> data);
         bool IsOwning(const std::shared_ptr<Object>& test_ptr) const noexcept;
         void AssertIsValid() const;
+        void UnregReferences() const;
 
         // Пустой удалитель, применяемый для невладеющих вместилищ, возвращаемых методом Share().
         static void EmptyDeleter(Object*) noexcept
@@ -130,8 +135,7 @@ namespace runtime
 
         std::shared_ptr<Object> data_;
         // Множество ссылок на данное вместилище. Позволяет отслеживать их существование и изменения.
-        std::set<PointerObject*> references_;
-        bool in_destructor_ = false;    // Флаг исполнения кода деструктора контейнера.
+        PointerRefStorage references_;
     };
 
     // Таблица символов, связывающая имя объекта с его значением.
@@ -326,7 +330,7 @@ namespace runtime
             return sizeof(object_ptr_);
         }
 
-        void SetPointer(ObjectHolder* object_ptr);
+        void SetPointer(ObjectHolder* object_ptr, bool do_unregister = true);
 
     private:
         ObjectHolder* object_ptr_;
@@ -528,6 +532,9 @@ namespace runtime
             return ImplGetValue<double>();
         }
 
+        [[nodiscard]] std::optional<Number> Inverse() const;
+        [[nodiscard]] Number Negate() const;
+
         const void* GetPtr() const;
         size_t SizeOf() const;
 
@@ -556,6 +563,7 @@ namespace runtime
     Number operator^(const Number& first_op, const Number& second_op);
     Number operator<<(const Number& first_op, const Number& second_op);
     Number operator>>(const Number& first_op, const Number& second_op);
+    Number operator-(const Number& first_op);
     Number operator~(const Number& first_op);
     bool operator<(const Number& first_op, const Number& second_op);
     bool operator==(const Number& first_op, const Number& second_op);
