@@ -391,9 +391,16 @@ public:
 
     // Статические функции исследования множеств сущностей, определённых в МУФЛОН-программе, и поиск среди них сущностей
     // некоторого типа с конкретным именем.
-    // Поиск класса с заданным именем class_name.
-    static runtime::ProgramCommandDescriptor ScanForClass
+    // Поиск пользовательского (программно-определённого) класса с заданным именем class_name.
+    static runtime::ProgramCommandDescriptor ScanForProgramClass
         (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& class_name);
+    // Поиск внутреннего (предопределённого) класса с заданным именем class_name.
+    static int ScanForInternalClass(const std::unordered_map<std::string, int>& internal_classes_id, const std::string& class_name);
+    // Поиск любого существующего (как предопределённого, так и пользовательского) класса с именем class_name.
+    static std::variant<std::monostate, runtime::ProgramCommandDescriptor, int> ScanForAnyClass
+        (const std::unordered_map<std::string, int>& internal_classes_ids,
+         const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
+         const std::string& class_name);
     // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
     static runtime::ProgramCommandDescriptor ScanForMethod
         (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,

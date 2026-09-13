@@ -258,6 +258,8 @@ namespace ast
             bool is_dereference_result = true;
         };
 
+        // Гарантируется, что аргумент object является инструкцией типа ast::VariableValue.
+        // При своём исполнении она возвращает контейнер, указывающий на объект, метод которого method и предстоит вызвать.
         MethodCall(std::unique_ptr<Statement> object, std::string method,
                    std::vector<std::unique_ptr<Statement>> args, std::string parent_name = {});
         MethodCall(MethodCallDesc&& method_call_desc);
@@ -723,6 +725,13 @@ namespace ast
             return declared_free_functions_def_;
         }
 
+        // Метод "подстыковки" (прикомпоновки) к данной программе (к её построенному АСД) другой МУФЛОН-программы в двоичном её
+        // представлении (также в виде уже готового АСД). Пристыковываемая программа может служить как двоичная библиотека,
+        // предоставляющая для использования данной программе свои процедуры - классы и свободные функции.
+        // В процессе компоновки происходит полная или частичная конкретизация одноимённых абстрактных процедур целевой программы
+        // в соответствии с содержимым таких процедур библиотечной программы linked_program.
+        std::pair<size_t, size_t> LinkAnotherCompound(ProgramCompound* linked_program);
+
     private:
         // Метаданные, связанные с программой, которую содержит эта сплотка (составная инструкция) в своём поле comp_body_.
         // Список системно-зависимых обработчиков динамических библиотек, загруженных при импорте файлово-организованных втыкал.
@@ -735,7 +744,7 @@ namespace ast
         std::unordered_map<std::string, ast::PluginDescData> plugines_;
         // Тип кодировки исходных текстов программы.
         const SingleByteEncodingDesc* source_encoding_ = NO_ENCODING;
-        // Словарь хранения идентов встроенных фиксированных классов инсполнительской среды.
+        // Словарь хранения идентов встроенных фиксированных классов исполнительской среды.
         std::unordered_map<std::string, int> internal_classes_ids_;
         // Словарь связи имени класса и его объекта-дескриптора типа ClassDefinition.
         std::unordered_map<std::string, ast::ClassDefinition*> declared_classes_def_;

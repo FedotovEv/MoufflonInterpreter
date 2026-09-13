@@ -64,22 +64,62 @@ void OutEncodingInfo(std::ostream& ostr, const SingleByteEncodingDesc& encoding_
     FillIndent(ostr, 1);
     ostr << "{\n";
 
-    for (int start_c = 0; start_c <= 0xff; start_c += out_enc_config.classifier_per_str)
-    {
-        FillIndent(ostr, 2);
-        int max_c = min(start_c + out_enc_config.classifier_per_str - 1, 0xff);
-        bool is_last_row = max_c >= 0xff;
-        for (int current_c = start_c; current_c <= max_c; ++current_c)
+    if (out_enc_config.classifier_per_str)
+    { // "Многосимвольный" режим вывода классификационного массива.
+        for (int start_c = 0; start_c <= 0xff; start_c += out_enc_config.classifier_per_str)
         {
-            ostr << "(EncodingCharClasses)0x" << std::hex << std::setfill('0') << std::setw(4) << encoding_info.char_classifier[current_c];
-            if (current_c < max_c)
-                ostr << ", ";
-            else
-                if (!is_last_row)
-                    ostr << ",\n";
+            FillIndent(ostr, 2);
+            int max_c = min(start_c + out_enc_config.classifier_per_str - 1, 0xff);
+            bool is_last_row = max_c >= 0xff;
+            for (int current_c = start_c; current_c <= max_c; ++current_c)
+            {
+                ostr << "(EncodingCharClasses)0x" << std::hex << std::setfill('0') << std::setw(4) << encoding_info.char_classifier[current_c];
+                if (current_c < max_c)
+                    ostr << ", ";
                 else
-                    ostr << std::endl;
+                    if (!is_last_row)
+                        ostr << ",\n";
+                    else
+                        ostr << std::endl;
+            }
         }
+    }
+    else
+    { // "Односимвольный" режим вывода классификационного массива.
+        for (int code_c = 0; code_c <= 0xff; ++code_c)
+        {
+            FillIndent(ostr, 2);
+            std::string row_text;
+            if (code_c & EncodingCharClasses::CHAR_CLASS_LETTER)
+                row_text += " & CHAR_CLASS_LETTER";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_DIGIT)
+                row_text += " & CHAR_CLASS_DIGIT";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_XDIGIT)
+                row_text += " & CHAR_CLASS_XDIGIT";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_CONTROL)
+                row_text += " & CHAR_CLASS_CONTROL";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_SPACE)
+                row_text += " & CHAR_CLASS_SPACE";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_BLANK)
+                row_text += " & CHAR_CLASS_BLANK";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_GRAPHIC)
+                row_text += " & CHAR_CLASS_GRAPHIC";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_PRINT)
+                row_text += " & CHAR_CLASS_PRINT";
+            if (code_c & EncodingCharClasses::CHAR_CLASS_PUNCT)
+                row_text += " & CHAR_CLASS_PUNCT";
+
+            if (row_text.empty())
+                row_text = "EncodingCharClasses::CHAR_CLASS_NOTHING";
+            else
+                row_text = "static_cast<EncodingCharClasses>(" + row_text.substr(3) + ")";
+
+            if (code_c < 0xff)
+                row_text += ',';   // Все символы, кроме последнего, снабжаются завершающей запятой.
+            row_text += "  // " + std::to_string(code_c);
+
+            ostr << row_text << "\n";
+    }
     }
     FillIndent(ostr, 1);
     ostr << "},\n";

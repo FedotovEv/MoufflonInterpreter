@@ -549,6 +549,14 @@ namespace runtime
             ASSERT_EQUAL(out.str(), "result"s);
 
             ASSERT_THROWS(instance.Call("missing_method"s, {}, ctx), runtime_error);
+
+            // Проверим возможность создания экземпляра абстрактного класса и его поведение при вызове неопределённых методов.
+            methods.clear();
+            methods.push_back({"abstract_method"s, {"arg1"s, "arg2"s}, {}});
+            Class abstract_cls{"AbstractTest"s, move(methods), {}};
+            ASSERT(!abstract_cls.GetMethod("abstract_method"s)->body);
+            ClassInstance abstract_class_instance{abstract_cls};
+            ASSERT_THROWS(abstract_class_instance.Call("abstract_method"s, {}, ctx), runtime_error);
         }
     }  // namespace
 

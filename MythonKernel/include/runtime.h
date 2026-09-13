@@ -180,7 +180,7 @@ namespace runtime
 
         Context()
         {
-            last_command_desc_ = { .module_id = -1, .module_string_number = -1 };
+            last_command_desc_ = {.module_id = -1, .module_string_number = -1};
         }
         virtual ~Context() = default;
         // Возвращает поток вывода для команд print.
@@ -225,6 +225,16 @@ namespace runtime
             global_closure_ = global_closure;
         }
 
+        const std::string& GetExecutedObjectName() const
+        {
+            return executed_object_name_;
+        }
+
+        void SetExecutedObjectName(std::string executed_object_name)
+        {
+            executed_object_name_ = std::move(executed_object_name);
+        }
+
     private:
         // Дескриптор последней корректной исполненной команды.
         #ifdef MYTHON_UNITHREAD
@@ -234,8 +244,11 @@ namespace runtime
         #endif
         // Указатель на корневой узел (типа ast::ProgramCompound) исполняющейся программы.
         Executable* root_program_statement_ = nullptr;
-        // Указатель на "корневую" таблицу смиволов, в которой будут содержаться все глобальные символы программы.
-        Closure* global_closure_;
+        // Указатель на "корневую" таблицу символов, в которой будут содержаться все глобальные символы программы.
+        Closure* global_closure_ = nullptr;
+        // Имя переменной, хрянящей объект, внутри которого (в одном из методов которого) в данный момент находится
+        // управление исполняемой программы.
+        std::string executed_object_name_;
     };
 
     // Объект-контейнер, предназначенный для хранения внутри себя одного из конкретных классов ошибки (CommonError или его наследники).
@@ -298,7 +311,8 @@ namespace runtime
         PointerObject() : object_ptr_(nullptr)
         {}
 
-        PointerObject(ObjectHolder* object_ptr) : object_ptr_(object_ptr)
+        PointerObject(ObjectHolder* object_ptr, const std::string& var_name = {}) :
+            object_ptr_(object_ptr), var_name_(var_name)
         {
             if (object_ptr_)
                 object_ptr_->AddPointer(this);
@@ -331,9 +345,16 @@ namespace runtime
         }
 
         void SetPointer(ObjectHolder* object_ptr, bool do_unregister = true);
+        const std::string GetVarName() const
+        {
+            return var_name_;
+        }
 
     private:
-        ObjectHolder* object_ptr_;
+        ObjectHolder* object_ptr_;  // Объект, на который указывает ссылка.
+        // Полное имя переменной или поля объекта, на которую(ое) ссылается данный объект. Будет непустым только в том случае,
+        // если имя соответствующей переменной известно достоверно.
+        std::string var_name_;
     };
 
     // Проверяет, содержится ли в object значение, приводимое к True.

@@ -68,6 +68,8 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_METHOD_NOT_FOUND:
             [[fallthrough]];
+        case ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL:
+            [[fallthrough]];
         case ThrowMessageNumber::THRM_BASE_CLASS:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS:

@@ -118,13 +118,19 @@ namespace runtime
         return ostr;
     }
 
+    BreakpointEventType operator|=(BreakpointEventType& lhs, BreakpointEventType rhs)
+    {
+        lhs = static_cast<BreakpointEventType>(lhs | rhs);
+        return lhs;
+    }
+
     #ifndef MYTHON_UNITHREAD
         // Многопоточный вариант отладочного контекста, предназначенный для одновременного доступа из нескольких параллельных
         // потоков (исполняющего и отлаживающего).
         // Макрос проверки допустимости индекса для некоторой существующей точки останова.
         #define CHECK_RET_BREAKPOINT(what_ret) \
             std::lock_guard lg(breakpoints_mutex_); \
-            if (breakpoint_index >= breakpoints_.size() || !breakpoints_[breakpoint_index].position.IsValid()) \
+            if (breakpoint_index >= breakpoints_.size() || !breakpoints_[breakpoint_index].IsValid()) \
                 return (what_ret)
 
         // Макрос подстановки индекса истинной вершины стека вызовов вместо значения по умолчанию (если индекс не указан явно) и
@@ -403,7 +409,7 @@ namespace runtime
         size_t result = 0;
         for (const BreakpointDesc& break_desc : breakpoints_)
         {
-            if (break_desc.position.IsValid())
+            if (break_desc.IsValid())
             {
                 if (break_desc.is_enabled || !is_enabled_only)
                     ++result;
@@ -420,7 +426,7 @@ namespace runtime
 
         size_t result = RESERVED_VALUE;
         for (size_t break_index = 0;
-             break_index < breakpoints_.size() && breakpoints_[break_index].position.IsValid();
+             break_index < breakpoints_.size() && breakpoints_[break_index].IsValid();
              ++break_index)
         {
             if (result == RESERVED_VALUE || result < break_index)
@@ -436,7 +442,7 @@ namespace runtime
         #endif
 
         size_t break_index = 0;
-        for (; break_index < breakpoints_.size() && breakpoints_[break_index].position.IsValid(); ++break_index);
+        for (; break_index < breakpoints_.size() && breakpoints_[break_index].IsValid(); ++break_index);
         if (break_index >= breakpoints_.size()) // Пустых ячеек в breakpoints_ сейчас нет, создаём новые.
             breakpoints_.resize(breakpoints_.size() + 10);
 
@@ -444,9 +450,9 @@ namespace runtime
         return break_index;
     }
 
-    size_t DebugContext::AddBreakpoint(const ProgramCommandDescriptor& new_break_position)
+    size_t DebugContext::AddPositionBreak(const ProgramCommandDescriptor& new_break_position)
     { // Создание типового бряка. Все его параметры, кроме положения, принимаются по умолчанию.
-        return AddBreakpoint({.position = new_break_position});
+        return AddBreakpoint(BreakpointDesc{.var_desc = LocalBreakpointDesc{.position = new_break_position}});
     }
 
     // Создание бряка на любой вызов некоторого метода с именем methon_name, принимающий params_count аргументов и принадлежащий
@@ -464,7 +470,7 @@ namespace runtime
             (program_root->GetDeclaredClassesDef(), MangleMethodFunctionName(method_name, params_count));
             method_def_pos != DUMB_PROG_POS)
             // Метод с затребованной сигнатурой найден. Создаёи бряк на его декларацию и возвращаем индекс этого бряка.
-            return AddBreakpoint(method_def_pos);
+            return AddPositionBreak(method_def_pos);
         else    // Метод с указанными именными характеристиками и классовой принадлежностью найти не удалось.
             return RESERVED_VALUE;
     }
@@ -482,16 +488,75 @@ namespace runtime
         if (ProgramCommandDescriptor free_func_def_pos = TypeTraitsInstance::ScanForFreeFunction
             (program_root->GetDeclaredFreeFunctionsDef(), MangleMethodFunctionName(free_func_name, params_count));
             free_func_def_pos != DUMB_PROG_POS)
-            // Свободная функция с затребованной сигнатурой найдена. Создаёи бряк на её декларацию и возвращаем его индекс.
-            return AddBreakpoint(free_func_def_pos);
+            // Свободная функция с затребованной сигнатурой найдена. Создаём бряк на её декларацию и возвращаем его индекс.
+            return AddPositionBreak(free_func_def_pos);
         else    // Свободную функцию с указанными именными характеристиками найти не удалось.
             return RESERVED_VALUE;
+    }
+
+    // Установка бряка на создание и/или уничтожение объектов класса class_name.
+    size_t DebugContext::AddInstantiateBreak(const std::string& class_name, bool is_instantiate, bool is_destroy)
+    {
+        ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(GetProgramRoot());
+        if (!program_root)
+        {
+            assert(false);
+            return RESERVED_VALUE;
+        }
+
+        bool is_class_found = std::holds_alternative<std::monostate>
+            (TypeTraitsInstance::ScanForAnyClass(program_root->GetInternalClassesIds(), program_root->GetDeclaredClassesDef(), class_name));
+        if (!is_class_found)
+            return RESERVED_VALUE;  // Класс какого-либо типа (встроенный или программно-определённый) с именем class_name не найден.
+
+        UnlocalBreakpointDesc unlocal_desc;
+        unlocal_desc.event_category = BreakpointEventCategory::BREAK_EVENT_CAT_CLASS;
+        unlocal_desc.mask = class_name;
+        if (is_instantiate)
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_INSTANTIATE;
+        if (is_destroy)
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_DESTROY;
+
+        return AddBreakpoint(BreakpointDesc{.var_desc = std::move(unlocal_desc)});
+    }
+
+    // Установка точки останова на доступ к конкретной переменной с именем var_name. Имя может быть как простым (однокомпонентным),
+    // так и составным (многокомпонентным). В первом случае подразумевается определённая глобальная переменная, а во втором - поле некоторого класса.
+    size_t DebugContext::AddBreakVarReadWrite(const std::string& var_name, bool is_var_read, bool is_var_write)
+    {
+        UnlocalBreakpointDesc unlocal_desc;
+        unlocal_desc.event_category = BreakpointEventCategory::BREAK_EVENT_CAT_VAR;
+        unlocal_desc.mask = var_name;
+        if (is_var_read)
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_READ;
+        if (is_var_write)
+        {
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_WRITE;
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_CREATE;
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_DELETE;
+        }
+
+        return AddBreakpoint(BreakpointDesc{.var_desc = std::move(unlocal_desc)});
+    }
+
+    // Создание бряка на создание/удаление конкретной переменной. Правила задания имени var_name аналогичны вышеобъявленной функции AddBreakVarReadWrite().
+    size_t DebugContext::AddBreakVarCreateDestroy(const std::string& var_name, bool is_var_create, bool is_var_delete)
+    {
+        UnlocalBreakpointDesc unlocal_desc;
+        unlocal_desc.event_category = BreakpointEventCategory::BREAK_EVENT_CAT_VAR;
+        unlocal_desc.mask = var_name;
+        if (is_var_create)
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_CREATE;
+        if (is_var_delete)
+            unlocal_desc.event_type |= BreakpointEventType::BREAK_EVENT_TYPE_DELETE;
+
+        return AddBreakpoint(BreakpointDesc{.var_desc = std::move(unlocal_desc)});
     }
 
     bool DebugContext::DeleteBreakpoint(size_t breakpoint_index)
     { // Удаление существующей в списке точки останова.
         CHECK_RET_BREAKPOINT(false);
-        breakpoints_[breakpoint_index].position = DUMB_PROG_POS;
+        breakpoints_[breakpoint_index].var_desc = {};
         breakpoints_[breakpoint_index].is_enabled = false;
         return true;
     }
@@ -551,7 +616,7 @@ namespace runtime
         return breakpoints_[breakpoint_index];
     }
 
-    size_t DebugContext::FindBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure)
+    size_t DebugContext::FindLocalBreakpoints(const ProgramCommandDescriptor& test_break_position, Executable* exec_statement, Closure& closure)
     { // Составление списка точек останова для исходной строки test_break_position, которые должны сработать в данный момент.
         #ifndef MYTHON_UNITHREAD
             std::lock_guard lg(breakpoints_mutex_);
@@ -562,7 +627,11 @@ namespace runtime
         for (; break_index < breakpoints_.size(); ++break_index)
         {
             BreakpointDesc& break_desc = breakpoints_[break_index];
-            if (break_desc.position.IsValid() && break_desc.position == test_break_position && break_desc.is_enabled)
+            if (!break_desc.IsValid() || !break_desc.IsLocal() || !break_desc.is_enabled)
+                continue;
+
+            const LocalBreakpointDesc& local_breakpoint = get<LocalBreakpointDesc>(break_desc.var_desc);
+            if (local_breakpoint.position.IsValid() && local_breakpoint.position == test_break_position)
             { // Перебираем все существующие и активные точки останова, установленные на test_break_position.
                 if (break_desc.is_conditional)
                 { // Это условная точка останова, нужно проверить выполнение условия, что мы сейчас и проделаем.

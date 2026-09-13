@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>-lrussian_russia.1251</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-lrussian_russia.1251 -fc2</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArgumentsHistory>-lUS_US.437|-lRU_RU.866|-lrussian_russian.866|-lrussian_russia.866|-lrussian_russia.1251|</LocalDebuggerCommandArgumentsHistory>
+    <LocalDebuggerCommandArgumentsHistory>-lrussian_russian.866|-lrussian_russia.866|-lrussian_russia.1251|-lrussian_russia.1251 -fc0|-lrussian_russia.1251 -fc2|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
 </Project>

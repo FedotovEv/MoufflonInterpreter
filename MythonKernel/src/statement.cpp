@@ -270,7 +270,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                 dbg_context->SetFirstProperStatementInRow(exec_obj_ptr);
         }
 
-        // Далее создадим новый кадр в модели стека вызовов, если поступившая команда предполагает образование такого кадра
+        // Далее создадим новый кадр в модели стека вызовов, если поступившая команда предполагает образование такого кадра.
         if (current_genus == CommandGenus::CMD_GENUS_INITIALIZE)
         {
             dbg_context->ClearCallStack();
@@ -302,7 +302,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
         // При переходе на новую строку исходника проверим наличие здесь (на этой новой строке) сработавших точек останова (бряков).
         // Модель стека вызовов к этому моменту уже будет иметь законченный вид, соответствующий исполняемой процедуре МУФЛОН-программы.
         if (is_new_source_line)
-            dbg_context->FindBreakpoints(current_command, exec_obj_ptr, closure);
+            dbg_context->FindLocalBreakpoints(current_command, exec_obj_ptr, closure);
 
         // Продолжим обработку поступившей инструкции, высылая отладчику-получателю соответствующие отладочные звонки. Звонки от "стартовых"
         // (открывающих) неисполняющих узлов будут поступать первыми (до возможных точек останова, которые тоже могут быть с ними связаны).
@@ -442,22 +442,21 @@ namespace
             return nullptr; // Подходящего исполняемого метода функтора среди всех публичных методов объекта functor_instance не найдено.
     }
 
-    // Проверка наличия определения свободной функции с именем free_function_name, принимающей arg_count аргументов, в таблице символов
-    // closure. При наличии таковой возвращается указатель на её описатель ast::FreeFunction. При отсутствии - возвращается nullptr.
-    runtime::FreeFunction* TestFreeFunctionVariable(const std::string& free_function_name, size_t arg_count, Closure& closure)
+    // Проверка наличия определения свободной функции с именем free_function_name, принимающей arg_count аргументов, среди всех определённых
+    // в данной программе. При наличии таковой возвращается указатель на её описатель ast::FreeFunction. При отсутствии - возвращается nullptr.
+    runtime::FreeFunction* TestFreeFunctionVariable(const std::string& free_function_name, size_t arg_count, ast::ProgramCompound* program_root)
     {
-        std::string mangled_function_name = MangleMethodFunctionName(free_function_name, arg_count);
-        if (!closure.contains(mangled_function_name))
-            return nullptr; // Переменной mangled_function_name (и, соответственно, определённой её функции) на данный момент в таблице символов нет.
-
-        ast::FreeFunctionDefinition* func_definition = closure.at(mangled_function_name).TryAs<ast::FreeFunctionDefinition>();
-        if (!func_definition)
-            return nullptr; // Переменная mangled_function_name существует, но это не определение функции.
-
-        runtime::FreeFunction* result_func = func_definition->GetFunction();
-        if (result_func->GetArgCount() != arg_count)
-            return nullptr; // По какой-то странной причине количество аргументов не совпадает с требуемым.
-        return result_func;
+        if (!program_root)
+            return nullptr;
+        for (const auto& declared_free_func_pair : program_root->GetDeclaredFreeFunctionsDef())
+        {
+            if (declared_free_func_pair.second->GetFunctionName() == free_function_name &&
+                declared_free_func_pair.second->GetArgCount() == arg_count)
+                // Определённая в программе свободная функция с требуемой сигнатурой обнаружена.
+                return declared_free_func_pair.second->GetFunction();
+        }
+        // Требуемой аргументами запроса свободной функции в программе не существует.
+        return nullptr;
     }
 
     runtime::LinkageValue ConvertToLinkageValue(const runtime::ObjectHolder& input_object)
@@ -659,7 +658,7 @@ namespace ast
                   // перенацеливая внутренний указатель контейнера, соответствующий этой переменной, на новое значение right_result.
                     CallDestroyIfNeed(*deref_ptr, context);
                     deref_ptr->ModifyData(move(right_result));
-                    return *deref_ptr;  // Для валидной сслыки возвращаемым результатом присваивания будет эффект её разыменования.
+                    return *deref_ptr;  // Для валидной ссылки возвращаемым результатом присваивания будет эффект её разыменования.
                 }
                 else
                 { // Если ссылка невалидна, вернём пустое значение.
@@ -759,6 +758,8 @@ namespace ast
             if (i++ < dotted_ids_.size())
             {
                 cur_class_instance_ptr = cur_object_holder->TryAs<runtime::ClassInstance>();
+                if (!cur_class_instance_ptr)
+                    ThrowRuntimeError(this, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
                 cur_closure_ptr = &(cur_class_instance_ptr->Fields());
             }
             else
@@ -847,11 +848,12 @@ namespace ast
             // анализе МУФЛОН-программы.
             return free_function_->Call(real_args, context);
 
+        ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(context.GetProgramRoot());
         // Второй базовый сценарий: тут возможны два варианта обработки конструкции free_function_name() - как вызов собственно
         // свободной функции с именем free_function_name или как вызов функционального объекта (функтора), хранящегося в
         // переменной с таким же именем.
         // Приоритет у нас будет иметь вызов функции, поэтому проверим его наличие в первую голову.
-        if (runtime::FreeFunction* find_free_func = TestFreeFunctionVariable(free_function_name_, real_args.size(), closure))
+        if (runtime::FreeFunction* find_free_func = TestFreeFunctionVariable(free_function_name_, real_args.size(), program_root))
             // Свободная функция free_function_name_ с нужным количеством аргументов существует - вызываем её без каких-либо дальнейших проверок.
             return find_free_func->Call(real_args, context);
         else if (runtime::CommonClassInstance* functor_instance = TestFunctorVariable(nullptr, free_function_name_, real_args.size(), closure))
@@ -1239,19 +1241,45 @@ namespace ast
         dll_list_.clear();
     }
 
-    void ProgramCompound::AppendInternalClassId(const std::string& class_name, int class_id)
+    void ProgramCompound::AppendInternalClassId(const string& class_name, int class_id)
     {
-        internal_classes_ids_.emplace(std::pair{class_name, class_id});
+        internal_classes_ids_.emplace(pair{class_name, class_id});
     }
 
-    void ProgramCompound::AppendDeclaredClassDef(const std::string& class_name, ast::ClassDefinition* class_def)
+    void ProgramCompound::AppendDeclaredClassDef(const string& class_name, ast::ClassDefinition* class_def)
     {
-        declared_classes_def_.emplace(std::pair{class_name, class_def});
+        declared_classes_def_.emplace(pair{class_name, class_def});
     }
 
-    void ProgramCompound::AppendDeclaredFreeFuncDef(const std::string& free_func_sign, ast::FreeFunctionDefinition* free_func_def)
+    void ProgramCompound::AppendDeclaredFreeFuncDef(const string& free_func_sign, ast::FreeFunctionDefinition* free_func_def)
     {
-        declared_free_functions_def_.emplace(std::pair{free_func_sign, free_func_def});
+        declared_free_functions_def_.emplace(pair{free_func_sign, free_func_def});
+    }
+
+    // Метод компоновки данной программы с другой "библиотечной" МУФЛОН-программой linked_program в двоичном её представлении.
+    pair<size_t, size_t> ProgramCompound::LinkAnotherCompound(ProgramCompound* linked_program)
+    {
+        if (!linked_program)
+            return {0, 0};
+        
+        size_t classes_corrected = 0, classes_appended = 0;
+        for (const auto& linked_decl_classes_pair : linked_program->GetDeclaredClassesDef())
+        {
+            if (auto our_decl_calss_it = GetDeclaredClassesDef().find(linked_decl_classes_pair.first);
+                our_decl_calss_it != GetDeclaredClassesDef().end())
+            { // Это доопределение уже существующего в нашей программе класса.
+
+            }
+            else
+            { // Такого класса в данной программе не существует, так что добавляем его к нашей "классовой базе" полностью, в неизменном виде.
+                unique_ptr<ast::ClassDefinition> new_class_def = make_unique<ast::ClassDefinition>(*linked_decl_classes_pair.second);
+                declared_classes_def_[linked_decl_classes_pair.first] = new_class_def.get();
+                AddStatement(move(new_class_def));
+                ++classes_appended;
+            }
+        }
+
+        return {classes_corrected , classes_appended};
     }
 
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)

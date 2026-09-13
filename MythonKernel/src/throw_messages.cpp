@@ -22,6 +22,7 @@ namespace runtime
         // Обращение к отсутствующим методам, переменным, полям или ссылкам.
         {ThrowMessageNumber::THRM_METHOD_NOT_FOUND, "Метод не найден"s},
         {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND, "Свободная функция не найдена"s},
+        {ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL, "Попытка вызова абстрактного метода, не имеющего конкретизации"s},
         {ThrowMessageNumber::THRM_FIELD_NOT_FOUND, "Обращение к несуществующему или недоступному полю"s},
         {ThrowMessageNumber::THRM_INDIRECT_ASSIGN_ERROR, "Ошибка семантики косвенного присваивания"s},
         {ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND, "Переменная не найдена"s},

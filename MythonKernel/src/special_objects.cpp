@@ -13,42 +13,42 @@ using namespace runtime;
 
 namespace ast
 {
-    NewArray::NewArray(std::vector<std::unique_ptr<Statement>> args) : args_(move(args))
+    NewArray::NewArray(vector<unique_ptr<Statement>> args) : args_(move(args))
     {
         if (!args_.size())
             throw ParseError(ThrowMessageNumber::THRM_ARRAY_MUST_HAVE_DIMS);
     }
 
-    runtime::ObjectHolder NewArray::Execute(runtime::Closure& closure, runtime::Context& context)
+    ObjectHolder NewArray::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
-        std::vector<int> elements_count;
+        vector<int> elements_count;
         for (auto& cur_param_ptr : args_)
         {
             ObjectHolder cur_count_object = cur_param_ptr->Execute(closure, context);
-            runtime::Number* cur_element_count_ptr = cur_count_object.TryAs<runtime::Number>();
+            Number* cur_element_count_ptr = cur_count_object.TryAs<Number>();
             if (cur_element_count_ptr)
                 elements_count.push_back(cur_element_count_ptr->GetIntValue());
             else
                 ThrowRuntimeError(this, ThrowMessageNumber::THRM_ARRAY_SIZE_NOT_NUMERIC);
         }
 
-        return ObjectHolder::Own(runtime::ArrayInstance(move(elements_count)));
+        return ObjectHolder::Own(ArrayInstance(move(elements_count)));
     }
 
-    NewMap::NewMap(std::vector<std::unique_ptr<Statement>> args)
+    NewMap::NewMap(vector<unique_ptr<Statement>> args)
     {
         if (args.size())
             throw ParseError(ThrowMessageNumber::THRM_MAP_CTOR_HAS_NO_PARAMS);
     }
 
-    runtime::ObjectHolder NewMap::Execute(runtime::Closure& closure, runtime::Context& context)
+    ObjectHolder NewMap::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
-        return ObjectHolder::Own(runtime::MapInstance());
+        return ObjectHolder::Own(MapInstance());
     }
 
-    NewTypeTraits::NewTypeTraits(std::vector<std::unique_ptr<Statement>> args) : args_(move(args))
+    NewTypeTraits::NewTypeTraits(vector<unique_ptr<Statement>> args) : args_(move(args))
     {
         if (args_.size() != 1)
             throw ParseError(ThrowMessageNumber::THRM_STR_HAS_ONE_PARAM);
@@ -56,11 +56,11 @@ namespace ast
 
     // Возвращает объект, содержащий значение типа TypeTraits, представляющее собой характеристический тип для значения первого
     // аргумента args_[0], ранее переданного в конструктор данного класса.
-    runtime::ObjectHolder NewTypeTraits::Execute(runtime::Closure& closure, runtime::Context& context)
+    ObjectHolder NewTypeTraits::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(this, closure, context);
         ObjectHolder traits_value = args_[0]->Execute(closure, context);
-        return ObjectHolder::Own(runtime::TypeTraitsInstance
+        return ObjectHolder::Own(TypeTraitsInstance
             (move(traits_value), static_cast<ProgramCompound*>(context.GetProgramRoot())));
     }
 
@@ -74,7 +74,7 @@ namespace ast
         return make_unique<NewMap>(NewMap(move(args)));
     }
 
-    unique_ptr<Statement> CreateTypeTraits(std::vector<std::unique_ptr<Statement>> args)
+    unique_ptr<Statement> CreateTypeTraits(vector<unique_ptr<Statement>> args)
     {
         return make_unique<NewTypeTraits>(NewTypeTraits(move(args)));
     }
@@ -296,7 +296,7 @@ namespace runtime
         }
     }
 
-    ArrayInstance::ArrayInstance(std::vector<int> elements_count) : elements_count_(move(elements_count))
+    ArrayInstance::ArrayInstance(vector<int> elements_count) : elements_count_(move(elements_count))
     {
         int total_elements = 1;
         for (size_t i = 0; i < elements_count_.size(); ++i)
@@ -305,7 +305,7 @@ namespace runtime
         data_storage_.resize(total_elements, ObjectHolder::None());
     }
 
-    void ArrayInstance::Print(std::ostream& os, Context& context)
+    void ArrayInstance::Print(ostream& os, Context& context)
     {
         os << "Arr:" << elements_count_.size();
         for (size_t i = 0; i < elements_count_.size(); ++i)
@@ -334,9 +334,9 @@ namespace runtime
     }
     
     // Извлечение элемента массива по набору его индексов.
-    ObjectHolder ArrayInstance::GetElement(const std::vector<size_t>& indexes) const
+    ObjectHolder ArrayInstance::GetElement(const vector<size_t>& indexes) const
     {
-        std::optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
+        optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
         if (absolute_element_index)
             return data_storage_[absolute_element_index.value()];
         else
@@ -353,9 +353,9 @@ namespace runtime
     }
 
     // Установка элемента массива, адресуемого по набору его индексов.
-    ObjectHolder ArrayInstance::SetElement(const std::vector<size_t>& indexes, ObjectHolder value)
+    ObjectHolder ArrayInstance::SetElement(const vector<size_t>& indexes, ObjectHolder value)
     {
-        std::optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
+        optional<size_t> absolute_element_index = CountAbsoluteElementIndex(indexes);
         if (absolute_element_index)
         {
             data_storage_[absolute_element_index.value()] = move(value);
@@ -375,7 +375,7 @@ namespace runtime
     }
 
     // Расчёт абсолютного индекса (индекса положения в линейном хранилище ) элемента, адресуемого набором своих разхмерных индексов.
-    std::optional<size_t> ArrayInstance::CountAbsoluteElementIndex(const std::vector<size_t>& indexes) const
+    std::optional<size_t> ArrayInstance::CountAbsoluteElementIndex(const vector<size_t>& indexes) const
     {
         size_t absolute_element_index = 0;
         for (size_t current_index_num = 0; current_index_num < elements_count_.size(); ++current_index_num)
@@ -390,8 +390,7 @@ namespace runtime
         return absolute_element_index;
     }
 
-    ObjectHolder ArrayInstance::MethodGet(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context)
+    ObjectHolder ArrayInstance::MethodGet(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Get"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_NUMERIC, elements_count_.size(), actual_args);
@@ -412,7 +411,7 @@ namespace runtime
         return ObjectHolder::Own(PointerObject(&data_storage_[absolute_element_number]));
     }
 
-    ObjectHolder ArrayInstance::MethodGetArrayDimensions(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+    ObjectHolder ArrayInstance::MethodGetArrayDimensions(const string& method, const vector<ObjectHolder>& actual_args,
                                                          Context& context)
     {
         CheckMethodParams(context, "GetArrayDimensions"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
@@ -421,7 +420,7 @@ namespace runtime
         return ObjectHolder::Own(runtime::Number(static_cast<int>(elements_count_.size())));
     }
 
-    ObjectHolder ArrayInstance::MethodGetDimensionCount(const std::string& method, const std::vector<ObjectHolder>& actual_args,
+    ObjectHolder ArrayInstance::MethodGetDimensionCount(const string& method, const vector<ObjectHolder>& actual_args,
                                                         Context& context)
     {
         CheckMethodParams(context, "GetDimensionCount"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
@@ -435,8 +434,7 @@ namespace runtime
             return ObjectHolder::Own(runtime::Number(-1));
     }
 
-    ObjectHolder ArrayInstance::MethodResize(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                             Context& context)
+    ObjectHolder ArrayInstance::MethodResize(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Resize"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_GREATER_EQ,
             MethodParamType::PARAM_TYPE_NUMERIC, 1, actual_args);
@@ -457,8 +455,7 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder ArrayInstance::MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                            Context& context)
+    ObjectHolder ArrayInstance::MethodClear(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Clear"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -476,8 +473,7 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder ArrayInstance::MethodPushBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                               Context& context)
+    ObjectHolder ArrayInstance::MethodPushBack(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "PushBack"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -495,8 +491,7 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder ArrayInstance::MethodBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                           Context& context)
+    ObjectHolder ArrayInstance::MethodBack(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Back"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_ANY, 0, actual_args);    
@@ -514,8 +509,7 @@ namespace runtime
         }
     }
 
-    ObjectHolder ArrayInstance::MethodPopBack(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                              Context& context)
+    ObjectHolder ArrayInstance::MethodPopBack(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "PopBack"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -536,8 +530,8 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder ArrayInstance::Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
-                                     Context& context, const std::string& parent_name)
+    ObjectHolder ArrayInstance::Call
+        (const string& method_name, const vector<ObjectHolder>& actual_args, Context& context, const string& parent_name)
     {
         if (array_method_table_.count(method_name))
             return (this->*array_method_table_.at(method_name))(method_name, actual_args, context);
@@ -618,7 +612,7 @@ namespace runtime
         return map_iterator_ == map_storage_ref_.begin();
     }
 
-    void MapCursor::Print(std::ostream& os, Context& context)
+    void MapCursor::Print(ostream& os, Context& context)
     {
         os << "MapIter:" << iterator_pack_serial_ << ' ' << boolalpha << IsCursorValid();
     }
@@ -629,14 +623,13 @@ namespace runtime
             map_instance_ref_.GetIteratorPackSerial() == iterator_pack_serial_;
     }
 
-    void MapInstance::Print(std::ostream& os, Context& context)
+    void MapInstance::Print(ostream& os, Context& context)
     {
         os << "Map:" << map_storage_.size();
         os << ' ' << boolalpha << is_in_iterator_mode_ << ' ' << iterator_pack_serial_;
     }
 
-    void CheckMapIteratorParam(Context& context, const string& method_name,
-                               const vector<ObjectHolder>& actual_args)
+    void CheckMapIteratorParam(Context& context, const string& method_name, const vector<ObjectHolder>& actual_args)
     {
         string err_mess;
 
@@ -681,20 +674,18 @@ namespace runtime
         return string_key;
     }
 
-    ObjectHolder MapInstance::MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                           Context& context)
+    ObjectHolder MapInstance::MethodInsert(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Insert"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
         if (is_in_iterator_mode_)
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_CURSOR_IN_PROGRESS_INSERT);
 
-        auto [map_iterator, inserted] = map_storage_.insert({ GetStringKey(actual_args[0], context), actual_args[1] });
+        auto [map_iterator, inserted] = map_storage_.insert({GetStringKey(actual_args[0], context), actual_args[1]});
         return ObjectHolder::Own(PointerObject(&(map_iterator->second)));
     }
 
-    ObjectHolder MapInstance::MethodFind(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                         Context& context)
+    ObjectHolder MapInstance::MethodFind(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Find"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -706,8 +697,7 @@ namespace runtime
             return ObjectHolder::Own(PointerObject());
     }
 
-    ObjectHolder MapInstance::MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context)
+    ObjectHolder MapInstance::MethodErase(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Erase"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -718,8 +708,7 @@ namespace runtime
         return ObjectHolder::Own(Number(static_cast<int>(items_deleted)));
     }
 
-    ObjectHolder MapInstance::MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                             Context& context)
+    ObjectHolder MapInstance::MethodContains(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Contains"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -727,8 +716,7 @@ namespace runtime
         return ObjectHolder::Own(Bool(map_storage_.count(GetStringKey(actual_args[0], context))));
     }
 
-    ObjectHolder MapInstance::MethodClear(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context)
+    ObjectHolder MapInstance::MethodClear(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Clear"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -737,8 +725,7 @@ namespace runtime
         return ObjectHolder::None();            
     }
 
-    ObjectHolder MapInstance::MethodBegin(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context)
+    ObjectHolder MapInstance::MethodBegin(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Begin"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -746,56 +733,49 @@ namespace runtime
         return ObjectHolder::Own(MapCursor(*this, map_storage_));
     }
 
-    ObjectHolder MapInstance::MethodPrevious(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                             Context& context)
+    ObjectHolder MapInstance::MethodPrevious(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "Previous"s, actual_args);
 
         return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->CursorPrevious()));
     }
 
-    ObjectHolder MapInstance::MethodNext(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                         Context& context)
+    ObjectHolder MapInstance::MethodNext(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "Next"s, actual_args);
 
         return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->CursorNext()));
     }
 
-    ObjectHolder MapInstance::MethodKey(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                        Context& context)
+    ObjectHolder MapInstance::MethodKey(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "Key"s, actual_args);
 
         return actual_args[0].TryAs<MapCursor>()->CursorGetKey();
     }
 
-    ObjectHolder MapInstance::MethodValue(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context)
+    ObjectHolder MapInstance::MethodValue(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "Value"s, actual_args);
 
         return actual_args[0].TryAs<MapCursor>()->CursorGetValue();
     }
 
-    ObjectHolder MapInstance::MethodIsCursorBegin(const std::string& method,
-                            const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder MapInstance::MethodIsCursorBegin(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "IsIteratorBegin"s, actual_args);
 
         return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->IsCursorBegin()));
     }
 
-    ObjectHolder MapInstance::MethodIsCursorEnd(const std::string& method,
-                            const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder MapInstance::MethodIsCursorEnd(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMapIteratorParam(context, "IsIteratorEnd"s, actual_args);
 
         return ObjectHolder::Own(Bool(actual_args[0].TryAs<MapCursor>()->IsCursorEnd()));
     }
 
-    ObjectHolder MapInstance::MethodRelease(const std::string& method, const std::vector<ObjectHolder>& actual_args,
-                                            Context& context)
+    ObjectHolder MapInstance::MethodRelease(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Release"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -804,8 +784,8 @@ namespace runtime
         return ObjectHolder::None();
     }
 
-    ObjectHolder MapInstance::Call(const std::string& method_name,
-                                   const std::vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
+    ObjectHolder MapInstance::Call
+        (const string& method_name, const vector<ObjectHolder>& actual_args, Context& context, const string& parent_name)
     {
         if (map_method_table_.count(method_name))
             return (this->*map_method_table_.at(method_name))(method_name, actual_args, context);
@@ -813,7 +793,7 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool MapInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
+    bool MapInstance::HasMethod(const string& method_name, size_t argument_count, const string& parent_name) const
     {
         if (!parent_name.empty())
             return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
@@ -829,7 +809,7 @@ namespace runtime
         }
     }
 
-    CoroutineInstance::CoroutineInstance(ClassInstance* class_instance, const runtime::Method* method, Closure& closure) :
+    CoroutineInstance::CoroutineInstance(ClassInstance* class_instance, const Method* method, Closure& closure) :
         class_instance_(class_instance), method_(method), coro_closure_(closure), is_started_(false), is_awaiting_(true)
     {
         if (!method_->is_coroutine)
@@ -855,7 +835,7 @@ namespace runtime
         coro_closure_[COROUTINE_STATUS_VAR] = ObjectHolder::Share(*this);
     }
 
-    void CoroutineInstance::Print(std::ostream& os, Context& context)
+    void CoroutineInstance::Print(ostream& os, Context& context)
     {
         if (class_instance_ &&  method_)
         {
@@ -873,8 +853,8 @@ namespace runtime
         }
     }
 
-    ObjectHolder CoroutineInstance::Call(const std::string& method_name,
-                                         const std::vector<ObjectHolder>& actual_args, Context& context, const std::string& parent_name)
+    ObjectHolder CoroutineInstance::Call
+        (const string& method_name, const vector<ObjectHolder>& actual_args, Context& context, const string& parent_name)
     {
         if (coroutine_method_table_.count(method_name))
             return (this->*coroutine_method_table_.at(method_name))(method_name, actual_args, context);
@@ -882,7 +862,7 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
 
-    bool CoroutineInstance::HasMethod(const string& method_name, size_t argument_count, const std::string& parent_name) const
+    bool CoroutineInstance::HasMethod(const string& method_name, size_t argument_count, const string& parent_name) const
     {
         if (!parent_name.empty())
             return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
@@ -898,7 +878,7 @@ namespace runtime
         }
     }
 
-    ObjectHolder CoroutineInstance::MethodResume(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodResume(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         if (!is_awaiting_)
             return ret_value_;
@@ -913,9 +893,15 @@ namespace runtime
         try
         {
             if (class_instance_)
+            {
+                if (!method_->body)
+                    ThrowRuntimeError(context, ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL);
                 ret_value_ = method_->body->Execute(coro_closure_, context);
+            }
             else if (free_function_)
+            {
                 ret_value_ = free_function_->ExecuteBody(coro_closure_, context);
+            }
         }
         catch (...)
         { // Любое исключение, распространившееся за пределы сопрограммы, окончательно её завершает.
@@ -928,32 +914,27 @@ namespace runtime
         return ret_value_;
     }
     
-    ObjectHolder CoroutineInstance::MethodIsStarted
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodIsStarted(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return ObjectHolder::Own(Bool(is_started_));
     }
     
-    ObjectHolder CoroutineInstance::MethodIsAwaiting
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodIsAwaiting(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return ObjectHolder::Own(Bool(is_awaiting_));
     }
     
-    ObjectHolder CoroutineInstance::MethodValue
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodValue(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return ret_value_;
     }
 
-    ObjectHolder CoroutineInstance::MethodGetAwaitable
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodGetAwaitable(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return coro_awaitable_;
     }
     
-    ObjectHolder CoroutineInstance::MethodSetAwaitable
-        (const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodSetAwaitable(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     { // Метод назначения ждуна этой сопрограмме. Ждун обязательно должен быть наследником встроенного прототипа Awaitable.
         CheckMethodParams(context, "SetAwaitable"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
             MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -971,20 +952,20 @@ namespace runtime
         }
     }
 
-    ObjectHolder CoroutineInstance::MethodSuspendType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodSuspendType(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return ObjectHolder::Own(Number(static_cast<int>(suspend_type_)));
     }
 
     // Предикат, возвращающий "ИСТИНУ", если сопрограмма построена на основе свободной функции.
-    ObjectHolder CoroutineInstance::MethodIsFreeFunction(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder CoroutineInstance::MethodIsFreeFunction(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         return ObjectHolder::Own(Bool(free_function_));
     }
 
     // Определения статических полей класса TypeTraitsInstance.
     // Таблица внешних методов этого специального класса, доступного из МУФЛОН-программы.
-    const std::unordered_map<std::string_view, TypeTraitsInstance::TypeTraitsCallMethod> TypeTraitsInstance::type_traits_method_table_
+    const unordered_map<string_view, TypeTraitsInstance::TypeTraitsCallMethod> TypeTraitsInstance::type_traits_method_table_
     {
         {"is_bool"sv, &TypeTraitsInstance::MethodIsBool},
         {"IsBool"sv, &TypeTraitsInstance::MethodIsBool},
@@ -1061,8 +1042,8 @@ namespace runtime
         {"GetFieldValue"sv, {1, 1}},
         {"set_field_value"sv, {2, 2}},
         {"SetFieldValue"sv, {2, 2}},
-        {"call_method"sv, {1, (std::numeric_limits<size_t>::max)()}},
-        {"CallMethod"sv, {1, (std::numeric_limits<size_t>::max)()}}
+        {"call_method"sv, {1, (numeric_limits<size_t>::max)()}},
+        {"CallMethod"sv, {1, (numeric_limits<size_t>::max)()}}
     };
 
     // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
@@ -1076,7 +1057,7 @@ namespace runtime
         traits_value_(move(traits_value)), program_compound_(program_compound)
     {}
 
-    void TypeTraitsInstance::Print(std::ostream& os, Context& context)
+    void TypeTraitsInstance::Print(ostream& os, Context& context)
     {
         const ast::ProgramCompound* program_root = dynamic_cast<const ast::ProgramCompound*>(context.GetProgramRoot());
         if (!program_root)
@@ -1089,8 +1070,8 @@ namespace runtime
             << " - Name - " << ObjectNameInternal(traits_value_);
     }
 
-    ObjectHolder TypeTraitsInstance::Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
-                                          Context& context, const std::string& parent_name)
+    ObjectHolder TypeTraitsInstance::Call(const string& method_name, const vector<ObjectHolder>& actual_args,
+                                          Context& context, const string& parent_name)
     {
         if (type_traits_method_table_.count(method_name))
             return (this->*type_traits_method_table_.at(method_name))(method_name, actual_args, context);
@@ -1098,7 +1079,7 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
     }
     
-    bool TypeTraitsInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
+    bool TypeTraitsInstance::HasMethod(const string& method_name, size_t argument_count, const string& parent_name) const
     {
         if (!parent_name.empty())
             return false;   // Метод не имеет предков, поэтому не существует методов с непустыми спецификаторами предшественников в иерархии наследования.
@@ -1114,20 +1095,43 @@ namespace runtime
     }
 
     // Поиск класса с заданным именем class_name среди всех объявленных в программе сущностей.
-    ProgramCommandDescriptor TypeTraitsInstance::ScanForClass
-        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& class_name)
+    ProgramCommandDescriptor TypeTraitsInstance::ScanForProgramClass
+        (const unordered_map<string, ast::ClassDefinition*>& declared_classes_def, const string& class_name)
     {
-        auto class_it = declared_classes_def.find(class_name);
-        if (class_it != declared_classes_def.end())
-            return class_it->second->GetCommandDesc();
+        auto decl_class_it = declared_classes_def.find(class_name);
+        if (decl_class_it != declared_classes_def.end())
+            return decl_class_it->second->GetCommandDesc();
         else
             return runtime::DUMB_PROG_POS;
     }
     
+    // Поиск внутреннего (предопределённого) класса с заданным именем class_name.
+    int TypeTraitsInstance::ScanForInternalClass(const unordered_map<string, int>& internal_classes_ids, const string& class_name)
+    {
+        auto internal_class_it = internal_classes_ids.find(class_name);
+        if (internal_class_it != internal_classes_ids.end())
+            return internal_class_it->second;
+        else
+            return INVALID_TYPE_IDENT;
+    }
+
+    // Поиск любого существующего (как предопределённого, так и пользовательского) класса с именем class_name.
+    variant<monostate, ProgramCommandDescriptor, int> TypeTraitsInstance::ScanForAnyClass
+        (const unordered_map<string, int>& internal_classes_ids, const unordered_map<string, ast::ClassDefinition*>& declared_classes_def,
+         const string& class_name)
+    {
+        if (int scan_class_id = ScanForInternalClass(internal_classes_ids, class_name); scan_class_id != INVALID_TYPE_IDENT)
+            return scan_class_id;
+        if (ProgramCommandDescriptor scan_class_pos = ScanForProgramClass(declared_classes_def, class_name);
+            scan_class_pos.IsValid())
+            return scan_class_pos;
+
+        return {};
+    }
+
     // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
     ProgramCommandDescriptor TypeTraitsInstance::ScanForMethod
-        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
-         const std::string& method_sign, const std::string& class_name)
+        (const unordered_map<string, ast::ClassDefinition*>& declared_classes_def, const string& method_sign, const string& class_name)
     {
         pair<string, size_t> method_params_pair = DemangleMethodFunctionName(method_sign);
         for (const auto& class_pair : declared_classes_def)
@@ -1147,7 +1151,7 @@ namespace runtime
     
     // Поиск определённой в МУФЛОН-программе свободной функции с заданной сигнатурой free_func_sign.
     ProgramCommandDescriptor TypeTraitsInstance::ScanForFreeFunction
-        (const std::unordered_map<std::string, ast::FreeFunctionDefinition*>& declared_free_functions_def, const std::string& free_func_sign)
+        (const unordered_map<string, ast::FreeFunctionDefinition*>& declared_free_functions_def, const string& free_func_sign)
     {
         auto free_function_it = declared_free_functions_def.find(free_func_sign);
         if (free_function_it != declared_free_functions_def.end())
@@ -1156,19 +1160,19 @@ namespace runtime
             return runtime::DUMB_PROG_POS;
     }
 
-    int TypeTraitsInstance::ObjectIdInternal(const std::unordered_map<std::string, int>& internal_classes_ids, const ObjectHolder& what_id)
+    int TypeTraitsInstance::ObjectIdInternal(const unordered_map<string, int>& internal_classes_ids, const ObjectHolder& what_id)
     {
         if (!what_id)
             return NONE_IDENT;
-        else if (what_id.TryAs<runtime::Bool>())
+        else if (what_id.TryAs<Bool>())
             return BOOL_IDENT;
-        else if (what_id.TryAs<runtime::Number>())
+        else if (what_id.TryAs<Number>())
             return NUMERIC_IDENT;
-        else if (what_id.TryAs<runtime::String>())
+        else if (what_id.TryAs<String>())
             return STRING_IDENT;
-        else if (runtime::ClassInstance* class_instance = what_id.TryAs<runtime::ClassInstance>())
+        else if (ClassInstance* class_instance = what_id.TryAs<ClassInstance>())
             return class_instance->GetBaseClass().GetId();
-        else if (runtime::CommonClassInstance* common_class_instance = what_id.TryAs<runtime::CommonClassInstance>())
+        else if (CommonClassInstance* common_class_instance = what_id.TryAs<CommonClassInstance>())
         {
             auto classes_ids_it = internal_classes_ids.find(common_class_instance->GetClassName());
             if (classes_ids_it != internal_classes_ids.end())
@@ -1180,51 +1184,51 @@ namespace runtime
             return INVALID_TYPE_IDENT;
     }
 
-    std::string TypeTraitsInstance::ObjectNameInternal(const ObjectHolder& what_name)
+    string TypeTraitsInstance::ObjectNameInternal(const ObjectHolder& what_name)
     {
         if (!what_name)
             return "None"s;
-        else if (what_name.TryAs<runtime::Bool>())
+        else if (what_name.TryAs<Bool>())
             return "Bool"s;
-        else if (what_name.TryAs<runtime::Number>())
+        else if (what_name.TryAs<Number>())
             return "Number"s;
-        else if (what_name.TryAs<runtime::String>())
+        else if (what_name.TryAs<String>())
             return "String"s;
-        else if (runtime::CommonClassInstance* common_class_instance = what_name.TryAs<runtime::CommonClassInstance>())
+        else if (CommonClassInstance* common_class_instance = what_name.TryAs<CommonClassInstance>())
             return common_class_instance->GetClassName();
         else
             return {};
     }
 
-    ObjectHolder TypeTraitsInstance::MethodIsBool(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsBool(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsBool"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::Bool>()));
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<Bool>()));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsNumeric(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsNumeric(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsNumeric"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::Number>()));
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<Number>()));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsString(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsString(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsString"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-        return ObjectHolder::Own(Bool(traits_value_.TryAs<runtime::String>()));
+        return ObjectHolder::Own(Bool(traits_value_.TryAs<String>()));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsNone(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsNone(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsNone"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
         return ObjectHolder::Own(Bool(!traits_value_));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsSameType(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsSameType(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsSameType"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -1243,7 +1247,7 @@ namespace runtime
         return ObjectHolder::Own(Bool(traits_value_id == actual_arg_id));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsSameTarget(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsSameTarget(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsSameTarget"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -1261,12 +1265,12 @@ namespace runtime
     }
 
     // Проверка на совпадение истинного имени характеризуемого класса и строкового аргумента метода.
-    ObjectHolder TypeTraitsInstance::MethodIsClass(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsClass(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsClass"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
-        std::string traits_name = ObjectNameInternal(traits_value_);
+        string traits_name = ObjectNameInternal(traits_value_);
         String* test_class_name = actual_args[0].TryAs<String>();
 
         if (!test_class_name || traits_name.empty() || test_class_name->GetValue().empty())
@@ -1274,17 +1278,17 @@ namespace runtime
         return ObjectHolder::Own(Bool(traits_name == test_class_name->GetValue()));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsSuсcessorOf"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
-        runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
-        runtime::CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<CommonClassInstance>();
+        CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<CommonClassInstance>();
         if (!traits_common_class_instance || !test_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Одно или оба из сравниваемых значений не класс, оно не участвует в наследственных отношениях.
 
-        runtime::ClassInstance* test_class_instance = actual_args[0].TryAs<runtime::ClassInstance>();
+        ClassInstance* test_class_instance = actual_args[0].TryAs<ClassInstance>();
         if (!test_class_instance)
             // Класс, для которого нужно выяснить, не являемся ли мы его потомком, является CommonClassInstance, но не ClassInstance.
             // В этом случае проверим их связь по происхождению, используя имя проверяемого класса test_common_class_instance.
@@ -1295,18 +1299,18 @@ namespace runtime
             return ObjectHolder::Own(Bool(traits_common_class_instance->IsSuccessorOf(test_class_instance->GetBaseClass())));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodIsPredecessorOf(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsPredecessorOf(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "IsPredecessorOf"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
 
-        runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
-        runtime::CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<CommonClassInstance>();
+        CommonClassInstance* test_common_class_instance = actual_args[0].TryAs<CommonClassInstance>();
         if (!traits_common_class_instance || !test_common_class_instance)
             // Одно или оба из сравниваемых значений не класс, оно(они) не участвует(ют) в наследственных отношениях.
             return ObjectHolder::Own(Bool(false));
 
-        runtime::ClassInstance* traits_class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        ClassInstance* traits_class_instance = traits_value_.TryAs<ClassInstance>();
         if (!traits_class_instance)
             // "Наш" класс есть CommonClassInstance, но не ClassInstance, то есть он есть какой-то встроенный фиксированный класс среды.
             // В этом случае проверим их родственное отношение по имени.
@@ -1317,14 +1321,14 @@ namespace runtime
     }
     
     // Проверка предположения, что мы являемся потомком (наследником) класса, имя которого является первым фактическим аргументом этого метода.
-    ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsSuсcessorOfName(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         // Фактический параметр должен быть строковым и единственным - имя класса, предположительно, нашего предка.
         CheckMethodParams(context, "IsSuсcessorOfName"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         String* test_our_predecessor_class_name = actual_args[0].TryAs<String>();
-        runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<CommonClassInstance>();
         if (!traits_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Наше значение не класс, оно не участвует в наследственных отношениях.
 
@@ -1332,16 +1336,16 @@ namespace runtime
     }
     
     // Проверка того, являемся ли мы предшественником класса (а он, соответственно, нашим потомком) с именем, заданным аргументом данного метода.
-    ObjectHolder TypeTraitsInstance::MethodIsPredecessorOfName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodIsPredecessorOfName(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         // Фактический параметр должен быть строковым и единственным - имя класса, предположительно, нашего потомка.
         CheckMethodParams(context, "IsPredecessorOfName"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         String* test_our_successor_class_ptr = actual_args[0].TryAs<String>();
-        std::string test_our_successor_class_name = test_our_successor_class_ptr->GetValue();
+        string test_our_successor_class_name = test_our_successor_class_ptr->GetValue();
 
-        runtime::CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* traits_common_class_instance = traits_value_.TryAs<CommonClassInstance>();
         if (!traits_common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Наше значение не класс, оно не участвует в наследственных отношениях.        
         
@@ -1366,8 +1370,8 @@ namespace runtime
             return ObjectHolder::Own(Bool(false));
 
         // Проверяемый класс - общий программно определяемый класс.
-        runtime::ClassInstance* traits_class_instance = traits_value_.TryAs<runtime::ClassInstance>();
-        runtime::Class* test_class = test_declared_classes_it->second->GetClass();
+        ClassInstance* traits_class_instance = traits_value_.TryAs<ClassInstance>();
+        Class* test_class = test_declared_classes_it->second->GetClass();
         if (traits_class_instance)
             // Характеризуемый класс - также класс общего типа. Проверим их родство прямо по классовым описателям.
             return ObjectHolder::Own(Bool(test_class->IsSuccessorOf(traits_class_instance->GetBaseClass())));
@@ -1376,7 +1380,7 @@ namespace runtime
             return ObjectHolder::Own(Bool(test_class->IsSuccessorOf(traits_common_class_instance->GetClassName())));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodId(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodId(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Id"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
@@ -1391,14 +1395,14 @@ namespace runtime
         return ObjectHolder::Own(Number(ObjectIdInternal(program_root->GetInternalClassesIds(), traits_value_)));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodName(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodName(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "Name"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
         return ObjectHolder::Own(String(ObjectNameInternal(traits_value_)));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodHasMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodHasMethod(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "HasMethod"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_NUMERIC_STRING, 2, actual_args);
@@ -1409,20 +1413,20 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_PARAMS_TYPE_INCONSISTENCY,
                               "Недопустимые параметры метода HasMethod() - должны быть (строка, число)");
 
-        runtime::CommonClassInstance* common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* common_class_instance = traits_value_.TryAs<CommonClassInstance>();
         if (!common_class_instance)
             return ObjectHolder::Own(Bool(false));  // Это не класс. Стандартные типы не имеют никаких методов.
 
         return ObjectHolder::Own(Bool(common_class_instance->HasMethod(find_method_name->GetValue(), find_method_param_count->GetIntValue())));
     }
     
-    ObjectHolder TypeTraitsInstance::MethodHasField(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodHasField(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "HasField"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         String* find_field_name = actual_args[0].TryAs<String>();
-        runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        ClassInstance* class_instance = traits_value_.TryAs<ClassInstance>();
         if (!class_instance)
             return ObjectHolder::Own(Bool(false));  // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
 
@@ -1431,13 +1435,13 @@ namespace runtime
 
     // Функции-члены извлечения и установки значения некоторого поля объекта. Имя поля передаётся первым строковым аргументом.
     // Второй аргумент есть у функции-установщика и является значением, которое будет назначено указанному полю.
-    ObjectHolder TypeTraitsInstance::MethodGetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodGetFieldValue(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "GetFieldValue"s, MethodParamCheckMode::PARAM_CHECK_TYPE_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_STRING, 1, actual_args);
 
         String* find_field_name = actual_args[0].TryAs<String>();
-        runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        ClassInstance* class_instance = traits_value_.TryAs<ClassInstance>();
         if (!class_instance)
             // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
@@ -1449,7 +1453,7 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
     }
     
-    ObjectHolder TypeTraitsInstance::MethodSetFieldValue(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodSetFieldValue(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "SetFieldValue"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
                           MethodParamType::PARAM_TYPE_ANY, 2, actual_args);
@@ -1457,7 +1461,7 @@ namespace runtime
         String* find_field_name = actual_args[0].TryAs<String>();
         if (!find_field_name) // Имя поля должно быть строкой.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE);
-        runtime::ClassInstance* class_instance = traits_value_.TryAs<runtime::ClassInstance>();
+        ClassInstance* class_instance = traits_value_.TryAs<ClassInstance>();
         if (!class_instance)
             // Это не класс общего типа. У прочих типов выражений полей нет вовсе.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);
@@ -1478,7 +1482,7 @@ namespace runtime
     // Метод вызова метода того объекта, для которого создана данная характеристика, по его строковому имени. Первый аргумент - строковое имя
     // вызываемого метода, остальные аргументы передаются этому методу "как есть". При вызове выполняется проверка наличия требуемого метода
     // целевого класса по его имени и количеству параметров.
-    ObjectHolder TypeTraitsInstance::MethodCallMethod(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder TypeTraitsInstance::MethodCallMethod(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
     {
         CheckMethodParams(context, "CallMethod"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_GREATER_EQ,
                           MethodParamType::PARAM_TYPE_ANY, 1, actual_args);
@@ -1486,7 +1490,7 @@ namespace runtime
         String* find_field_name = actual_args[0].TryAs<String>();
         if (!find_field_name) // Имя метода должно быть строкой.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAM_TYPE);
-        runtime::CommonClassInstance* common_class_instance = traits_value_.TryAs<runtime::CommonClassInstance>();
+        CommonClassInstance* common_class_instance = traits_value_.TryAs<CommonClassInstance>();
         if (!common_class_instance)
             // Это не какой-либо класс. У прочих простых типов выражений методов нет вовсе.
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE);

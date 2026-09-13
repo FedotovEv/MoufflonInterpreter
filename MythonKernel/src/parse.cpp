@@ -61,14 +61,12 @@ namespace
         {
             if constexpr (std::is_same_v<T, ast::ClassDefinition>)
             { // Для узлов определителей классов нужно дополнительно добавить указатель на каждый такой определитель во вспомогательный словарь
-              // характеризатора runtime::TypeTraitsInstance.
-                // runtime::TypeTraitsInstance::AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
+              // корневого узла АСД строящейся программы.
                 if (root_program_statement_)
                     root_program_statement_->AppendDeclaredClassDef(object_ptr->GetClassName(), object_ptr.get());
             }
             else if constexpr (std::is_same_v<T, ast::FreeFunctionDefinition>)
             { // Для узлов же определителей свободных функций следует сделать аналогичное действие, но добавление происходит в другой словарь.
-                // runtime::TypeTraitsInstance::AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
                 if (root_program_statement_)
                     root_program_statement_->AppendDeclaredFreeFuncDef(object_ptr->GetFunctionMangledName(), object_ptr.get());
             }
@@ -325,10 +323,20 @@ namespace
             parsed_method.formal_params = ParseIdList();
 
             lexer_.Expect<ITokenType::Char>(')');
-            lexer_.ExpectNext<ITokenType::Char>(':');
             lexer_.NextToken();
-
-            parsed_method.body = exec_factory_.Create(ast::MethodBody(ParseSuite(), def_desc), def_desc);
+            // Следующий жетон может быть либо двоеточием (в этом случае мы имеем дело с определением метода, содержащим его следующее
+            // далее тело), либо концом строки (в этом случае это есть только опережающее объявление, а определение метода будет
+            // расположено в другом двоичном модуле). Любые иные жетоны являются недопустимыми и ошибочными.
+            if (lexer_.CurrentToken() == ':')
+            { // Это вариант полного определения метода. Считываем и сохраняем его тело в формируемую структуру описания метода.
+                lexer_.NextToken();
+                parsed_method.body = exec_factory_.Create(ast::MethodBody(ParseSuite(), def_desc), def_desc);
+            }
+            else
+            { // Это предварительное объявление метода. Далее ожидается конец строки. Если это так, тело метода пока оставляем пустым.
+                lexer_.Expect<ITokenType::Newline>();
+                lexer_.NextToken();
+            }
 
             exec_factory_.SetCurrentMethod();
             return parsed_method;
@@ -458,10 +466,6 @@ namespace
                 { // Свободная функция с требуемым именем last_name ранее не определялась. Возможно, это вызов функтора или функции, которая
                   // будет определена позже.
                     return exec_factory_.Create(ast::FreeFunctionCall(last_name, std::move(args)));
-                    /*
-                    exec_factory_.ThrowParseError
-                        (ThrowMessages::ConstructThrowText("%1 - "s + last_name + "()"s, {ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND}));
-                    */
                 }
             }
 
@@ -578,15 +582,17 @@ namespace
                 else if (op == '/')
                 { // Здесь может быть как общий случай деления, так и частный случай операции обращения,
                   // если result есть константа - целое число, точно равное 1.
+                    bool is_inversion = false;
                     if (ast::NumericConst* op_statement = dynamic_cast<ast::NumericConst*>(result.get()))
                     { // Делимое - число, это может быть инверсией аргумента.
                         const runtime::Number& op_number_value = op_statement->GetValue();
                         if (op_number_value.IsInt() && op_number_value.GetIntValue() == 1)
-                            // Делимое - целое число, равное единице. Это действительно инверсия.
-                            result = exec_factory_.Create(ast::Inversion(ParseMult()));
+                            is_inversion = true; // Делимое - целое число, равное единице. Это действительно инверсия.
                     }
-                    // Это общий случай деления.
-                    result = exec_factory_.Create(ast::Div(std::move(result), ParseMult()));
+                    if (is_inversion)   // Это частный случай одноместной операции инверсии аргумента.
+                        result = exec_factory_.Create(ast::Inversion(ParseMult()));
+                    else // Это общий случай деления.
+                        result = exec_factory_.Create(ast::Div(std::move(result), ParseMult()));
                 }
                 else
                 {

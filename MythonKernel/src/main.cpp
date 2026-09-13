@@ -365,7 +365,7 @@ namespace
             { // Установка единичного бряка различных допустимых типов.
                 if (std::holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
                 {
-                    debug_context.AddBreakpoint(std::get<runtime::ProgramCommandDescriptor>(one_break));
+                    debug_context.AddPositionBreak(std::get<runtime::ProgramCommandDescriptor>(one_break));
                 }
                 else if (std::holds_alternative<runtime::BreakpointDesc>(one_break))
                 {
@@ -682,10 +682,10 @@ while i < 10:
   map_var.insert(i, 2 * i)
   i = i + 1
               
-map_iter = map_var.begin()
-while not map_var.is_cursor_end(map_iter):
-  print map_var.key(map_iter), map_var.value(map_iter)
-  map_var.next(map_iter)
+map_cursor = map_var.begin()
+while not map_var.is_cursor_end(map_cursor):
+  print map_var.key(map_cursor), map_var.value(map_cursor)
+  map_var.next(map_cursor)
 map_var.release()
 )--");
 
@@ -2177,12 +2177,14 @@ print cls_3                                         # Строка 47
                 runtime::ProgramCommandDescriptor{.module_string_number = 19},    // Ординарная точка останова на строку 19 (внутри свободной функции FreeFunction_1).
                 runtime::ProgramCommandDescriptor{.module_string_number = 37},    // Ординарная точка останова на строку 37.
                 MethodCharm{.name = "ClassMethod_2", .class_name = "TestClass", .arg_count =  1}, // Точка останова на вызов метода TestClass::ClassMethod_2().
-                runtime::BreakpointDesc{.position{.module_string_number = 7},     // Отключённый останов на строку 7 (внутри метода TestClass::ClassMethod_1). Срабатывать не должен.
+                // Отключённый останов на строку 7 (внутри метода TestClass::ClassMethod_1). Срабатывать не должен.
+                runtime::BreakpointDesc{.var_desc = LocalBreakpointDesc{.position{.module_string_number = 7}},
                                         .is_enabled = false},
-                runtime::BreakpointDesc{.position{.module_string_number = 8}},    // Обычный останов на строку 8 (внутри метода TestClass::ClassMethod_1), но созданный с помощью BreakpointDesc{}.
-                runtime::BreakpointDesc{.position{.module_string_number = 40},    // Условный бряк на строку 40.
+                // Обычный останов на строку 8 (внутри метода TestClass::ClassMethod_1), но созданный с помощью BreakpointDesc{}.
+                runtime::BreakpointDesc{.var_desc = LocalBreakpointDesc{.position{.module_string_number = 8}}},
+                runtime::BreakpointDesc{.var_desc = LocalBreakpointDesc{.position{.module_string_number = 40}},    // Условный бряк на строку 40.
                                         .is_conditional = true},
-                runtime::BreakpointDesc{.position{.module_string_number = 14},    // Условный бряк на строку 14 (внутри метода TestClass::ClassMethod_2).
+                runtime::BreakpointDesc{.var_desc = LocalBreakpointDesc{.position{.module_string_number = 14}},    // Условный бряк на строку 14 (внутри метода TestClass::ClassMethod_2).
                                         .is_conditional = true},
                 runtime::ProgramCommandDescriptor{.module_string_number = 44}     // Обыкновенная точка останова на строку 44.
             };
@@ -2362,13 +2364,60 @@ print a, b, c, ret_v                    # Окончательное состо�
         ASSERT_EQUAL(ostr.str(), "3 5\n1 2 3\n-2 7 3 11\n-2 7 9 6\n-2 2 9 24\n");
     }
 
+    void TestAbstractClasses()
+    {  // Работа с "абстрактными" классами и объектами этих классов.
+        istringstream input(R"--( 
+class TestAbstractClass:
+  def Method_1(x, y):
+    a = x
+    b = y
+    c = a + b
+    a = a - 2 * x
+    return c
+
+  def Method_2(z)   # Первый абстрактный метод.
+
+  def Method_3(z):
+    return z * 3
+
+  def Method_4(y, z)   # Второй абстрактный метод.
+
+# Создаём экземпляр частично абстрактного класса TestAbstractClass.
+tst_class = TestAbstractClass()
+# Вызываем нормальный (полностью определённый) метод класса TestAbstractClass.
+print tst_class.Method_1(1, 2)
+
+# А теперь вызов абстрактного (только объявленного, не не определённого) метода.
+try:
+  rsl_2 = tst_class.Method_2(1)
+  print rsl_2
+except SyntaxError as ex_err:
+  print "Error =", ex_err.GetErrorCode()
+
+# Вновь вызываем другой нормальный (полностью определённый) метод класса TestAbstractClass.
+print tst_class.Method_3(3)
+
+# Еще один вызов абстрактного (только объявленного, не не определённого) метода.
+try:
+  rsl_4 = tst_class.Method_4(1, 2)
+  print rsl_4
+except SyntaxError as ex_err:
+  print "Error =", ex_err.GetErrorCode()
+)--");
+
+        ostringstream ostr;
+        RunMythonProgram(input, ostr);
+        // std::cout << ostr.str() << std::endl;
+        ASSERT_EQUAL(ostr.str(), "3\nError = 22\n9\nError = 22\n");
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
 
-        //RUN_TEST(tr, TestDebugExecution);
+        //RUN_TEST(tr, TestAbstractClasses);
         //return;
 
         parse::RunOpenLexerTests(tr);
@@ -2408,6 +2457,7 @@ print a, b, c, ret_v                    # Окончательное состо�
         RUN_TEST(tr, TestFunctorClassFunction);
         RUN_TEST(tr, TestDebugExecution);
         RUN_TEST(tr, TestGlobalVariables);
+        RUN_TEST(tr, TestAbstractClasses);
     }
 }  // namespace
 

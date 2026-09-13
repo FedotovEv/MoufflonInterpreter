@@ -42,7 +42,8 @@ namespace runtime
         {
             for (const std::string& global_var_name : method->global_vars)
                 // Создаём объект-ссылку на глобальную переменную с именем global_var_name.
-                method_closure[global_var_name] = ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name]));
+                method_closure[global_var_name] =
+                    ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name], global_var_name));
         }
 
         return method_closure;
@@ -596,12 +597,16 @@ namespace runtime
         }
         else
         { // Немедленное исполнение обычной функции - непосредственное исполнение и последующее возвращение результата её работы.
+            if (!method_func_.body)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL);
             return method_func_.body->Execute(function_closure, context);
         }
     }
 
     ObjectHolder FreeFunction::ExecuteBody(Closure& closure, Context& context)
     {
+        if (!method_func_.body)
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL);
         return method_func_.body->Execute(closure, context);
     }
 
@@ -672,6 +677,8 @@ namespace runtime
         }
         else
         { // Исполнение обычного метода - непосредственное исполнение и последующее возвращение результата его работы.
+            if (!get_method.method->body)
+                ThrowRuntimeError(context, ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL);
             return get_method.method->body->Execute(method_closure, context);
         }
     }

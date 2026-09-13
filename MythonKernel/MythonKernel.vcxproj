@@ -37,6 +37,7 @@
     <ClCompile Include="src\throw_messages.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\debug_context.h" />
     <ClInclude Include="include\declares.h" />
     <ClInclude Include="include\encodings.h" />
     <ClInclude Include="include\error_classes.h" />
