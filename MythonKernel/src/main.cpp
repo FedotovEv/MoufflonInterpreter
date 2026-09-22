@@ -106,25 +106,26 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(std::string include_arg) override
+    void IncludeSwitchTo(const string& include_arg) override
     {
-        if (!include_arg.size())
+        string use_include_arg = include_arg;
+        if (!use_include_arg.size())
         { // Инициализирующий вызов IncludeSwitchTo().
             eof_bit_ = false;
-            last_read_symb_ = std::char_traits<char>::eof();
-            unget_symb_ = std::char_traits<char>::eof();
+            last_read_symb_ = char_traits<char>::eof();
+            unget_symb_ = char_traits<char>::eof();
             current_position_ = 0;
             current_module_desc_ptr_ = nullptr;
             current_part_name_.clear();
             include_stack_.clear();
-            include_arg = main_module_name_;
+            use_include_arg = main_module_name_;
         }
         
-        if (!include_map_.count(include_arg))
-            throw ParseError("Включаемая часть "s + include_arg + " не найдена"s);
+        if (!include_map_.count(use_include_arg))
+            throw ParseError("Включаемая часть "s + use_include_arg + " не найдена"s);
         if (current_part_name_.size())
             include_stack_.push_back({current_part_name_, current_position_, command_desc_ptr_->module_string_number});
-        current_part_name_ = include_arg;
+        current_part_name_ = use_include_arg;
         current_module_desc_ptr_ = &include_map_[current_part_name_];
         current_position_ = 0;
         command_desc_ptr_->module_id = current_module_desc_ptr_->part_number;
@@ -244,18 +245,21 @@ private:
 
 namespace
 {
-    void RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+    unique_ptr<ast::Statement> ParseTestProgram(istream& input)
     {
         parse::TrivialParseContext parse_context;
-        runtime::SimpleContext context(output, link_function);
-        runtime::Closure closure;
-
         parse::Lexer lexer(input);
-        auto program = ParseProgram(lexer, parse_context);
-        program->Execute(closure, context);
+        return ParseProgram(lexer, parse_context);
     }
 
-    void RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+    runtime::ObjectHolder RunMythonProgram(unique_ptr<ast::Statement>& input_program, ostream& output, const runtime::LinkageFunction& link_function = {})
+    {
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
+        return input_program->Execute(closure, context);
+    }
+
+    runtime::ObjectHolder RunMythonProgram(istream& input, ostream& output, const runtime::LinkageFunction& link_function = {})
     {
         parse::TrivialParseContext parse_context;
         runtime::SimpleContext context(output, link_function);
@@ -263,7 +267,18 @@ namespace
 
         parse::Lexer lexer(input);
         auto program = ParseProgram(lexer, parse_context);
-        program->Execute(closure, context);
+        return program->Execute(closure, context);
+    }
+
+    runtime::ObjectHolder RunMythonProgramEx(parse::LexerInputEx& input, ostream& output, const runtime::LinkageFunction& link_function = {})
+    {
+        parse::TrivialParseContext parse_context;
+        runtime::SimpleContext context(output, link_function);
+        runtime::Closure closure;
+
+        parse::Lexer lexer(input);
+        auto program = ParseProgram(lexer, parse_context);
+        return program->Execute(closure, context);
     }
 
     /**
@@ -275,66 +290,66 @@ namespace
     * \return   Первый член возвращаемого кортежа - строка отладочного потока, второй член - суммарная строка выходного потока,
                 третий член - коллекция событий отладчика.
     */
-    using DebugExecutionModeV = std::vector<runtime::DebugExecutionMode>;
+    using DebugExecutionModeV = vector<runtime::DebugExecutionMode>;
     // Возможные варианты способа задания точки останова. Первый - прямая позиция в коде, второй - полное описание бряка,
     // третий - параметры свободной функции, четвёртый - характеристики метода.
     struct FreeFunctionCharm
     {
-        std::string name;
+        string name;
         size_t arg_count = 0;
     };
 
     struct MethodCharm
     {
-        std::string name;
-        std::string class_name;
+        string name;
+        string class_name;
         size_t arg_count = 0;
     };
 
-    using OneBreakpointDef = std::variant<runtime::ProgramCommandDescriptor, runtime::BreakpointDesc, FreeFunctionCharm, MethodCharm>;
-    using BreakpointsList = std::vector<OneBreakpointDef>;
+    using OneBreakpointDef = variant<runtime::ProgramCommandDescriptor, runtime::BreakpointDesc, FreeFunctionCharm, MethodCharm>;
+    using BreakpointsList = vector<OneBreakpointDef>;
 
-    std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> DebugMythonProgram
-        (istream& input, std::variant<runtime::DebugExecutionMode, DebugExecutionModeV> what_return, const BreakpointsList& breaks = {},
+    tuple<string, string, vector<runtime::DebugEventDesc>> DebugMythonProgram
+        (istream& input, variant<runtime::DebugExecutionMode, DebugExecutionModeV> what_return, const BreakpointsList& breaks = {},
          const runtime::DebugCallback& cond_break_req = {}, const runtime::LinkageFunction& link_function = {})
     {
         using namespace runtime;
-        auto debug_event_out = [](std::ostream& ostr, DebugCallbackReason call_reason, Executable* exec_op, Closure& closure, Context& context)
+        auto debug_event_out = [](ostream& ostr, DebugCallbackReason call_reason, Executable* exec_op, Closure& closure, Context& context)
             {
                 static constexpr size_t MAX_TYPIID_LENGTH = 30;
 
-                std::string typid_name = typeid(*exec_op).name();
+                string typid_name = typeid(*exec_op).name();
                 if (typid_name.size() > MAX_TYPIID_LENGTH)
                     typid_name = typid_name.substr(0, MAX_TYPIID_LENGTH);
                 else
-                    typid_name += std::string(MAX_TYPIID_LENGTH - typid_name.size(), ' ');
+                    typid_name += string(MAX_TYPIID_LENGTH - typid_name.size(), ' ');
 
                 ostr << "Reason : " << call_reason << " Genus : " << exec_op->GetCommandGenus() << " Type : "
                      << typid_name << ' ' << exec_op->GetCommandDesc();
             };
 
         ostringstream debug_ostr;
-        std::vector<DebugEventDesc> debug_event_collector;
+        vector<DebugEventDesc> debug_event_collector;
         auto debug_event_handler = [&](DebugCallbackReason call_reason, Executable* exec_op, Closure& closure, Context& context) -> DebugExecutionMode
             {
                 static size_t what_return_index = 0;
 
                 debug_event_out(debug_ostr, call_reason, exec_op, closure, context);
                 DebugEventDesc rec_event{.event_reason = call_reason, .genus = exec_op->GetCommandGenus(), .command = exec_op->GetCommandDesc()};
-                debug_ostr << std::endl;
+                debug_ostr << endl;
                 debug_event_collector.push_back(rec_event);
 
                 if (call_reason == DebugCallbackReason::DEBUG_CALLBACK_CHECK_CONDITION && cond_break_req)
                     // Запрошена проверка условия, присоединённого к точке останова, и для таких запросов назначен обработчик. Вызовем его.
                     return cond_break_req(call_reason, exec_op, closure, context);
 
-                if (std::holds_alternative<DebugExecutionMode>(what_return))
+                if (holds_alternative<DebugExecutionMode>(what_return))
                 { // Требуется отвечать на отладочные звонки одним и тем же значением.
-                    return std::get<DebugExecutionMode>(what_return);
+                    return get<DebugExecutionMode>(what_return);
                 }
-                else if (std::holds_alternative<DebugExecutionModeV>(what_return))
+                else if (holds_alternative<DebugExecutionModeV>(what_return))
                 { // Ответы на отладочные звонки перечислены в массиве.
-                    const DebugExecutionModeV& what_return_vec = std::get<DebugExecutionModeV>(what_return);
+                    const DebugExecutionModeV& what_return_vec = get<DebugExecutionModeV>(what_return);
                     if (call_reason == DebugCallbackReason::DEBUG_CALLBACK_INIT)
                         what_return_index = 0;
                     if (what_return_vec.empty())
@@ -363,34 +378,34 @@ namespace
         {
             for (const OneBreakpointDef& one_break : breaks)
             { // Установка единичного бряка различных допустимых типов.
-                if (std::holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
+                if (holds_alternative<runtime::ProgramCommandDescriptor>(one_break))
                 {
-                    debug_context.AddPositionBreak(std::get<runtime::ProgramCommandDescriptor>(one_break));
+                    debug_context.AddPositionBreak(get<runtime::ProgramCommandDescriptor>(one_break));
                 }
-                else if (std::holds_alternative<runtime::BreakpointDesc>(one_break))
+                else if (holds_alternative<runtime::BreakpointDesc>(one_break))
                 {
-                    debug_context.AddBreakpoint(std::get<runtime::BreakpointDesc>(one_break));
+                    debug_context.AddBreakpoint(get<runtime::BreakpointDesc>(one_break));
                 }
-                else if (std::holds_alternative<FreeFunctionCharm>(one_break))
+                else if (holds_alternative<FreeFunctionCharm>(one_break))
                 {
-                    const FreeFunctionCharm& break_charm = std::get<FreeFunctionCharm>(one_break);
+                    const FreeFunctionCharm& break_charm = get<FreeFunctionCharm>(one_break);
                     debug_context.AddBreakAtFreeFunction(break_charm.name, break_charm.arg_count);
                 }
-                else if (std::holds_alternative<MethodCharm>(one_break))
+                else if (holds_alternative<MethodCharm>(one_break))
                 {
-                    const MethodCharm& break_charm = std::get<MethodCharm>(one_break);
+                    const MethodCharm& break_charm = get<MethodCharm>(one_break);
                     debug_context.AddBreakAtMethod(break_charm.name, break_charm.arg_count, break_charm.class_name);
                 }
             }
         }
 
-        if (std::holds_alternative<DebugExecutionMode>(what_return))
+        if (holds_alternative<DebugExecutionMode>(what_return))
         {
-            debug_context.SetDebugMode(std::get<DebugExecutionMode>(what_return));
+            debug_context.SetDebugMode(get<DebugExecutionMode>(what_return));
         }
-        else if (std::holds_alternative<DebugExecutionModeV>(what_return))
+        else if (holds_alternative<DebugExecutionModeV>(what_return))
         {
-            const DebugExecutionModeV& what_return_vec = std::get<DebugExecutionModeV>(what_return);
+            const DebugExecutionModeV& what_return_vec = get<DebugExecutionModeV>(what_return);
             if (!what_return_vec.empty())
                 debug_context.SetDebugMode(what_return_vec.front());
             else
@@ -407,7 +422,8 @@ namespace
 
     void TestSimplePrints()
     {
-        istringstream input(R"(
+        {
+            istringstream input(R"(
 print 57
 print 10, 24, -8
 print 'hello'
@@ -417,9 +433,27 @@ print
 print None
 )");
 
-        ostringstream output;
-        RunMythonProgram(input, output);
-        ASSERT_EQUAL(output.str(), "57\n10 24 -8\nhello\nworld\nTrue False\n\nNone\n");
+            ostringstream output;
+            RunMythonProgram(input, output);
+            ASSERT_EQUAL(output.str(), "57\n10 24 -8\nhello\nworld\nTrue False\n\nNone\n");
+        }
+
+        {   // Тест с досрочным прерыванием программы и возвращением результата её работы.
+            istringstream input(R"(
+print 1
+print 11, 111, 1111
+return 22               # Экстренное прерывание программы с возвращением общего результата её работы.
+print 'hello'           # Всё прочее уже не выполняется.
+print None
+)");
+
+            ostringstream output;
+            runtime::ObjectHolder program_result = RunMythonProgram(input, output);
+            ASSERT_EQUAL(output.str(), "1\n11 111 1111\n");
+            runtime::Number* number_result = program_result.TryAs<runtime::Number>();
+            ASSERT(number_result && number_result->IsInt());
+            ASSERT_EQUAL(number_result->GetIntValue(), 22);
+        }
     }
     
     void TestAssignments()
@@ -1297,7 +1331,7 @@ while i > 0:
 
     void TestSimpleCoroutine()
     { // Испытания работоспособности и различных способов применения существующего в языке механизма сопрограмм.
-        std::string test_class_example(R"--(
+        string test_class_example(R"--(
 class TestClass:
   def __init__(err_code):
     self.code = err_code
@@ -1315,7 +1349,7 @@ class TestClass:
 test_instance = TestClass(0)
 )--");
         { // Проверка работоспособности аппарата сопрограмм в его простейшем виде.
-        std::string simple_coro_example(R"--(
+        string simple_coro_example(R"--(
 ordinary_value = test_instance.simple_method(2)
 
 coro_instance = test_instance.coroutine_method(2)
@@ -1335,7 +1369,7 @@ print coro_value_1, coro_value_2, coro_value_3
 
         { // Чуть более сложный пример сопрограммы, где она выступает как генератор
           // (теоретически бесконечной) последовательности.
-            std::string gener_coro_example(R"--(
+            string gener_coro_example(R"--(
 ordinary_value = test_instance.simple_method(2)
 
 coro_instance = test_instance.coroutine_method(2)
@@ -1358,7 +1392,7 @@ print "Всего", i
     void TestAwaitables()
     { // Проверка работоспособности механизма ждунов (ожидоспособных объектов), а также их функционирования в составе сопрограмм.
         { // Наличие встроенного класса Awaitable, возможности его инстанцирования.
-            std::string simple_awaitable_example(R"--(
+            string simple_awaitable_example(R"--(
 dummy_awaitable = Awaitable()  # Ждун по умолчанию.
 
 dummy_suspend_result = dummy_awaitable.AwaitSuspend(None)
@@ -1376,7 +1410,7 @@ print dummy_resume_result
         }
 
         { // Возможность наследования от него и корректность порождённого производного класса.
-            std::string inherit_from_awaitable(R"--(
+            string inherit_from_awaitable(R"--(
 class MyAwaitable(Awaitable):
   def AwaitSuspend(coro_instance):
     return 1
@@ -1402,7 +1436,7 @@ print my_resume_result
 
         { // А теперь следует проверка основного сценария использования ждуна - его применения для условной приостановки
           // сопрограммы в составе оператора co_await.
-            std::string coro_awaitable_suspend(R"--(
+            string coro_awaitable_suspend(R"--(
 class MyAwaitable(Awaitable):
   def AwaitSuspend(coro_instance):
     return 1 # Возвращаемое значение, воспринимаемое как True. Поэтому с таким ждуном сопрограмма всегда приостанавливается.
@@ -1456,7 +1490,7 @@ coro_instance.resume()
 
     void TestTypeTraits()
     { // Получение и иссследование типовых отпечатков (характериситического класса) для различных выражений языка.
-        std::string classes_definitions(R"--(
+        string classes_definitions(R"--(
 # Переменные классовых типов программно-определяемых классов.
 class OneClass:
   def OneClassMethod_1():
@@ -1495,7 +1529,7 @@ class TwoClass(OneClass):
 )--");
 
         { // Простейшая типовая характеристика для переменной базового класса.
-            std::string simple_type_traits(R"--(
+            string simple_type_traits(R"--(
 # Переменные базовых классов.
 # Целое число
 x = 5
@@ -1514,16 +1548,16 @@ print traits_none.IsBool(), traits_none.IsNumeric(), traits_none.IsString(), tra
             istringstream istr(simple_type_traits);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            // std::cout << ostr.str() << std::endl;
-            std::string etalon_string =
-                "False True False " + std::to_string(NUMERIC_IDENT) + " Number\n" +
-                "False False True " + std::to_string(STRING_IDENT) + " String\n" +
-                "False False False " + std::to_string(NONE_IDENT) + " None\n";
+            // cout << ostr.str() << endl;
+            string etalon_string =
+                "False True False " + to_string(NUMERIC_IDENT) + " Number\n" +
+                "False False True " + to_string(STRING_IDENT) + " String\n" +
+                "False False False " + to_string(NONE_IDENT) + " None\n";
             ASSERT_EQUAL(ostr.str(), etalon_string);
         }
 
         { // Более сложный случай взаимоотношей по родству общих программно-определяемых классов.
-            std::string complex_classes_type_traits(R"--(
+            string complex_classes_type_traits(R"--(
 # Тривиальный случай соотношения наследственности между одним и тем же классом.
 var_one_class = OneClass()
 traits_one_class = TypeTraits(var_one_class)
@@ -1542,13 +1576,13 @@ print traits_two_class.IsSuccessorOf(var_one_class), traits_two_class.IsPredeces
             istringstream istr(classes_definitions + complex_classes_type_traits);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            // std::cout << ostr.str() << std::endl;
-            std::string etalon_string = "False False False OneClass\nTrue True True True\nFalse False False TwoClass\nTrue True True True\nFalse True False True\nTrue False True False\n";
+            // cout << ostr.str() << endl;
+            string etalon_string = "False False False OneClass\nTrue True True True\nFalse False False TwoClass\nTrue True True True\nFalse True False True\nTrue False True False\n";
             ASSERT_EQUAL(ostr.str(), etalon_string);
         }
 
         { // Проверка наличия методов в объекте класса.
-            std::string classes_check_metods(R"--(
+            string classes_check_metods(R"--(
 var_one_class = OneClass()
 traits_one_class = TypeTraits(var_one_class)
 var_two_class = TwoClass()
@@ -1569,8 +1603,8 @@ print traits_two_class.HasMethod("TwoClassMethod_1", 0), traits_two_class.HasMet
             istringstream istr(classes_definitions + classes_check_metods);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            // std::cout << ostr.str() << std::endl;
-            std::string etalon_string =
+            // cout << ostr.str() << endl;
+            string etalon_string =
                 // Методы класса OneClass
                 "True False False False\n"s +   // Есть метод OneClassMethod_1(), но нет методов OneClassMethod_1(a), OneClassMethod_1(a, a) и OneClassMethod_1(a, a, a).
                 "False True True False\n"s +    // Есть методы OneClassMethod_2(a) и OneClassMethod_2(a, a), но нет методов OneClassMethod_2() и OneClassMethod_2(a, a, a).
@@ -1587,7 +1621,7 @@ print traits_two_class.HasMethod("TwoClassMethod_1", 0), traits_two_class.HasMet
         }
 
         { // Проверка наличия полей в объекте класса.
-            std::string classes_check_fields(R"--(
+            string classes_check_fields(R"--(
 var_two_class = TwoClass()
 traits_two_class = TypeTraits(var_two_class)
 
@@ -1625,8 +1659,8 @@ print traits_two_class.HasField("yy"), traits_two_class.HasField("yyy"), traits_
             istringstream istr(classes_definitions + classes_check_fields);
             ostringstream ostr;
             RunMythonProgram(istr, ostr);
-            // std::cout << ostr.str() << std::endl;
-            std::string etalon_string =
+            // cout << ostr.str() << endl;
+            string etalon_string =
                 // Исходное состояние объекта - полей нет.
                 "False False False\n"s +
                 "False False False\n" +
@@ -1823,8 +1857,8 @@ z1_3 = OneClass(4)
 )--");
             ostringstream ostr;
             RunMythonProgram(class_with_dtor, ostr);
-            // std::cout << ostr.str() << std::endl;
-            std::string etalon_string =
+            // cout << ostr.str() << endl;
+            string etalon_string =
                 "del:z1_3\ndel:z1_1\nDestructor : 1\ndel:z1_2\n"s +                     // Операции первой группы - удаление объектов по del.
                 "assign:create_z1_1\nDestructor : 2\nassign:z1_1\n"s +                  // Операции второй группы - удаление объектов при присваивании.
                 "end:create_z1_2\nend:create_z1_3\nDestructor : 3\nDestructor : 4\n"s;  // Операции третьей группы  - уничтожение объектов по завершении программы.
@@ -1871,7 +1905,7 @@ print functor_contain_var.func_field(20)
         };
         // Функция сравнения последовательности отладочных событий, полученных при исполнении тестовой программы, с эталонной последовательностью.
         auto debug_event_sequence_check = []
-            (const std::vector<DebugEventDesc>& sequence_fact, const std::vector<DebugEventSimp>& sequence_etalon) -> bool
+            (const vector<DebugEventDesc>& sequence_fact, const vector<DebugEventSimp>& sequence_etalon) -> bool
             {
                 if (sequence_fact.size() != sequence_etalon.size())
                     return false;
@@ -1887,7 +1921,7 @@ print functor_contain_var.func_field(20)
                 return true;
             };
         // Определения методов и свободных функций, которые будут использоваться в дальнейших тестах.
-        std::string methods_def(R"--( 
+        string methods_def(R"--( 
 class TestClass:                # Строка 1
   def __init__(a):              # Строка 2
     self.aa = a                 # Строка 3
@@ -1934,10 +1968,10 @@ print ab, bc, abc   # Строка 12
 # Комментарий_4     # Строка 13
 print d             # Строка 14
 )--");
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_STEP_IN);
-            // std::cout << "1. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "1. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP, 1},
@@ -1976,10 +2010,10 @@ while a < 33:                                   # Строка 16
                                                 # Строка 19
 print a * 2, a * 3                              # Строка 20
 )--");
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_STEP_IN);
-            // std::cout << "2. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "2. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP, 1},
@@ -2001,7 +2035,7 @@ print a * 2, a * 3                              # Строка 20
         }
 
         // Тело испытательной программы, которое будет применяться в трёх следующих тестах.
-        std::string main_body(R"--(
+        string main_body(R"--(
 lc_1 = 5                                            # Строка 29
 lc_2 = 11                                           # Строка 30
 print lc_1, lc_2                                    # Строка 31
@@ -2054,10 +2088,10 @@ print cls_3                                         # Строка 47
                 DebugExecutionMode::DEBUG_STEP_OUT,     // Вызов перед исполнением строки 42. Сюда возвращается управление после завершения ClassMethod_2().
                 DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 43. Дальнейшая работа программы происходит без трассировки.
             };
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
             // Вывод в консоль трассы исполнения тестовой программы.
-            // std::cout << "3. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "3. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     // Далее следуют события последовательного исполнения от первой исполяемой строки программы 29 до строки 37 (вход в тело конструктора
@@ -2124,10 +2158,10 @@ print cls_3                                         # Строка 47
                 DebugExecutionMode::DEBUG_STEP_IN,      // Вызов перед исполнением строки 42.
                 DebugExecutionMode::DEBUG_NO_DEBUG      // Вызов перед исполнением строки 43. Дальнейшая работа программы происходит без трассировки.
             };
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
             // Очередную порцию трасс исполнения - в консоль.
-            // std::cout << "4. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "4. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     // Ординарное исполнение строк от первой исполнимой с номером 29 до строки 33.
@@ -2189,11 +2223,11 @@ print cls_3                                         # Строка 47
                 runtime::ProgramCommandDescriptor{.module_string_number = 44}     // Обыкновенная точка останова на строку 44.
             };
 
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
             // Выведем в консоль результаты трассировки.
-            // std::cout << "5. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "5. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 29},
@@ -2213,7 +2247,7 @@ print cls_3                                         # Строка 47
 
         // Далее находится группа тестов, осуществляющих работу трассировщика внутри сопрограмм.
         // Испытательная программа, содержащая сопрограмму - свободную функцию.
-        std::string coro_program_free_func(R"--(
+        string coro_program_free_func(R"--(
 def CoroFunction_1(g, h) :                              # Строка 1
   print g, h                                            # Строка 2
   gh = g * h + g - h                                    # Строка 3
@@ -2261,10 +2295,10 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 20
                 DebugExecutionMode::DEBUG_STEP_OUT      // Перед print в строке 20. Завершение работы программы.
             };
 
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple = DebugMythonProgram(input, what_return_arr);
             // Выводим трассу исполнения в консоль.
-            // std::cout << "6. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "6. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_STEP, 10},
@@ -2297,11 +2331,11 @@ print resume_result_1, resume_result_2, resume_result_3 # Строка 20
                 runtime::ProgramCommandDescriptor{.module_string_number = 6}    // Ординарная точка останова на строку 6.
             };
 
-            std::tuple<std::string, std::string, std::vector<runtime::DebugEventDesc>> result_tuple =
+            tuple<string, string, vector<runtime::DebugEventDesc>> result_tuple =
                 DebugMythonProgram(input, DebugExecutionMode::DEBUG_SIMPLE_RUN, break_list);
             // Выведем в консоль результаты трассировки.
-            // std::cout << "7. Debug -->>\n" << std::get<0>(result_tuple) << std::endl << "Out -->>\n" << std::get<1>(result_tuple) << std::endl;
-            ASSERT(debug_event_sequence_check(std::get<2>(result_tuple),
+            // cout << "7. Debug -->>\n" << get<0>(result_tuple) << endl << "Out -->>\n" << get<1>(result_tuple) << endl;
+            ASSERT(debug_event_sequence_check(get<2>(result_tuple),
                 {
                     {DebugCallbackReason::DEBUG_CALLBACK_INIT, -1},             // Инициализация.
                     {DebugCallbackReason::DEBUG_CALLBACK_BREAKPOINT, 1},        // Возобновление сопрограммы после coro_variable.resume() в строке 12.
@@ -2360,13 +2394,13 @@ print a, b, c, ret_v                    # Окончательное состо�
 
         ostringstream ostr;
         RunMythonProgram(input, ostr);
-        // std::cout << ostr.str() << std::endl;
+        // cout << ostr.str() << endl;
         ASSERT_EQUAL(ostr.str(), "3 5\n1 2 3\n-2 7 3 11\n-2 7 9 6\n-2 2 9 24\n");
     }
 
     void TestAbstractClasses()
     {  // Работа с "абстрактными" классами и объектами этих классов.
-        istringstream input(R"--( 
+        string abstracts_defines(R"--(
 class TestAbstractClass:
   def Method_1(x, y):
     a = x
@@ -2375,13 +2409,22 @@ class TestAbstractClass:
     a = a - 2 * x
     return c
 
-  def Method_2(z)   # Первый абстрактный метод.
+  def Method_2(z)           # Первый абстрактный метод.
 
   def Method_3(z):
     return z * 3
 
-  def Method_4(y, z)   # Второй абстрактный метод.
+  def Method_4(y, z)        # Второй абстрактный метод.
 
+def FirstFunction(x)        # Первая абстрактная функция.
+def SecondFunction(y):      # Эта функция конкретная.
+  return y * 2
+
+def ThirdFunction(x, z)     # Вторая абстрактная функция.
+
+)--");
+
+        string call_abstracts_1(R"--(
 # Создаём экземпляр частично абстрактного класса TestAbstractClass.
 tst_class = TestAbstractClass()
 # Вызываем нормальный (полностью определённый) метод класса TestAbstractClass.
@@ -2392,7 +2435,7 @@ try:
   rsl_2 = tst_class.Method_2(1)
   print rsl_2
 except SyntaxError as ex_err:
-  print "Error =", ex_err.GetErrorCode()
+  print "M2Error =", ex_err.GetErrorCode()
 
 # Вновь вызываем другой нормальный (полностью определённый) метод класса TestAbstractClass.
 print tst_class.Method_3(3)
@@ -2402,13 +2445,79 @@ try:
   rsl_4 = tst_class.Method_4(1, 2)
   print rsl_4
 except SyntaxError as ex_err:
-  print "Error =", ex_err.GetErrorCode()
-)--");
+  print "M4Error =", ex_err.GetErrorCode()
 
-        ostringstream ostr;
-        RunMythonProgram(input, ostr);
-        // std::cout << ostr.str() << std::endl;
-        ASSERT_EQUAL(ostr.str(), "3\nError = 22\n9\nError = 22\n");
+# Далее следуют опыты с обращением к абстрактным и конретным свободным функциям.
+try:
+  rsl_5 = FirstFunction(1)
+  print rsl_5
+except SyntaxError as ex_err:
+  print "FFError =", ex_err.GetErrorCode()
+
+rsl_6 = SecondFunction(3)
+print rsl_6
+
+try:
+  rsl_7 = ThirdFunction(4, 7)
+  print rsl_7
+except SyntaxError as ex_err:
+  print "TFError =", ex_err.GetErrorCode()
+)--");
+        // Подготовим оттранслированную программу, содержащую объявления абстрактных процедур и набор их тестовых вызовов.
+        istringstream abstract_input(abstracts_defines + call_abstracts_1);
+        unique_ptr<ast::Statement> abstract_program = ParseTestProgram(abstract_input);
+
+        { // Тест на обращения к методам и свободным функциям, не имеющим полного определения ("абстрактным").
+            ostringstream ostr;
+            RunMythonProgram(abstract_program, ostr);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "3\nM2Error = 22\n9\nM4Error = 22\nFFError = 22\n6\nTFError = 22\n");
+        }
+
+        // Далее частично доопределяем некоторые абстрактные методы и функции из исходного текста abstracts_defines.
+        string define_concrets_part(R"--(
+def FirstFunction(x):        # (До)определение первой абстрактной функции.
+  return x + 2
+
+class TestAbstractClass:
+  def Method_2(z):           # Доопределение первого абстрактного метода класса TestAbstractClass.
+    z = z * 2
+    return z + 5
+)--");
+        // Доопределим часть абстрактных методов и функций транслированной программы abstract_program.
+        istringstream partically_concrete_input(define_concrets_part);
+        unique_ptr<ast::Statement> partically_concrete_addition = ParseTestProgram(partically_concrete_input);
+        static_cast<ast::ProgramCompound*>(abstract_program.get())->LinkAnotherProgram
+            (static_cast<ast::ProgramCompound*>(partically_concrete_addition.get()));
+        {
+            ostringstream ostr;
+            RunMythonProgram(abstract_program, ostr);
+            // cout << ostr.str() << endl;
+            // Ошибки по вызову ранее бывших абстрактными метода Method_2() и свободной функции FirstFunction() должны исчезнуть (они
+            // теперь полностью определены), а ошибки при вызовах по-прежнему абстрактных Method_4() и ThirdFunction() пока сохраняются.
+            ASSERT_EQUAL(ostr.str(), "3\n7\n9\nM4Error = 22\n3\n6\nTFError = 22\n");
+        }
+
+        // Ну а теперь определим класс TestAbstractClass и все свободные функции программы abstracts_defines полностью.
+        string define_concrets_full(R"--(
+def ThirdFunction(x, z):        # (До)определение второй абстрактной функции.
+  return (x << 2) + z
+
+class TestAbstractClass:
+  def Method_4(y, z):           # Доопределение второго абстрактного метода класса TestAbstractClass.
+    z = z * 2
+    return (y + 3) * (z + 5)
+)--");
+        istringstream full_concrete_input(define_concrets_full);
+        unique_ptr<ast::Statement> full_concrete_addition = ParseTestProgram(full_concrete_input);
+        static_cast<ast::ProgramCompound*>(abstract_program.get())->LinkAnotherProgram
+            (static_cast<ast::ProgramCompound*>(full_concrete_addition.get()));
+        { // Теперь все испытательные вызовы свободных функций и методов класса TestAbstractClass должны происходить успешно.
+            ostringstream ostr;
+            RunMythonProgram(abstract_program, ostr);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "3\n7\n9\n36\n3\n6\n23\n");
+        }
     }
 
     void TestAll()
@@ -2461,7 +2570,7 @@ except SyntaxError as ex_err:
     }
 }  // namespace
 
-std::optional<std::string> ScanArgvForString(int argc, char* argv[], const char* scan_row)
+optional<string> ScanArgvForString(int argc, char* argv[], const char* scan_row)
 {
     for (int param_index = 1; param_index < argc; ++param_index)
     {
@@ -2470,12 +2579,12 @@ std::optional<std::string> ScanArgvForString(int argc, char* argv[], const char*
         if (test_row_len < scan_row_len || strncmp(argv[param_index], scan_row, scan_row_len) != 0)
             continue;
         if (test_row_len == scan_row_len)
-            return std::string();   // Существует параметр-переключатель с указанным именем без дополнительного значения.
+            return string();   // Существует параметр-переключатель с указанным именем без дополнительного значения.
         if (*(argv[param_index] + scan_row_len) != '=')
             continue;   // В действительности имя проверяемого аргумента более длинное и не равно scan_row.
         // Проверяемый аргумент командной строки имеет вид scan_row=... . Следовательно, это нужный нам аргумент, но с
         // дополнительным строковым значением, которые мы сейчас и возвратим.
-        return std::string(argv[param_index] + scan_row_len + 1);
+        return string(argv[param_index] + scan_row_len + 1);
     }
 
     return {};

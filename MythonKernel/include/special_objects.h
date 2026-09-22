@@ -401,10 +401,9 @@ public:
         (const std::unordered_map<std::string, int>& internal_classes_ids,
          const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
          const std::string& class_name);
-    // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
+    // Поиск метода с заданной полной сигнатурой method_sign. Если сигнатура не содержит имени класса, ищется любой подходящий метод.
     static runtime::ProgramCommandDescriptor ScanForMethod
-        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def,
-         const std::string& method_sign, const std::string& class_name = {});
+        (const std::unordered_map<std::string, ast::ClassDefinition*>& declared_classes_def, const std::string& method_sign);
     // Поиск свободной функции с заданной сигнатурой free_func_sign.
     static runtime::ProgramCommandDescriptor ScanForFreeFunction
         (const std::unordered_map<std::string, ast::FreeFunctionDefinition*>& declared_free_functions_def, const std::string& free_func_sign);

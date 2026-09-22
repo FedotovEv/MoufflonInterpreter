@@ -344,6 +344,7 @@ namespace runtime
     {
         if (!test_ptr)
             return false;
+
         if (auto data_del_p = std::get_deleter<void(*)(Object*)>(test_ptr))
             return *data_del_p != EmptyDeleter;
         else
@@ -592,15 +593,11 @@ namespace runtime
         Closure function_closure = FormateMethodClosure(actual_args, context, &method_func_);
         // Таблица символов подготовлена, можно обработать тело функции.
         if (method_func_.is_coroutine)
-        { // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
+            // Запуск функции как сопрограммы. Она пока только готовится к запуску и будет находиться в приостановленном состоянии.
             return ObjectHolder::Own(move(CoroutineInstance(this, function_closure)));
-        }
         else
-        { // Немедленное исполнение обычной функции - непосредственное исполнение и последующее возвращение результата её работы.
-            if (!method_func_.body)
-                ThrowRuntimeError(context, ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL);
-            return method_func_.body->Execute(function_closure, context);
-        }
+            // Немедленное исполнение обычной функции - непосредственное исполнение и последующее возвращение результата её работы.
+            return ExecuteBody(function_closure, context);
     }
 
     ObjectHolder FreeFunction::ExecuteBody(Closure& closure, Context& context)
@@ -623,6 +620,16 @@ namespace runtime
     bool FreeFunction::IsCoroutine() const
     {
         return method_func_.is_coroutine;
+    }
+
+    bool FreeFunction::IsAbstract() const
+    {
+        return method_func_.IsAbstract();
+    }
+
+    const Method* FreeFunction::GetBodyMethod() const
+    {
+        return &method_func_;
     }
 
     void ClassInstance::Print(std::ostream& os, Context& context)
@@ -741,6 +748,7 @@ namespace runtime
                     { // Нужный нам метод успешно найден - он имеет нужное имя, требуемое число параметров и, если указано,
                         // принадлежит указанному классу.
                         found_method = &test_method;
+                        found_method.vmt_it = test_method_it;
                         return true;
                     }
                 }
@@ -822,6 +830,28 @@ namespace runtime
                 nodes_queue.push(up_parent_ref);
         }
         return false;
+    }
+
+    // Функция-член, производящая добавление нового или замену существующего метода класса на метод, описанный аргументом method.
+    // Возврат указывает на тип проведённой операции: возвращается "ИСТИНА" при выполнении добавления нового метода и "ЛОЖЬ" при
+    // замене существующего.
+    bool Class::AddMethod(Method&& method)
+    {
+        // Попробуем отыскать среди методов нашего класса тот, что имеет ту же сигнатуру, что и method.
+        GetMethodRet scan_method = GetMethod(method.name, static_cast<int>(method.formal_params.size()), my_name_);
+        if (!scan_method.IsError())
+        { // Аналогичный метод уже существует - заменим его на указанный аргумент.
+            auto vmt_method_node = virtual_method_table_.extract(scan_method.vmt_it);
+            vmt_method_node.mapped() = move(method);
+            virtual_method_table_.insert(move(vmt_method_node));
+            return false;
+        }
+        else
+        { // Метод с аналогичной сигнатурой не найден - выполняем добавление нового метода в виртуальную таблицу класса.
+            string method_name = method.name;
+            virtual_method_table_.emplace(method_name, move(method));
+            return true;
+        }
     }
 
     optional<Number> Number::Inverse() const
@@ -919,6 +949,11 @@ namespace runtime
         return *this;
     }
 
+    bool Method::IsAbstract() const
+    {
+        return !body;
+    }
+
     void Method::TuneBodyReference()
     {
         if (ast::MethodBody* method_body = dynamic_cast<ast::MethodBody*>(body.get()))
@@ -926,6 +961,25 @@ namespace runtime
             method_body->SetSentinelInfoData(true, &name);
             method_body->SetSentinelInfoData(false, &name);
         }
+    }
+
+    // Функция-член переопределяет свойства данного метода на соответствующие значения из метода other, содержимое же его
+    // тела изменяет на new_body. Флаг is_same_sign_only включает режим контроля совпадения сигнатур нашего метода и
+    // метода-источника новых свойств.
+    bool Method::RedefineProperties(const Method& other, std::unique_ptr<Executable>&& new_body, bool is_same_sign_only)
+    {
+        if (is_same_sign_only)
+        {
+            if (name != other.name || formal_params.size() != other.formal_params.size())
+                return false;
+        }
+
+        formal_params = other.formal_params;
+        is_coroutine = other.is_coroutine;
+        global_vars = other.global_vars;
+        body = move(new_body);
+
+        return true;
     }
 
     WorkflowPosition::WorkPosType WorkflowPosition::GetType() const

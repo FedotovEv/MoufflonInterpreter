@@ -130,7 +130,7 @@ namespace runtime
         void UnregReferences() const;
 
         // Пустой удалитель, применяемый для невладеющих вместилищ, возвращаемых методом Share().
-        static void EmptyDeleter(Object*) noexcept
+        static void EmptyDeleter(Object*)
         {}  // Не делает ничего. Абсолютно ничего.
 
         std::shared_ptr<Object> data_;
@@ -305,6 +305,7 @@ namespace runtime
         T value_;
     };
 
+    // Объект-ссылка, ссылающийся (указывающий) на какое-либо иное вместилище типа ObjectHolder.
     class PointerObject : public Object
     {
     public:
@@ -625,7 +626,9 @@ namespace runtime
         // Список глобальных переменных, используемых данным методом (свободной функцией).
         std::vector<std::string> global_vars;
 
+        bool IsAbstract() const;
         void TuneBodyReference();
+        bool RedefineProperties(const Method& other, std::unique_ptr<Executable>&& new_body, bool is_same_sign_only = true);
     };
 
     // Псевдокоманда для служебных целей (посылки уведомлений в ast::PrepareExecute)
@@ -651,6 +654,7 @@ namespace runtime
         struct GetMethodRet
         {
             const Method* method = nullptr;
+            std::unordered_multimap<std::string, Method>::const_iterator vmt_it;
             ThrowMessageNumber error = ThrowMessageNumber::THRM_UNKNOWN;
 
             GetMethodRet() = default;
@@ -698,7 +702,7 @@ namespace runtime
         // поиск выполняется непосредственно от данного класса.
         [[nodiscard]] GetMethodRet GetMethod(const std::string& name, int args_count = -1, const std::string& parent_name = {}) const;
         
-        // Возвращает массив пар-описателей методов класса
+        // Возвращает массив пар-описателей методов класса. Первый член пары - имя метода, второй член - количество его аргументов.
         [[nodiscard]] std::vector<std::pair<std::string, size_t>> GetMethodsDesc() const;
 
         // Возвращает имя класса
@@ -729,6 +733,9 @@ namespace runtime
         {
             return my_id_;
         }
+
+        // Добавление нового или замена существующего метода класса на метод, описанный аргументом method.
+        bool AddMethod(Method&& method);
 
     private:
         int my_id_;             // Присвоенный классу числовой идент типа.
@@ -775,6 +782,8 @@ namespace runtime
         std::string GetName() const;
         size_t GetArgCount() const;
         bool IsCoroutine() const;
+        bool IsAbstract() const;
+        const Method* GetBodyMethod() const;
 
     private:
         Method method_func_;

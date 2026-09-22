@@ -141,58 +141,59 @@ bool LexerInputExImpl::RenameIncludeModule(const std::string& old_module_name, c
     return true;
 }
 
-void LexerInputExImpl::IncludeSwitchTo(string include_arg)
+void LexerInputExImpl::IncludeSwitchTo(const string& include_arg)
 {
-    if (!include_arg.size())
-    { // Инициализирующий вызов IncludeSwitchTo()
+    string use_include_arg = include_arg;
+    if (!use_include_arg.size())
+    { // Инициализирующий вызов IncludeSwitchTo().
         eof_bit_ = false;
         last_read_symb_ = std::char_traits<char>::eof();
         unget_symb_ = std::char_traits<char>::eof();
         current_position_ = 0;
         current_module_name_.clear();
         include_stack_.clear();
-        include_arg = main_module_name_;
+        use_include_arg = main_module_name_;
     }
 
-    if (!include_arg.size())
+    if (!use_include_arg.size())
         throw ParseError("Отсутствует стартовый модуль"s);
 
-    if (!include_map_.count(include_arg))
-    {  // Обрабатываем случай, если целевой модуль include_arg пока не существует
-        path test_module_path = search_modules_path_ / path(include_arg);
+    if (!include_map_.count(use_include_arg))
+    {  // Обрабатываем случай, если целевой модуль use_include_arg пока не существует
+        path test_module_path = search_modules_path_ / path(use_include_arg);
         if (!is_auto_scan_include_modules_ || !exists(test_module_path))
             // Если автопоиск модулей запрещён или не удался, выбрасываем исключение
-            throw ParseError("Включаемая часть "s + include_arg + " не найдена"s);
+            throw ParseError("Включаемая часть "s + use_include_arg + " не найдена"s);
 
         // Файл модуля обнаружен, пробуем прочитать его
         ifstream ifile(test_module_path);
         if (!ifile)
-            throw ParseError("Ошибка при открытии файла включаемой части "s + include_arg);
+            throw ParseError("Ошибка при открытии файла включаемой части "s + use_include_arg);
 
         string module_data{std::istreambuf_iterator<char>(ifile), std::istreambuf_iterator<char>()};
 
         if (!ifile.good() && !ifile.eof())
-            throw ParseError("Ошибка при чтении файла включаемой части "s + include_arg);
+            throw ParseError("Ошибка при чтении файла включаемой части "s + use_include_arg);
         // Модуль успешно найден и считан. добавляем его в систему хранения.
         ModuleDescType module_desc;
         module_desc.module_id = ++last_module_id_;
-        module_desc.module_name = include_arg;
+        module_desc.module_name = use_include_arg;
         module_desc.module_path = move(test_module_path);
         module_desc.module_body = move(module_data);
         module_desc.module_is_active = true;
         module_desc.module_is_main = false;
 
-        include_map_[include_arg] = move(module_desc);
+        include_map_[use_include_arg] = move(module_desc);
         is_include_map_changed_ = true;
     }
 
-    if (!include_map_[include_arg].module_is_active)
-        throw ParseError("Модуль "s + include_arg + " не активен");
+    if (!include_map_[use_include_arg].module_is_active)
+        throw ParseError("Модуль "s + use_include_arg + " не активен");
     // В том случае, если устанавливаемый модуль не является стартовым, сохраним состояние выбывающего модуля в стеке
     if (current_module_name_.size())
         include_stack_.push_back({current_module_name_, current_position_, command_desc_ptr_->module_string_number});
 
-    current_module_name_ = include_arg;
+    current_module_name_ = use_include_arg;
     current_module_desc_ptr_ = &include_map_[current_module_name_];
     current_position_ = 0;
     command_desc_ptr_->module_id = current_module_desc_ptr_->module_id;

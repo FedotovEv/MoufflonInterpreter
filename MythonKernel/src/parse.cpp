@@ -279,7 +279,7 @@ namespace
             std::string new_func_name = new_free_func.GetName();
             auto [it, inserted] = declared_free_functions_.insert({new_func_name, runtime::ObjectHolder::Own(move(new_free_func))});
             if (!inserted)
-                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + new_func_name + "%2",
+                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + new_func_name + " %2",
                                               {ThrowMessageNumber::THRM_FUNCTION, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
 
             return exec_factory_.Create(ast::FreeFunctionDefinition(it->second), def_desc);
@@ -354,7 +354,7 @@ namespace
                 std::string new_value_name = lexer_.ExpectNext<ITokenType::Id>().value;
                 if (is_unique && std::find(result_id_list.begin(), result_id_list.end(), new_value_name) != result_id_list.end())
                     // Требование уникальности имён в списке нарушено.
-                    exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + new_value_name + "%2"s,
+                    exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + new_value_name + " %2"s,
                         {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_USE_MULTIPLE_TIMES}));
 
                 result_id_list.push_back(move(new_value_name)); // Это имя очередного идентификатора.
@@ -388,7 +388,7 @@ namespace
                 {
                     auto it = declared_classes_.find(next_parent_name);
                     if (it == declared_classes_.end())
-                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + next_parent_name + "%2"s + class_name,
+                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + next_parent_name + " %2 "s + class_name,
                             {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
                         
                     base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
@@ -409,7 +409,7 @@ namespace
 
             auto [it, inserted] = declared_classes_.insert({class_name, move(class_object_holder)});
             if (!inserted)
-                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1"s + class_name + "%2"s,
+                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + class_name + " %2"s,
                     {ThrowMessageNumber::THRM_CLASS, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
 
             return exec_factory_.Create(ast::ClassDefinition(it->second), class_desc);

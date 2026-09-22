@@ -10,7 +10,11 @@
 // потоки и связанная с ними инфраструктура не поддерживаются используемым компилятором), следует определить макрос MYTHON_UNITHREAD.
 
 #ifdef MYTHON_UNITHREAD
-    #warning "Используется однопоточный вариант интерпретатора МУФЛОНА"
+    #warning "Используется однопоточный вариант интерпретатора МУФЛОНА."
+#endif
+
+#ifdef MYTHON_NON_GLOBAL_REFS
+    #warning "Включена поддержка ссылок на поля объектов. Это снижает производительность программ."
 #endif
 
 #if defined (_WIN64) || defined(_WIN32)
@@ -235,7 +239,25 @@ namespace runtime
     };
 } // namespace runtime
 
-// Функция генерации декорированного имени метода либо функции, содержащего также элемент, кодирующий количество аргументов в нём.
-std::string MangleMethodFunctionName(const std::string& method_func_name, size_t arg_count);
-// Функция разделяет калечное имя метода или функции на его компоненты - само имя и количество аргументов процедуры.
-std::pair<std::string, size_t> DemangleMethodFunctionName(const std::string& mangled_method_func_name);
+// Функция генерации декорированного имени метода либо функции, содержащего также элементы, кодирующие классовую принадлежность
+// метода и количество аргументов в нём.
+std::string MangleMethodFunctionName(const std::string& class_name, const std::string& method_func_name, size_t arg_count);
+// Функция разделяет калечное имя метода или функции на его компоненты - непосредственно само имя метода или функции, имя
+// класса-хозяина метода, если таковой имеется, а также количество аргументов процедуры.
+struct DemangledData
+{
+    static constexpr char UNKNOWN_CLASS[] = "__Unknown__";
+
+    bool is_mangled = false;    // Устанавливается в "ИСТИНУ", если имя действительно многокомпонентное, а не простое.
+    bool is_valid = true;       // Устанавливается в "ИСТИНУ", если при заполнении данной записи не произошло никаких ошибок.
+    // Признаки наличия в декорированном имени его отдельных компонент. 
+    bool is_class_name = false;
+    bool is_method_name = false;
+    bool is_arg_count = false;
+    // -------
+    std::string class_name;     // Имя содержащего метод класса (если существует).
+    std::string method_name;    // Имя самого метода либо свободной функции.
+    size_t arg_count = 0;       // Число аргументов процедуры.
+};
+DemangledData DemangleMethodFunctionName(const std::string& mangled_method_func_name);
+std::string DottedIdsToString(const std::vector<std::string>& dotted_ids_v);

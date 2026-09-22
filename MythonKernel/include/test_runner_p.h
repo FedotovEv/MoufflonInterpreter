@@ -142,7 +142,7 @@ public:
         catch (...)
         {
             ++fail_count;
-            std::cerr << "Unknown exception caught" << std::endl;
+            std::cerr << test_name << " Unknown exception caught" << std::endl;
         }
     }
 

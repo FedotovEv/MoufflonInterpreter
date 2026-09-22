@@ -50,33 +50,96 @@ void CallDestroyIfNeed(Closure& use_closure, const std::string& var_name, Contex
 }
 
 // Функция порождает декорированное ("калечное") имя метода либо функции, содержащее кроме непосредственного имени также
-// сигнатурный элемент, кодирующий количество аргументов в ней.
-string MangleMethodFunctionName(const string& method_func_name, size_t arg_count)
+// дополнительные сигнатурные элементы, кодирующий классовую принадлежность метода и количество аргументов в нём.
+string MangleMethodFunctionName(const std::string& class_name, const std::string& method_func_name, size_t arg_count)
 {
-    return method_func_name + '@' + to_string(arg_count);
+    return (!class_name.empty() ? "@1_" + class_name : string()) + "@2_" + method_func_name + "@3_" + to_string(arg_count);
 }
 
 // Функция разделяет калечное имя метода или функции на его компоненты - само имя и количество аргументов процедуры.
-pair<string, size_t> DemangleMethodFunctionName(const string& mangled_method_func_name)
+DemangledData DemangleMethodFunctionName(const string& mangled_method_func_name)
 {
-    string direct_name;
-    size_t arg_count = 0;    
-    if (size_t tail_pos = mangled_method_func_name.find('@'); tail_pos != string::npos)
-    { // Это калечное имя, далее мы разделяем его на компоненты.
-        direct_name = mangled_method_func_name.substr(0, tail_pos);
-        string name_tail_portion = mangled_method_func_name.substr(tail_pos + 1);
-        const char* start_symb_ptr = name_tail_portion.c_str();
-        errno = 0;
-        arg_count = strtoull(start_symb_ptr, nullptr, 10);
-        if (errno != 0)
-            arg_count = 0;
-    }
-    else
-    { // Комплексное имя является простым и не содержит элементов отделки.
-        direct_name = mangled_method_func_name;
+    static constexpr int CLASS_NAME_TERM_TYPE = 1;
+    static constexpr int METHOD_NAME_TERM_TYPE = 2;
+    static constexpr int ARG_COUNT_TERM_TYPE = 3;
+
+    if (mangled_method_func_name.empty() || mangled_method_func_name[0] != '@')
+    { // Комплексное имя является на самом деле простым и не содержит элементов отделки.
+        return {.is_method_name = true, .method_name = mangled_method_func_name};
     }
 
-    return {move(direct_name), arg_count};
+    // Это действительно калечное имя, далее мы разделяем его на компоненты.
+    DemangledData demangled_result{.is_mangled = true};
+    size_t term_head_pos = 0;
+    while (term_head_pos < mangled_method_func_name.size() && mangled_method_func_name[term_head_pos] == '@')
+    {
+        size_t term_body_pos = mangled_method_func_name.find('_', term_head_pos);
+        if (term_body_pos == string::npos)
+        { // Неверная структура очередного терма.
+            demangled_result.is_valid = false;
+            break;
+        }
+
+        size_t next_term_head_pos = mangled_method_func_name.find('@', term_body_pos);
+        if (next_term_head_pos == string::npos)
+            next_term_head_pos = mangled_method_func_name.size();
+
+        string term_type_str = mangled_method_func_name.substr(term_head_pos + 1, term_body_pos - term_head_pos - 1);
+        string term_body_str = mangled_method_func_name.substr(term_body_pos + 1, next_term_head_pos - term_body_pos - 1);
+
+        const char* term_type_start = term_type_str.c_str();
+        char* term_type_end;
+        errno = 0;
+        int term_type = strtol(term_type_start, &term_type_end, 10);
+        if (errno != 0 || (term_type_end - term_type_start) != term_type_str.size())
+        {  // Тип терма должен быть целым числом и преобразовываться в такое число полностью и без ошибок.
+            demangled_result.is_valid = false;
+            break;
+        }
+
+        switch (term_type)
+        {
+        case CLASS_NAME_TERM_TYPE:
+            demangled_result.class_name = move(term_body_str);
+            demangled_result.is_class_name = true;
+            break;
+        case METHOD_NAME_TERM_TYPE:
+            demangled_result.method_name = move(term_body_str);
+            demangled_result.is_method_name = true;
+            break;
+        case ARG_COUNT_TERM_TYPE:
+        {
+            const char* arg_count_start_pos = term_body_str.c_str();
+            char* arg_count_end_pos;
+            errno = 0;
+            demangled_result.is_arg_count = true;
+            demangled_result.arg_count = strtoull(arg_count_start_pos, &arg_count_end_pos, 10);
+            if (errno != 0 || (arg_count_end_pos - arg_count_start_pos) != term_body_str.size())
+            {
+                demangled_result.is_valid = false;
+                demangled_result.arg_count = 0;
+            }
+            break;
+        }
+        default:    // Неизвестный тип терма, их наличие не считается ошибкой, они просто пропускаются.
+            break;
+        }
+
+        term_head_pos = next_term_head_pos;
+    }
+    return demangled_result;
+}
+
+std::string DottedIdsToString(const std::vector<std::string>& dotted_ids_v)
+{
+    string str_dotted_ids;
+    for (const string& one_var_id : dotted_ids_v)
+    {
+        if (!str_dotted_ids.empty())
+            str_dotted_ids += '.';
+        str_dotted_ids += one_var_id;
+    }
+    return str_dotted_ids;
 }
 
 void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure, runtime::Context& context)
@@ -868,7 +931,7 @@ namespace ast
     {
         string intermediate_name = free_function_ ? free_function_->GetName() : free_function_name_;
         if (is_full_signature)
-            return MangleMethodFunctionName(intermediate_name, args_.size());
+            return MangleMethodFunctionName({}, intermediate_name, args_.size());
         else
             return move(intermediate_name);
     }
@@ -897,10 +960,48 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         ObjectHolder real_object = object_->Execute(closure, context);
+
         vector<ObjectHolder> real_args;
         for (auto& cur_arg_ptr : args_)
             // Вычисляем истинные значения аргументов метода.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
+
+        #ifdef MYTHON_NON_GLOBAL_REFS
+            // Создадим необходимые объекты, которые будут отслеживать текущую переменную, в контексте которой находится таблица
+            // символов closure (то есть переменную, которая указывает на объект, к которому относится эта таблица). К таким объектам
+            // относится функция, вычисляющая имя такой переменной, а также сторожок, который восстановит исходное имя вмещающей нас
+            // переменной, в объекте которой мы находимся сейчас.
+            // Создаём и взводим этот сторожок.
+            string old_exec_objname = context.GetExecutedObjectName();
+            auto exec_objname_restorer = [&old_exec_objname, &context](string* internal_string) -> void
+                {
+                    context.SetExecutedObjectName(old_exec_objname);
+                    delete internal_string;
+                };
+            unique_ptr<string, decltype(exec_objname_restorer)> objname_scope_guard(new string(old_exec_objname), exec_objname_restorer);
+            // А теперь определяем лямбду, которая будет вычислять и устанавливать новое полное каноническое имя переменной, значение
+            // которой возвращает инструкция object_, и внутри объекта которой мы окажемся при вызове его метода. 
+            auto set_new_canonical_var =
+                [this, &real_object, &objname_scope_guard, &context](const std::string& method_func_name, size_t arg_count) -> void
+                {
+                    string method_class_name;
+                    if (runtime::CommonClassInstance* real_object_class = real_object.TryAs<runtime::CommonClassInstance>())
+                        method_class_name = real_object_class->GetClassName();
+
+                    vector<string> dotted_id_name = dynamic_cast<VariableValue*>(object_.get())->GetDottedIds();
+                    // Проверим содержимое первого элемента dotted_id_name, по которому выясним тип поля object_.
+                    if (!dotted_id_name.empty() && dotted_id_name[0] == SELF_FIELD_NAME)
+                        // Это поле объекта. В таком случае заменяем "self" на сигнатуру имени класса.
+                        dotted_id_name[0] = "@1_" + method_class_name;
+                    else // Это локальная переменная метода. Для этого варианта вставим перед именем переменной сигнатуру метода.
+                        dotted_id_name.insert(dotted_id_name.begin(), MangleMethodFunctionName(method_class_name, method_func_name, arg_count));
+
+                    if (!objname_scope_guard->empty())
+                        (*objname_scope_guard) += '.';
+                    (*objname_scope_guard) += DottedIdsToString(dotted_id_name);
+                    context.SetExecutedObjectName((*objname_scope_guard));
+                };
+        #endif
 
         // Возможны два варианта обработки конструкции object_.method_ - как вызов собственно метода с именем method_ объекта real_object
         // или как вызов функционального объекта (функтора), хранящегося в переменной object_.method_ (поле method_ объекта real_object).
@@ -908,11 +1009,19 @@ namespace ast
         runtime::CommonClassInstance* real_object_common = real_object.TryAs<runtime::CommonClassInstance>();
         // Приоритет у нас будет иметь вызов метода, поэтому проверим его наличие в первую голову.
         if (real_object_common && real_object_common->HasMethod(method_, static_cast<int>(real_args.size()), parent_name_))
-            // Метод method_ есть у объекта real_object. Просто вызываем его без каких-либо дальнейших проверок.
+        { // Метод method_ есть у объекта real_object. Просто вызываем его без каких-либо дальнейших проверок.
+            #ifdef MYTHON_NON_GLOBAL_REFS
+                set_new_canonical_var(method_, real_args.size());
+            #endif
             result = real_object_common->Call(method_, real_args, context, parent_name_);
+        }
         else if (runtime::CommonClassInstance* functor_instance = TestFunctorVariable(real_object_common, method_, real_args.size(), closure))
-            // Выражение object_.method_ является объектом функтора. Вызовём его соответствующий исполнительный метод.
+        { // Выражение object_.method_ является объектом функтора. Вызовём его соответствующий исполнительный метод.
+            #ifdef MYTHON_NON_GLOBAL_REFS
+                set_new_canonical_var(FUNCTOR_CALL_METHOD, real_args.size());
+            #endif
             result = functor_instance->Call(FUNCTOR_CALL_METHOD, real_args, context);
+        }
         else // Оба варианта провалились - вызов метода исполнить невозможно, возвращаем ошибку.
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
 
@@ -945,7 +1054,7 @@ namespace ast
     std::string MethodCall::GetInvokedName(bool is_full_signature) const
     {
         if (is_full_signature)
-            return MangleMethodFunctionName(method_, args_.size());
+            return MangleMethodFunctionName(DemangledData::UNKNOWN_CLASS, method_, args_.size());
         else
             return method_;
     }
@@ -1190,7 +1299,7 @@ namespace ast
     void Compound::AddStatement(std::unique_ptr<Statement> stmt)
     { // Добавляет очередную инструкцию в конец составной инструкции.
         if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(stmt.get()))
-            last_body_command_desc_ = compound_stmt_ptr->GetLastCommandDesc();           
+            last_body_command_desc_ = compound_stmt_ptr->GetLastCommandDesc();
         else
             last_body_command_desc_ = stmt->GetCommandDesc();
         comp_body_.push_back(std::move(stmt));
@@ -1214,7 +1323,15 @@ namespace ast
         context.SetProgramRoot(this);
         context.SetGlobalClosure(&closure);
         // Исполним программу.
-        runtime::ObjectHolder ret_value = Compound::Execute(closure, context);
+        runtime::ObjectHolder ret_value;
+        try
+        {
+            ret_value = Compound::Execute(closure, context);
+        }
+        catch (ReturnResult& program_result)
+        {
+            ret_value = program_result.ret_result_;
+        }
         // Если это не запрещено соответствующей опцией контекста, после завершения программы корректно удаляем все объекты,
         // сохранившиеся к данному моменту в таблице символов closure - если нужно, взываем для каждого из них внутренний деструктор.
         runtime::LinkageValue destroy_at_finish_opt = context.GetOption(runtime::Context::OptionType::CONTEXT_OPT_DESTRUCT_AT_FINISH);
@@ -1223,7 +1340,21 @@ namespace ast
             for (auto& closure_pair : closure)
                 CallDestroyIfNeed(closure_pair.second, context);
         }
-
+        // Далее мы попытаемся "зафиксировать" результат выполнения программы ret_value таким образом, чтобы это значение могло бы существовать
+        // независимо, в отдельности от узлов АСД завершившейся программы.
+        if (!ret_value.IsOwning())
+        { // Контейнер ret_value является невладеющим, то есть он, на самом деле, указывает на объект-значение, принадлежащее какому-то узлу
+          // АСД исполнившейся программы, а оно будет уничтожено вместе c ним. Поэтому попытаемся скопировать его в другое, независимое от
+          // АСД значение, которое продолжит существование после расформирования программы.
+            if (!ret_value) // ret_value - None.
+                ret_value = ObjectHolder::None();
+            else if (runtime::Number* number_value = ret_value.TryAs<runtime::Number>())    // ret_value - число, целое либо дробное.
+                ret_value = ObjectHolder::Own(runtime::Number(*number_value));
+            else if (runtime::String* string_value = ret_value.TryAs<runtime::String>())    // ret_value - строка.
+                ret_value = ObjectHolder::Own(runtime::String(*string_value));
+            else if (runtime::Bool* boolean_value = ret_value.TryAs<runtime::Bool>())       // ret_value - логическое значение
+                ret_value = ObjectHolder::Own(runtime::Bool(*boolean_value));
+        }
         return ret_value;
     }
 
@@ -1257,29 +1388,91 @@ namespace ast
     }
 
     // Метод компоновки данной программы с другой "библиотечной" МУФЛОН-программой linked_program в двоичном её представлении.
-    pair<size_t, size_t> ProgramCompound::LinkAnotherCompound(ProgramCompound* linked_program)
+    ProgramCompound::LinkReport ProgramCompound::LinkAnotherProgram(ProgramCompound* linked_program)
     {
+        LinkReport result_report;
         if (!linked_program)
-            return {0, 0};
-        
-        size_t classes_corrected = 0, classes_appended = 0;
-        for (const auto& linked_decl_classes_pair : linked_program->GetDeclaredClassesDef())
-        {
-            if (auto our_decl_calss_it = GetDeclaredClassesDef().find(linked_decl_classes_pair.first);
-                our_decl_calss_it != GetDeclaredClassesDef().end())
-            { // Это доопределение уже существующего в нашей программе класса.
+            return result_report;
 
+        // Обработка классов, содержащихся в присоединяемой программе.
+        for (const auto& linked_decl_class_pair : linked_program->GetDeclaredClassesDef())
+        {
+            if (auto our_decl_class_it = declared_classes_def_.find(linked_decl_class_pair.first);
+                our_decl_class_it != declared_classes_def_.end())
+            { // Это доопределение уже существующего в нашей программе класса. Проверяем отдельные его методы на необходимость переопределения.
+                runtime::Class* our_class = our_decl_class_it->second->GetClass();
+                runtime::Class* linked_class = linked_decl_class_pair.second->GetClass();
+                result_report.classes_corrected.push_back(linked_decl_class_pair.first);
+                for (const pair<string, size_t>& linked_method_desc : linked_class->GetMethodsDesc())
+                {
+                    runtime::Class::GetMethodRet our_method =
+                        our_class->GetMethod(linked_method_desc.first, static_cast<int>(linked_method_desc.second), our_class->GetName());
+                    runtime::Class::GetMethodRet linked_method =
+                        linked_class->GetMethod(linked_method_desc.first, static_cast<int>(linked_method_desc.second), linked_class->GetName());
+                    if (!our_method.IsError() && linked_method.method->IsAbstract())
+                        // "Наш" класс методом с сигнатурой linked_method_desc уже располагает, а переопределяющий метод linked_method является
+                        // абстрактным. Это единственный случай, при котором мы отвергаем компонуемый метод стороннего класса.
+                        continue;
+
+                    string change_method_sign =
+                        MangleMethodFunctionName(our_decl_class_it->first, our_method.method->name, our_method.method->formal_params.size());
+                    // Конструируем объект перенаправления, который будет фактически исполнять тело компонуемого метода.
+                    unique_ptr<Statement> redir_to_linked_statement = make_unique<MethodBodyRedirector>(linked_method.method->body.get());
+                    if (our_method.IsError())
+                    { // Такого метода у нас ещё нет. Строим новый, используя ранее созданный перенаправитель как его исполняемое тело.
+                        result_report.methods_appended.push_back(move(change_method_sign));
+                        runtime::Method redir_to_linked_method
+                            (linked_method.method->name, linked_method.method->formal_params, move(redir_to_linked_statement),
+                             linked_method.method->is_coroutine, linked_method.method->global_vars);
+                        our_class->AddMethod(move(redir_to_linked_method));
+                    }
+                    else
+                    { // Такой метод у нас уже есть. В его описателе, находящимся в виртуальной таблице методов, нужно только подменить
+                      // тело на объект перенаправления.
+                        result_report.methods_corrected.push_back(move(change_method_sign));
+                        // Переопределяем свойства "выбывающего" метода на соответствующие значения свойств из метода "прибывающего".
+                        const_cast<runtime::Method*>(our_method.method)->RedefineProperties
+                            (*linked_method.method, move(redir_to_linked_statement));
+                    }
+                }
             }
             else
             { // Такого класса в данной программе не существует, так что добавляем его к нашей "классовой базе" полностью, в неизменном виде.
-                unique_ptr<ast::ClassDefinition> new_class_def = make_unique<ast::ClassDefinition>(*linked_decl_classes_pair.second);
-                declared_classes_def_[linked_decl_classes_pair.first] = new_class_def.get();
+                unique_ptr<ast::ClassDefinition> new_class_def = make_unique<ast::ClassDefinition>(*linked_decl_class_pair.second);
+                declared_classes_def_[linked_decl_class_pair.first] = new_class_def.get();
+                result_report.classes_appended.push_back(new_class_def->GetClassName());
                 AddStatement(move(new_class_def));
-                ++classes_appended;
+            }
+        }
+        // Далее следует аналогичная обработка для свободных функций, содержащихся в прокомпоновываемом дереве.
+        for (const auto& linked_free_func_pair : linked_program->GetDeclaredFreeFunctionsDef())
+        {
+            auto our_decl_func_it = declared_free_functions_def_.find(linked_free_func_pair.first);
+            bool is_new_function = (our_decl_func_it == declared_free_functions_def_.end());
+            // Если присоединяемая сторонняя функция абстрактная и уже имеет эквивалент в нашей программе, мы её отвергаем.
+            // Во всех прочих же случаях она будет заменять имеющийся в данный момент у нас аналог.
+            if (!is_new_function && linked_free_func_pair.second->GetFunction()->IsAbstract())
+                    continue;   // Присоединяемый кандидат абстрактен и не нов - отвергаем его.
+            // Теперь добавим описание новой (заменяющей) функции в оба места хранения - в АСД-дерево в виде узла инструкции
+            // ast::FreeFunctionDefinition, а также в словарь declared_free_functions_def_ в форме указателя на эту инструкцию.
+            if (is_new_function)
+            { // Новая (ранее неизвестная нам) функция дополняет базу функций.
+                result_report.functions_appended.push_back(linked_free_func_pair.first);
+                auto new_func_def = make_unique<ast::FreeFunctionDefinition>(*linked_free_func_pair.second);
+                declared_free_functions_def_[linked_free_func_pair.first] = new_func_def.get();
+                AddStatement(move(new_func_def));
+            }
+            else
+            { // Прибывающая функция заменяет имеющуюся в базе.
+                result_report.functions_corrected.push_back(linked_free_func_pair.first);
+                runtime::Method* old_method = const_cast<runtime::Method*>(our_decl_func_it->second->GetFunction()->GetBodyMethod());
+                const runtime::Method* new_linked_method = linked_free_func_pair.second->GetFunction()->GetBodyMethod();
+                // Переопределяем свойства "старого" метода на соответствующие значения свойств из метода "нового".
+                old_method->RedefineProperties(*new_linked_method, make_unique<MethodBodyRedirector>(new_linked_method->body.get()));
             }
         }
 
-        return {classes_corrected , classes_appended};
+        return result_report;
     }
 
     ObjectHolder Raise::Execute(runtime::Closure& closure, runtime::Context& context)
@@ -1531,7 +1724,7 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
         runtime::FreeFunction* free_function_def = free_function_.TryAs<runtime::FreeFunction>();
-        closure[MangleMethodFunctionName(free_function_def->GetName(), free_function_def->GetArgCount())] = free_function_;
+        closure[MangleMethodFunctionName({}, free_function_def->GetName(), free_function_def->GetArgCount())] = free_function_;
         return free_function_;
     }
 
@@ -2256,6 +2449,25 @@ namespace ast
         method_sentinel_end_->SetCommandDesc(after_body_command_desc);
     }
 
+    // Специальный конструктор для создания объекта-переадресатора, который не содержит внутри истинного исполняемого тела метода,
+    // но воспринимает и воспроизводит вовне только его внешние атрибуты.
+    MethodBody::MethodBody(Statement* real_body)
+    {
+        // Установим тот же набор родов для самой инструкции и внуренних её ограничителей.
+        SetCommandGenus(runtime::CommandGenus::CMD_GENUS_DECLARATIVE);
+        SetCommandDesc(real_body->GetCommandDesc());
+        method_sentinel_begin_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_PRE_FIRST_METHOD_STMT);
+        method_sentinel_end_->SetCommandGenus(runtime::CommandGenus::CMD_GENUS_AFTER_LAST_METHOD_STMT);
+
+        if (MethodBody* real_method_body = dynamic_cast<MethodBody*>(real_body))
+        { // Скопируем настройки наших ограничителей из истинного подлежащего тела, которое предстоит представлять.
+            method_sentinel_begin_->SetCommandDesc(real_method_body->GetSentinelCommandDesc(true));
+            method_sentinel_end_->SetCommandDesc(real_method_body->GetSentinelCommandDesc(false));
+            method_sentinel_begin_->info_data_ptr = real_method_body->GetSentinelInfoData(true);
+            method_sentinel_end_->info_data_ptr = real_method_body->GetSentinelInfoData(false);
+        }
+    }
+
     ObjectHolder MethodBody::Execute(Closure& closure, Context& context)
     {
         PrepareExecute(method_sentinel_begin_.get(), closure, context); // Отправляем уведомление о начале исполнения метода.
@@ -2299,5 +2511,15 @@ namespace ast
             return method_sentinel_begin_->GetCommandDesc();
         else
             return method_sentinel_end_->GetCommandDesc();
+    }
+
+    MethodBodyRedirector::MethodBodyRedirector(Statement* real_body) :
+        MethodBody(real_body), real_body_(real_body)
+    {}
+
+    // Исполняет истинное тело метода real_body, переданного в конструктор, и возвращет вызывающей стороне полученный от него результат.
+    runtime::ObjectHolder MethodBodyRedirector::Execute(runtime::Closure& closure, runtime::Context& context)
+    {
+        return real_body_->Execute(closure, context);
     }
 }  // namespace ast

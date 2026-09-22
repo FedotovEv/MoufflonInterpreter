@@ -1616,7 +1616,7 @@ namespace runtime
                 if (from_utf8_result.second == 0)
                 { // Ошибка извлечения из входной строки очередного UTF-8-юникода.
                     string err_mess =
-                        ThrowMessages::ConstructThrowText("%1"s + std::to_string(input_str_pos), {ThrowMessageNumber::THRM_UTF8_EXTRACT_ERROR});
+                        ThrowMessages::ConstructThrowText("%1 "s + std::to_string(input_str_pos), {ThrowMessageNumber::THRM_UTF8_EXTRACT_ERROR});
                     ThrowRuntimeError(context, ThrowMessageNumber::THRM_STRING_ENCODING_ERROR, err_mess);
                 }
                 last_unicode_ = from_utf8_result.first;

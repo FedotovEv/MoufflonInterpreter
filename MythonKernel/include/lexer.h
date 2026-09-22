@@ -144,7 +144,7 @@ namespace parse
         // include, так и обратном - когда текущий модуль завершается) исходных модулей.
         virtual void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) = 0;
         // Функция ниже вызывается при обработке директивы include. include_arg - параметр этой директивы.
-        virtual void IncludeSwitchTo(std::string include_arg) = 0;
+        virtual void IncludeSwitchTo(const std::string& include_arg) = 0;
         virtual int get() = 0;
         virtual int peek() = 0;
         virtual LexerInputEx& unget() = 0;
@@ -156,14 +156,56 @@ namespace parse
     class SimpleLexerInputEx : public LexerInputEx
     {
     public:
-        SimpleLexerInputEx(std::istream& input_stream) : input_stream_(input_stream)
+        enum class ModuleIdPolicy
+        {
+            MODULE_ID_NOT_CHANGE = 0,   // Не изменять идент модуля (идент будет всегда сохранять своё умолчательное значение -1).
+            MODULE_ID_CONST,            // Постоянное значение идента модуля. Устанавливается однажды при инициализирующем вызове IncludeSwitchTo() и далее не меняется.
+            MODULE_ID_INCLUDE_ARG,      // Идент модуля прямо извлекается из аргумента директивы include.
+            MOUDLE_ID_INCLUDE_MAP       // Идент модуля может быть явно назначен для каждого аргумента директивы include.
+        };
+
+        SimpleLexerInputEx(std::istream& input_stream, ModuleIdPolicy id_policy = ModuleIdPolicy::MODULE_ID_NOT_CHANGE, int id_const = -1) :
+            input_stream_(input_stream), id_policy_(id_policy), id_const_(id_const)
         {}
 
-        void IncludeSwitchTo(std::string include_arg) override
-        {}
+        void IncludeSwitchTo(const std::string& include_arg) override;
+
+        int GetIdConst(int new_id_const) const
+        {
+            return id_const_;
+        }
+
+        int SetIdConst(int new_id_const)
+        {
+            return std::exchange(id_const_, new_id_const);
+        }
+
+        bool AddIdMap(const std::string& include_arg, int mapped_id_const)
+        {
+            return include_arg_to_id_.emplace(include_arg, mapped_id_const).second;
+        }
+
+        bool EraseIdMap(const std::string& include_arg)
+        {
+            return include_arg_to_id_.erase(include_arg);
+        }
+
+        int RequestIdMap(const std::string& include_arg) const;
+
+        ModuleIdPolicy GetModuleIdPolicy() const
+        {
+            return id_policy_;
+        }
+
+        ModuleIdPolicy SetModuleIdPolicy(ModuleIdPolicy new_id_policy)
+        {
+            return std::exchange(id_policy_, new_id_policy);
+        }
 
         void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) override
-        {}
+        {
+            use_command_desc_ = command_desc_ptr;
+        }
 
         int get() override
         {
@@ -198,6 +240,11 @@ namespace parse
 
     private:
         std::istream& input_stream_;
+        // Поля, обеспечивающие управление значением идента текущего обрабатываемого исходного модуля.
+        runtime::ProgramCommandDescriptor* use_command_desc_ = nullptr;
+        ModuleIdPolicy id_policy_ = ModuleIdPolicy::MODULE_ID_NOT_CHANGE;
+        int id_const_ = -1;
+        std::unordered_map<std::string, int> include_arg_to_id_;
     };
     
     class Lexer

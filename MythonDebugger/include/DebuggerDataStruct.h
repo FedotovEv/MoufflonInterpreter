@@ -117,7 +117,7 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(std::string include_arg) override;
+    void IncludeSwitchTo(const std::string& include_arg) override;
 
     int get() override;
     int peek() override;

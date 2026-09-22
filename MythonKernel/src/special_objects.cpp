@@ -1129,18 +1129,24 @@ namespace runtime
         return {};
     }
 
-    // Поиск метода с заданной сигнатурой method_sign, принадлежащему классу class_name, или любому классу, если class_name пуст.
+    // Поиск метода с заданной полной сигнатурой method_sign. Если сигнатура не содержит имени класса, ищется любой подходящий метод.
     ProgramCommandDescriptor TypeTraitsInstance::ScanForMethod
-        (const unordered_map<string, ast::ClassDefinition*>& declared_classes_def, const string& method_sign, const string& class_name)
+        (const unordered_map<string, ast::ClassDefinition*>& declared_classes_def, const string& method_sign)
     {
-        pair<string, size_t> method_params_pair = DemangleMethodFunctionName(method_sign);
+        DemangledData method_params = DemangleMethodFunctionName(method_sign);
+        if (!method_params.is_valid)
+        {
+            assert(false);
+            return DUMB_PROG_POS;
+        }
+
         for (const auto& class_pair : declared_classes_def)
         {
-            if (class_name.empty() || class_pair.second->GetClassName() == class_name)
+            if (method_params.class_name.empty() || class_pair.second->GetClassName() == method_params.class_name)
             { // Подходящий по имени класс найден. Проверим наличие в нём метода с требуемой сигнатурой (расширенным именем).
                 const Class* test_class = class_pair.second->GetClass();
                 if (Class::GetMethodRet test_method_ret =
-                    test_class->GetMethod(method_params_pair.first, static_cast<int>(method_params_pair.second)))
+                    test_class->GetMethod(method_params.method_name, static_cast<int>(method_params.arg_count)))
                     // Метод с сигнатурой method_sign принадлежит классу class_name (может быть для него вызван).
                     return test_method_ret.method->body->GetCommandDesc();
             }

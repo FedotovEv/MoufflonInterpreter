@@ -467,7 +467,7 @@ namespace runtime
         }
 
         if (ProgramCommandDescriptor method_def_pos = TypeTraitsInstance::ScanForMethod
-            (program_root->GetDeclaredClassesDef(), MangleMethodFunctionName(method_name, params_count));
+            (program_root->GetDeclaredClassesDef(), MangleMethodFunctionName(class_name, method_name, params_count));
             method_def_pos != DUMB_PROG_POS)
             // Метод с затребованной сигнатурой найден. Создаёи бряк на его декларацию и возвращаем индекс этого бряка.
             return AddPositionBreak(method_def_pos);
@@ -486,7 +486,7 @@ namespace runtime
         }
 
         if (ProgramCommandDescriptor free_func_def_pos = TypeTraitsInstance::ScanForFreeFunction
-            (program_root->GetDeclaredFreeFunctionsDef(), MangleMethodFunctionName(free_func_name, params_count));
+        (program_root->GetDeclaredFreeFunctionsDef(), MangleMethodFunctionName({}, free_func_name, params_count));
             free_func_def_pos != DUMB_PROG_POS)
             // Свободная функция с затребованной сигнатурой найдена. Создаём бряк на её декларацию и возвращаем его индекс.
             return AddPositionBreak(free_func_def_pos);

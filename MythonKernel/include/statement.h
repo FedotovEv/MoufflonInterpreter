@@ -90,7 +90,7 @@ namespace ast
         explicit VariableValue(std::vector<std::string> dotted_ids);
 
         runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
-        std::vector<std::string> GetDottedIds()
+        const std::vector<std::string>& GetDottedIds() const
         {
             return dotted_ids_;
         }
@@ -730,7 +730,19 @@ namespace ast
         // предоставляющая для использования данной программе свои процедуры - классы и свободные функции.
         // В процессе компоновки происходит полная или частичная конкретизация одноимённых абстрактных процедур целевой программы
         // в соответствии с содержимым таких процедур библиотечной программы linked_program.
-        std::pair<size_t, size_t> LinkAnotherCompound(ProgramCompound* linked_program);
+        struct LinkReport
+        { // Структура с отчётом о выполнении "компоновочных работ".
+            std::vector<std::string> classes_corrected;
+            std::vector<std::string> classes_appended;
+            //
+            std::vector<std::string> methods_corrected;
+            std::vector<std::string> methods_appended;
+            //
+            std::vector<std::string> functions_corrected;
+            std::vector<std::string> functions_appended;
+        };
+
+        LinkReport LinkAnotherProgram(ProgramCompound* linked_program);
 
     private:
         // Метаданные, связанные с программой, которую содержит эта сплотка (составная инструкция) в своём поле comp_body_.
@@ -758,6 +770,8 @@ namespace ast
     {
     public:
         explicit MethodBody(std::unique_ptr<Statement>&& body, const runtime::ProgramCommandDescriptor& real_method_pos = runtime::DUMB_PROG_POS);
+        // Специальный конструктор для рвботы в составе объекта-переадресатора класса MethodBodyRedirector.
+        explicit MethodBody(Statement* real_body);
 
         // Вычисляет инструкцию, переданную в качестве body.
         // Если внутри body была выполнена инструкция return, возвращает результат return.
@@ -774,6 +788,22 @@ namespace ast
         std::unique_ptr<runtime::PsevdoExecutable> method_sentinel_begin_ = std::make_unique<runtime::PsevdoExecutable>();
         std::unique_ptr<Statement> body_;
         std::unique_ptr<runtime::PsevdoExecutable> method_sentinel_end_ = std::make_unique<runtime::PsevdoExecutable>();
+    };
+
+    class MethodBodyRedirector : public MethodBody
+    {
+    public:
+        explicit MethodBodyRedirector(Statement* real_body = nullptr);
+        // Исполняет истинное тело метода real_body, переданного в конструктор, и возвращет вызывающей стороне полученный от него результат.
+        runtime::ObjectHolder Execute(runtime::Closure& closure, runtime::Context& context) override;
+
+        Statement* GetRealBody() const
+        {
+            return real_body_;
+        }
+
+    private:
+        Statement* real_body_ = nullptr;
     };
 
     // Объект исполнения инструкции выброса исключения raise с выражением (аргументом) statement.
@@ -953,6 +983,7 @@ namespace ast
     class ClassDefinition : public Statement
     {
         friend class runtime::TypeTraitsInstance;
+        friend class ProgramCompound;
 
     public:
         // Гарантируется, что ObjectHolder содержит объект типа runtime::Class.
@@ -1003,7 +1034,7 @@ namespace ast
         std::string GetFunctionMangledName() const
         {
             const runtime::FreeFunction* int_function = free_function_.TryAs<runtime::FreeFunction>();
-            return MangleMethodFunctionName(int_function->GetName(), int_function->GetArgCount());
+            return MangleMethodFunctionName({}, int_function->GetName(), int_function->GetArgCount());
         }
         // Получение количества формальных аргументов вложенной функции.
         size_t GetArgCount() const

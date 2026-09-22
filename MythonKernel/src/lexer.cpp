@@ -579,6 +579,48 @@ namespace parse
         return "{Unknown token type}";
     }
 
+    void SimpleLexerInputEx::IncludeSwitchTo(const std::string& include_arg)
+    {
+        if (!use_command_desc_ || id_policy_ == ModuleIdPolicy::MODULE_ID_NOT_CHANGE)
+            return;
+        if (!include_arg.size())
+        { // Инициализирующий вызов IncludeSwitchTo().
+            if (id_policy_ == ModuleIdPolicy::MOUDLE_ID_INCLUDE_MAP && include_arg_to_id_.contains(include_arg))
+                use_command_desc_->module_id = include_arg_to_id_.at(include_arg);
+            else
+                use_command_desc_->module_id = id_const_;
+        }
+        else
+        { // Вызов IncludeSwitchTo(), переключающий модули.
+            switch (id_policy_)
+            {
+            case ModuleIdPolicy::MODULE_ID_CONST:
+                use_command_desc_->module_id = id_const_;
+                break;
+            case ModuleIdPolicy::MODULE_ID_INCLUDE_ARG:
+                use_command_desc_->module_id = strtoul(include_arg.c_str(), nullptr, 10);
+                break;
+            case ModuleIdPolicy::MOUDLE_ID_INCLUDE_MAP:
+                if (include_arg_to_id_.contains(include_arg))
+                    use_command_desc_->module_id = include_arg_to_id_.at(include_arg);
+                else
+                    use_command_desc_->module_id = id_const_;
+                break;
+            default:
+                break;
+            }
+        }
+        return;
+    }
+
+    int SimpleLexerInputEx::RequestIdMap(const std::string& include_arg) const
+    {
+        if (auto include_id_it = include_arg_to_id_.find(include_arg); include_id_it != include_arg_to_id_.end())
+            return include_id_it->second;
+        else
+            return -1;
+    }
+
     Lexer::Lexer(LexerInputEx& input) : input_(input),
                                         indent_amount_(0),
                                         indent_sent_(0),

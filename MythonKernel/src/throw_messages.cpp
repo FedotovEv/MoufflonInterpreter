@@ -82,25 +82,25 @@ namespace runtime
         {ThrowMessageNumber::THRM_RAISE_CALL, "Принудительный вызов исключения оператором raise"s},
         {ThrowMessageNumber::THRM_URGENT_TERMINATE, "Немедленное завершение программы"s},
         // Подстановочные фрагменты, предназначенные для формирования составных, более сложных, сообщений.
-        {ThrowMessageNumber::THRM_BASE_CLASS, "Базовый класс "s},
-        {ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS, " не найден для класса "s},
-        {ThrowMessageNumber::THRM_CLASS, "Класс "s},
-        {ThrowMessageNumber::THRM_FUNCTION, "Функция "s},
-        {ThrowMessageNumber::THRM_ALREADY_EXISTS, " уже существует"s},
-        {ThrowMessageNumber::THRM_USE_MULTIPLE_TIMES, " используется многократно"s},
-        {ThrowMessageNumber::THRM_METHOD, "Метод "s},
-        {ThrowMessageNumber::THRM_ARGUMENTS, " аргументов"s},
-        {ThrowMessageNumber::THRM_DEMAND_EQUAL, " требует "s},
-        {ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL, " требует не более "s},
-        {ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL, " требует не менее "s},
-        {ThrowMessageNumber::THRM_PARAMETER, "Параметр "s},
-        {ThrowMessageNumber::THRM_OF_METHOD, " метода "s},
-        {ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE, " имеет несоответствующий тип"s},
-        {ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT, " требует 1 аргумент"s},
-        {ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD, "Параметр 1 метода "s},
-        {ThrowMessageNumber::THRM_MUST_BE_CURSOR, " должен быть курсором"s},
-        {ThrowMessageNumber::THRM_IN_METHOD, "В методе "s},
-        {ThrowMessageNumber::THRM_CURSOR_INVALID, " курсор недействителен"s},
+        {ThrowMessageNumber::THRM_BASE_CLASS, "Базовый класс"s},
+        {ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS, "не найден для класса"s},
+        {ThrowMessageNumber::THRM_CLASS, "Класс"s},
+        {ThrowMessageNumber::THRM_FUNCTION, "Функция"s},
+        {ThrowMessageNumber::THRM_ALREADY_EXISTS, "уже существует"s},
+        {ThrowMessageNumber::THRM_USE_MULTIPLE_TIMES, "используется многократно"s},
+        {ThrowMessageNumber::THRM_METHOD, "Метод"s},
+        {ThrowMessageNumber::THRM_ARGUMENTS, "аргументов"s},
+        {ThrowMessageNumber::THRM_DEMAND_EQUAL, "требует"s},
+        {ThrowMessageNumber::THRM_DEMAND_LESS_OR_EQUAL, "требует не более"s},
+        {ThrowMessageNumber::THRM_DEMAND_GREATER_OR_EQUAL, "требует не менее"s},
+        {ThrowMessageNumber::THRM_PARAMETER, "Параметр"s},
+        {ThrowMessageNumber::THRM_OF_METHOD, "метода"s},
+        {ThrowMessageNumber::THRM_HAVE_INCOMPATIBLE_TYPE, "имеет несоответствующий тип"s},
+        {ThrowMessageNumber::THRM_DEMAND_ONE_ARGUMENT, "требует 1 аргумент"s},
+        {ThrowMessageNumber::THRM_FIRST_PARAM_OF_METHOD, "Параметр 1 метода"s},
+        {ThrowMessageNumber::THRM_MUST_BE_CURSOR, "должен быть курсором"s},
+        {ThrowMessageNumber::THRM_IN_METHOD, "В методе"s},
+        {ThrowMessageNumber::THRM_CURSOR_INVALID, "курсор недействителен"s},
     };
 
     const std::string& ThrowMessages::GetThrowText(ThrowMessageNumber throw_message_number)
@@ -136,16 +136,16 @@ namespace runtime
                     size_t msg_index = strtoul(start_index_symbol, &end_index_symbol, 10);                    
                     if (size_t end_index_strlen = end_index_symbol - start_index_symbol)
                     {
-                        if (msg_index >= 0 && msg_index < throw_messages.size())
-                            result += GetThrowText(throw_messages[msg_index]);
+                        if (msg_index > 0 && msg_index <= throw_messages.size())
+                            result += GetThrowText(throw_messages[msg_index - 1]);
                         i += end_index_strlen;
                     }
                     else
                     { // После опознавателя '%' вообще нет корректного номера подстановки.
                       // В таком случае воспринимаем его как обыковенный знак.
-                        --i;
                         result += c;
                     }
+                    --i;
                 }
                 else
                 { // Символ '%' - последний в строке. Присоединяем его к результату как есть, а затем выходим.
