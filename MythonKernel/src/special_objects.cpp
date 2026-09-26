@@ -555,6 +555,22 @@ namespace runtime
         }
     }
 
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому реализация этих методов чисто формальная.
+    bool ArrayInstance::HasField(const std::string& field_name, FieldTypeAccess /* field_access */) const
+    {
+        return false;
+    }
+    
+    ObjectHolder ArrayInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool ArrayInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
     MapCursor::MapCursor(MapInstance & map_instance, map<string, ObjectHolder> & map_storage) :
         map_instance_ref_(map_instance), map_storage_ref_(map_storage), map_iterator_(map_storage.begin()),
         iterator_pack_serial_(map_instance.AllocIteratorPackSerial())
@@ -809,6 +825,21 @@ namespace runtime
         }
     }
 
+    bool MapInstance::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        return false;
+    }
+    
+    ObjectHolder MapInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool MapInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
     CoroutineInstance::CoroutineInstance(ClassInstance* class_instance, const Method* method, Closure& closure) :
         class_instance_(class_instance), method_(method), coro_closure_(closure), is_started_(false), is_awaiting_(true)
     {
@@ -876,6 +907,21 @@ namespace runtime
         {
             return false;
         }
+    }
+
+    bool CoroutineInstance::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        return false;
+    }
+    
+    ObjectHolder CoroutineInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool CoroutineInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
     }
 
     ObjectHolder CoroutineInstance::MethodResume(const string& method, const vector<ObjectHolder>& actual_args, Context& context)
@@ -1046,11 +1092,6 @@ namespace runtime
         {"CallMethod"sv, {1, (numeric_limits<size_t>::max)()}}
     };
 
-    // Словари, заполняемые при разборе и синтаксическом анализе МУФЛОН-программы.
-    // std::unordered_map<std::string, int> TypeTraitsInstance::internal_classes_ids_;
-    // std::unordered_map<std::string, ast::ClassDefinition*> TypeTraitsInstance::declared_classes_def_;
-    // std::unordered_map<std::string, ast::FreeFunctionDefinition*> TypeTraitsInstance::declared_free_functions_def_;
-
     // Определение методов класса TypeTraitsInstance.
 
     TypeTraitsInstance::TypeTraitsInstance(ObjectHolder traits_value, ast::ProgramCompound* program_compound) :
@@ -1067,7 +1108,7 @@ namespace runtime
         }
 
         os << "Типовая характеристика TypeTraits : ID - " << ObjectIdInternal(program_root->GetInternalClassesIds(), traits_value_)
-            << " - Name - " << ObjectNameInternal(traits_value_);
+           << " - Name - " << ObjectNameInternal(traits_value_);
     }
 
     ObjectHolder TypeTraitsInstance::Call(const string& method_name, const vector<ObjectHolder>& actual_args,
@@ -1092,6 +1133,23 @@ namespace runtime
         {
             return false;
         }
+    }
+
+    // Методы считывания и установки значений полей объекта класса TypeTraitsInstance. Данный класс пока полей не содержит.
+    // Поэтому методы всегда вызывают сбой.
+    bool TypeTraitsInstance::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        return false;
+    }
+    
+    ObjectHolder TypeTraitsInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool TypeTraitsInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
     }
 
     // Поиск класса с заданным именем class_name среди всех объявленных в программе сущностей.

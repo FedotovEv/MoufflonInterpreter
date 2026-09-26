@@ -400,7 +400,7 @@ namespace ast
     {
         PrepareExecute(this, closure, context);
 
-        ObjectHolder plugin_holder = ObjectHolder::Own(std::move(PluginInstance(class_name_, plugin_desc_)));
+        ObjectHolder plugin_holder = ObjectHolder::Own(std::move(PluginInstance(class_name_, plugin_desc_, context)));
         PluginInstance* plugin_object = plugin_holder.TryAs<PluginInstance>();
         // Вычислим фактические значения аргументов, которые требуется передать конструктору.
         std::vector<ObjectHolder> actual_args;
@@ -576,12 +576,14 @@ namespace runtime
         return {check_result.first, check_result.second};
     }
 
-    PluginInstance::PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc) :
-        class_name_(class_name), plugin_desc_(plugin_desc)
+    const std::string PluginInstance::PLUGIN_FIELD_ACCESS_STR = PLUGIN_FIELD_ACCESS_METHOD;
+
+    PluginInstance::PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc, Context& context) :
+        class_name_(class_name), plugin_desc_(plugin_desc), context_(context)
     {}
 
     PluginInstance::PluginInstance(PluginInstance&& other) noexcept :
-        class_name_(std::move(other.class_name_)), plugin_desc_(other.plugin_desc_)
+        class_name_(std::move(other.class_name_)), plugin_desc_(other.plugin_desc_), context_(other.context_)
     {
         other.class_name_.clear();
     }
@@ -655,5 +657,35 @@ namespace runtime
             return false;
 
         return GetMethod(plugin_desc_, method_name, argument_count).method_definer;
+    }
+
+    bool PluginInstance::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        if (!HasMethod(PLUGIN_FIELD_ACCESS_STR, PLUGIN_FIELD_ACCESS_ARG_COUNT))
+            return false;   // Метода для доступа к полям втыкала не предоставлет вовсе - полагаем, что никаких полей в таком классе нет .
+
+        return const_cast<PluginInstance*>(this)->Call(PLUGIN_FIELD_ACCESS_STR,
+            {ObjectHolder::Own(runtime::Number(static_cast<int>(FieldRequestType::PLUG_HAS_FIELD_REQUEST))),
+             ObjectHolder::Own(runtime::String(field_name)),
+             ObjectHolder::Own(runtime::Number(field_access))},
+            context_).TryAs<runtime::Bool>();
+    }
+    
+    ObjectHolder PluginInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        return const_cast<PluginInstance*>(this)->Call(PLUGIN_FIELD_ACCESS_STR,
+            {ObjectHolder::Own(runtime::Number(static_cast<int>(FieldRequestType::PLUG_GET_FIELD_REQUEST))),
+             ObjectHolder::Own(runtime::String(field_name)),
+             ObjectHolder::Own(runtime::Number(FieldTypeAccess::FIELD_ACCESS_READ))},
+            context_);
+    }
+    
+    bool PluginInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        return Call(PLUGIN_FIELD_ACCESS_STR,
+            {ObjectHolder::Own(runtime::Number(static_cast<int>(FieldRequestType::PLUG_SET_FIELD_REQUEST))),
+             ObjectHolder::Own(runtime::String(field_name)),
+             ObjectHolder::Own(runtime::Number(FieldTypeAccess::FIELD_ACCESS_WRITE))},
+            context_).TryAs<runtime::Bool>();
     }
 } // namespace runtime

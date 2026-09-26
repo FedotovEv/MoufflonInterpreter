@@ -800,6 +800,20 @@ namespace runtime
         virtual ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                                   Context& context, const std::string& parent_name = {}) = 0;
         virtual std::string GetClassName() const = 0; // Возвращает имя данного класса.
+        // Методы считывания и установки значений полей объекта класса. Эти методы целесообразно использовать только для специальных классов,
+        // не имеющих внутренней стандартной таблицы символов Closure, и, следовательно, значения полей в которых хранятся не в такой таблице,
+        // а каким-то иным, особенным способом.
+        enum FieldTypeAccess
+        {
+            FIELD_ACCESS_NOTHING = 0,
+            FIELD_ACCESS_READ = 1,
+            FIELD_ACCESS_WRITE = 2,
+            FIELD_ACCESS_READ_WRITE = FIELD_ACCESS_READ | FIELD_ACCESS_WRITE,
+            FIELD_ACCESS_ALL = FIELD_ACCESS_READ_WRITE
+        };
+        virtual bool HasField(const std::string& field_name, FieldTypeAccess field_access) const = 0;
+        virtual ObjectHolder GetField(const std::string& field_name, Context& context) const = 0;
+        virtual bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) = 0;
 
         // Анализ отношений родства классов. Методы возвращают "ИСТИНУ", если класс test_my_parent
         // является предком класса, экземпляром которого является данный объект.
@@ -855,6 +869,11 @@ namespace runtime
 
         // Возвращает true, если объект имеет метод method, принимающий argument_count параметров.
         [[nodiscard]] bool HasMethod(const std::string& method, size_t argument_count, const std::string& parent_name = {}) const override;
+        // Методы получения и установки значений полей класса. Хотя эти методы полностью работоспособны, для работы с полями общих
+        // программно-определённых классов они не используются. Вместо них применяются описанные ниже функции-члены семейства Fields().
+        bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+        ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+        bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
 
         // Возвращает ссылку на Closure, содержащий поля объекта
         [[nodiscard]] Closure& Fields();

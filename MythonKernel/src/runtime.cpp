@@ -651,6 +651,26 @@ namespace runtime
             return false;
     }
 
+    bool ClassInstance::HasField(const std::string& field_name, FieldTypeAccess /* field_access */) const
+    {
+        return closure_.contains(field_name);
+    }
+
+    ObjectHolder ClassInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        if (auto closure_it = closure_.find(field_name); closure_it != closure_.end())
+            return closure_it->second;
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool ClassInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        bool already_exists = closure_.contains(field_name);
+        closure_[field_name] = field_value;
+        return already_exists;
+    }
+
     Closure& ClassInstance::Fields()
     {
         return closure_;

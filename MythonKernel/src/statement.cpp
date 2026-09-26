@@ -801,33 +801,42 @@ namespace ast
         PrepareExecute(this, closure, context);
         size_t i = 1;
         Closure* cur_closure_ptr = &closure;
-        runtime::ClassInstance* cur_class_instance_ptr = nullptr;
+        ObjectHolder cur_object_holder;
+        runtime::ClassInstance* cur_program_class_instance = nullptr;
+        runtime::CommonClassInstance* cur_common_class_instance = nullptr;
+
         for (const string id_name : dotted_ids_)
         {
-            if (!cur_closure_ptr->count(id_name))
-                ThrowRuntimeError(this, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+            if (cur_closure_ptr)
+            {
+                if (!cur_closure_ptr->count(id_name))
+                    ThrowRuntimeError(this, ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND);
+                cur_object_holder = cur_closure_ptr->at(id_name);
+            }
+            else if (cur_common_class_instance)
+                cur_object_holder = cur_common_class_instance->GetField(id_name, context);
+            else
+                ThrowRuntimeError(this, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
 
-            ObjectHolder* cur_object_holder = &cur_closure_ptr->at(id_name);
             // Если на данном этапе в соответствующем элементе текущей символьной таблицы хранится ссылка, то разыменуем её.
-            if (runtime::PointerObject* target_ptr = cur_object_holder->TryAs<runtime::PointerObject>())
+            if (runtime::PointerObject* target_ptr = cur_object_holder.TryAs<runtime::PointerObject>())
             { // Это объект-ссылка.
                 if (ObjectHolder* deref_ptr = target_ptr->GetPointer())
                     // Она ненулевая и указывает на какую-то иную существующую переменную.
-                    cur_object_holder = deref_ptr;
+                    cur_object_holder = *deref_ptr;
                 else // Ссылка нулевая, никуда не указывает, так что дальнейшее следование по компонентам цепочки полей dotted_ids_ невозможно.
                     return {};
             }
 
             if (i++ < dotted_ids_.size())
             {
-                cur_class_instance_ptr = cur_object_holder->TryAs<runtime::ClassInstance>();
-                if (!cur_class_instance_ptr)
-                    ThrowRuntimeError(this, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
-                cur_closure_ptr = &(cur_class_instance_ptr->Fields());
+                cur_common_class_instance = cur_object_holder.TryAs<runtime::CommonClassInstance>();
+                cur_program_class_instance = cur_object_holder.TryAs<runtime::ClassInstance>();
+                cur_closure_ptr = cur_program_class_instance  ? &(cur_program_class_instance->Fields()) : nullptr;
             }
             else
             {
-                if (cur_class_instance_ptr && cur_class_instance_ptr->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
+                if (cur_program_class_instance && cur_program_class_instance->GetClassName() == EXTERNAL_LINK_CLASS_NAME &&
                     context.GetExternalLinkage() && id_name.size())
                 {  // Вызов звонковой функции при чтении полей объекта "__external"
                     return ConvertToObject(context.GetExternalLinkage()
@@ -835,7 +844,7 @@ namespace ast
                 }
                 else
                 {
-                    return *cur_object_holder;
+                    return cur_object_holder;
                 }
             }
         }
@@ -906,10 +915,46 @@ namespace ast
             // Вычисляем истинные значения аргументов функции.
             real_args.push_back(cur_arg_ptr->Execute(closure, context));
 
+        #ifdef MYTHON_NON_GLOBAL_REFS
+            // Создадим необходимые объекты, которые будут отслеживать текущую переменную, в контексте которой будет исполняться
+            // вызываемая свободная функция (или метод, если вызывается переменная-функтор).
+            // Также создаём и взводим сторожок, который восстановит исходное имя вмещающей нас переменной, в объекте которой мы
+            // находимся сейчас.
+            string old_exec_objname = context.GetExecutedObjectName();
+            auto exec_objname_restorer = [&old_exec_objname, &context](string* internal_string) -> void
+                {
+                    context.SetExecutedObjectName(old_exec_objname);
+                    delete internal_string;
+                };
+            unique_ptr<string, decltype(exec_objname_restorer)> objname_scope_guard(new string(old_exec_objname), exec_objname_restorer);
+
+            // Лямбда для вычисления и установки нового полного канонического имени переменной free_function_name_, внутри объекта которой мы
+            // окажемся при вызове метода его method_name. 
+            auto set_canonical_var_for_method = [this, &objname_scope_guard, &context]
+                (runtime::CommonClassInstance* class_instance, const std::string& method_name, size_t arg_count) -> void
+                {
+                    string class_name = class_instance->GetClassName();
+                    if (!objname_scope_guard->empty())
+                        (*objname_scope_guard) += '.';
+                    (*objname_scope_guard) += MangleMethodFunctionName(class_name, method_name, arg_count);
+                    context.SetExecutedObjectName((*objname_scope_guard));
+                };
+            // Лямбда вычисления полного канонического имени переменной, каким она окажется при вызове свободной функции.
+            auto set_canonical_var_for_function = [this, &objname_scope_guard, &context](runtime::FreeFunction* free_func) -> void
+                {
+
+
+                };
+        #endif
+
         if (free_function_)
-            // Первый базовый сценарий - прямой вызов свободной функции, связь с которой установлена ещё при синтаксическом
+        {   // Первый базовый сценарий - прямой вызов свободной функции, связь с которой установлена ещё при синтаксическом
             // анализе МУФЛОН-программы.
+            #ifdef MYTHON_NON_GLOBAL_REFS
+                set_canonical_var_for_function(free_function_);
+            #endif
             return free_function_->Call(real_args, context);
+        }
 
         ast::ProgramCompound* program_root = dynamic_cast<ast::ProgramCompound*>(context.GetProgramRoot());
         // Второй базовый сценарий: тут возможны два варианта обработки конструкции free_function_name() - как вызов собственно
@@ -917,11 +962,19 @@ namespace ast
         // переменной с таким же именем.
         // Приоритет у нас будет иметь вызов функции, поэтому проверим его наличие в первую голову.
         if (runtime::FreeFunction* find_free_func = TestFreeFunctionVariable(free_function_name_, real_args.size(), program_root))
-            // Свободная функция free_function_name_ с нужным количеством аргументов существует - вызываем её без каких-либо дальнейших проверок.
+        { // Свободная функция free_function_name_ с нужным количеством аргументов существует - вызываем её без каких-либо дальнейших проверок.
+            #ifdef MYTHON_NON_GLOBAL_REFS
+                set_canonical_var_for_function(find_free_func);
+            #endif
             return find_free_func->Call(real_args, context);
+        }
         else if (runtime::CommonClassInstance* functor_instance = TestFunctorVariable(nullptr, free_function_name_, real_args.size(), closure))
-            // Переменная free_function_name_ содержит объект-функтор. Вызовём его соответствующий исполнительный метод.
+        {  // Переменная free_function_name_ содержит объект-функтор. Вызовём его соответствующий исполнительный метод.
+            #ifdef MYTHON_NON_GLOBAL_REFS
+                set_canonical_var_for_method(functor_instance, FUNCTOR_CALL_METHOD, real_args.size());
+            #endif
             return functor_instance->Call(FUNCTOR_CALL_METHOD, real_args, context);
+        }
         else
             // Оба варианта провалились - вызов метода исполнить невозможно, возвращаем ошибку.
             ThrowRuntimeError(this, ThrowMessageNumber::THRM_FREE_FUNCTION_NOT_FOUND);

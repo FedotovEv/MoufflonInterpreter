@@ -814,7 +814,7 @@ print str_ops.find(alphabet_var, "A"), str_ops.find(alphabet_var, "I"), str_ops.
 # Обратный поиск - должны быть найдены концевые буквы из второй половины сцепки alphabet_var.
 # Правильные результаты поиска - 51, 43, 33, 39.
 print str_ops.rfind(alphabet_var, "A"), str_ops.rfind(alphabet_var, "I"), str_ops.rfind(alphabet_var, "S"), str_ops.find(alphabet_var, "MLK")
-print str_ops.find(alphabet_var, "0") == str_ops.not_found() # Сравнение возвращает True, так как "0" не содержится в alphabet_var.
+print str_ops.find(alphabet_var, "0") == str_ops.not_found # Сравнение возвращает True, так как "0" не содержится в alphabet_var.
 )--");
             ostringstream ostr;
             RunMythonProgram(input, ostr);
@@ -2423,6 +2423,28 @@ def SecondFunction(y):      # Эта функция конкретная.
 def ThirdFunction(x, z)     # Вторая абстрактная функция.
 
 )--");
+        { // Наследование абстрактного класса его конкретным полностью определённым наследником.
+            string concrete_descendant(R"--(
+class ConcreteDescendant(TestAbstractClass):
+  def Method_2(z):           # Определение первого абстрактного метода TestAbstractClass.
+    z = z - 2
+    return z + 2
+
+  def Method_4(y, z):        # Определение второго абстрактного метода TestAbstractClass.
+    x = y * 2 - z
+    return x + 1
+
+# Инстанциование класса ConcreteDescendant и вызовы всех его методов.
+ccd = ConcreteDescendant()
+# Будет выведена полседовательность численных результатов - 3, 3, 12, 5.
+print ccd.Method_1(1, 2), ccd.Method_2(3), ccd.Method_3(4), ccd.Method_4(5, 6)
+)--");
+            istringstream concrete_desc_exec(abstracts_defines + concrete_descendant);
+            ostringstream ostr;
+            RunMythonProgram(concrete_desc_exec, ostr);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "3 3 12 5\n");
+        }
 
         string call_abstracts_1(R"--(
 # Создаём экземпляр частично абстрактного класса TestAbstractClass.

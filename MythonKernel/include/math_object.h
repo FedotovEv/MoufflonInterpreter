@@ -33,6 +33,11 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому работа этих методов всегда заканчивается ошибкой.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
+
     [[nodiscard]] std::string GetClassName(void) const override
     {
         return "math";
@@ -75,6 +80,8 @@ class StringOpsInstance : public CommonClassInstance
 public:
     using StringOpsCallMethod = ObjectHolder(StringOpsInstance::*)(const std::string&, const std::vector<ObjectHolder>&,
                                                                    Context&);
+    using StringOpsFieldProc = ObjectHolder(StringOpsInstance::*)(bool, const std::string&, Context&);
+    
     StringOpsInstance() = default;
     void Print(std::ostream& os, Context& context) override;
     /*
@@ -128,6 +135,11 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
+    // Методы обращения к полям объектов этого класса.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
+
     [[nodiscard]] std::string GetClassName(void) const override
     {
         return "string_ops";
@@ -141,6 +153,7 @@ public:
 private:
     static const std::unordered_map<std::string_view, StringOpsCallMethod> string_ops_method_table_;
     static const std::unordered_map<std::string_view, std::pair<size_t, size_t>> string_ops_method_argument_count_;
+    static const std::unordered_map<std::string_view, StringOpsFieldProc> string_ops_fields_table_;
 
     int last_to_number_error_ = 0;      // Ошибка, возникшая при последнем to_number().
     int last_to_number_length_ = 0;     // Длина фрагмента, использованного при последнем to_number().
@@ -205,7 +218,6 @@ private:
     ObjectHolder MethodStartsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodEndsWith(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodContains(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
-    ObjectHolder MethodNotFound(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     //
     ObjectHolder MethodInsert(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
     ObjectHolder MethodErase(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
@@ -243,4 +255,7 @@ private:
       // Возврат Юникода последнего UTF-8 символа, который был обработан некоторыми операциями над многобайтовыми
       // строками (в частности, методом MethodMbSymSizeAtPos()).
     ObjectHolder MethodLastMbSymCode(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context);
+    // ----- Методы доступа к полям класса. -----
+    // Доступ к мнемоническому константному полю "NOT_FOUND" (оно же "not_found", "NotFound").
+    ObjectHolder FieldNotFound(bool is_set_field, const std::string& field_name, Context& context);
 };

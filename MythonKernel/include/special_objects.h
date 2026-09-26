@@ -68,6 +68,11 @@ public:
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
 
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому реализация этих методов чисто формальная.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
+
     [[nodiscard]] std::string GetClassName(void) const override
     {
         return "array";
@@ -149,6 +154,11 @@ public:
     ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
+
+    // Методы обращения к полям объектов класса. В данном классе пока никаких полей не существует.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {
@@ -241,6 +251,10 @@ public:
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому реализация этих методов чисто формальная.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {
@@ -383,6 +397,10 @@ public:
     ObjectHolder Call(const std::string& method_name, const std::vector<ObjectHolder>& actual_args,
                       Context& context, const std::string& parent_name = {}) override;
     bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
+    // Методы считывания и установки значений полей объекта класса. Данный класс пока полей не содержит. Поэтому методы всегда вызывают сбой.
+    bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+    ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+    bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
 
     [[nodiscard]] std::string GetClassName(void) const override
     {

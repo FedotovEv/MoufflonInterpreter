@@ -1428,9 +1428,9 @@ namespace
         {
             if (runtime::Method* current_method = exec_factory_.CurrentMethod())
             { 
-                if (current_method->name.substr(0, 2) == "__")
-                    // Специальные методы (точки настройки типа __init__, __add__, __eq__, и.т.д.), имена которых
-                    // начинаются с "__", не могут быть сопрограммами.
+                if (current_method->name.substr(0, 2) == "__" && current_method->name != FUNCTOR_CALL_METHOD)
+                    // Специальные методы (точки настройки типа __init__, __add__, __eq__, и.т.д.), имена которых начинаются с "__",
+                    // не могут быть сопрограммами. Исключение - функциональный метод __run__. Он может быть сопрограммой.
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_SPECIAL_METHOD_CANT_COROUTINE);
                 current_method->is_coroutine = true;
             }

@@ -70,7 +70,7 @@ namespace runtime
     { // Экземпляр "двоичного дополнения МУФЛОНа" - специального загружаемого объекта с предопределенным набором методов.
     public:
 
-        PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc);
+        PluginInstance(const std::string& class_name, const ast::PluginDescData& plugin_desc, Context& context);
         // Класс некопируемый, но перемещаемый.
         PluginInstance(const PluginInstance& other) = delete;
         PluginInstance(PluginInstance&& other) noexcept;
@@ -80,12 +80,20 @@ namespace runtime
         ObjectHolder Call(const std::string& method, const std::vector<ObjectHolder>& actual_args,
                           Context& context, const std::string& parent_name = {}) override;
         bool HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name = {}) const override;
+
+        // Методы считывания и установки значений полей объекта класса.
+        bool HasField(const std::string& field_name, FieldTypeAccess field_access) const override;
+        ObjectHolder GetField(const std::string& field_name, Context& context) const override;
+        bool SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context) override;
+
         std::string GetClassName() const override
         {
             return class_name_;
         }
 
     private:
+        static const std::string PLUGIN_FIELD_ACCESS_STR;
+
         // Имя класса втыкалы, которому соответствует данный объект.
         std::string class_name_;
         // Описатель втыкалы plugin_desc_ содержит всю информацию, необходимую для работы с ней - указатели на её сервисные функции (информирующую
@@ -94,6 +102,6 @@ namespace runtime
         // (при его вызове) требованиям к составу его формальных аргументов. При нарушении этих требований вызов метода не выполняется, а сразу
         // выбрасывается соответствующее исключение.
         const ast::PluginDescData& plugin_desc_;
-        //Context& context_;
+        Context& context_;
     };
 } // namespace runtime

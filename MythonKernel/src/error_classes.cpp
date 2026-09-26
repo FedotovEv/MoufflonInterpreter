@@ -192,12 +192,12 @@ namespace runtime
         ThrowRuntimeError(exec_obj_ptr->GetCommandDesc(), msg_num, except_text);
     }
 
-    [[noreturn]] void ThrowRuntimeError(Context& context, ThrowMessageNumber msg_num, const std::string& except_text)
+    [[noreturn]] void ThrowRuntimeError(const Context& context, ThrowMessageNumber msg_num, const std::string& except_text)
     {
         ThrowRuntimeError(context.GetLastCommandDesc(), msg_num, except_text);
     }
 
-    [[noreturn]] void RethrowRuntimeError(Context& context, const TempError& orig_temp_error)
+    [[noreturn]] void RethrowRuntimeError(const Context& context, const TempError& orig_temp_error)
     {
         ThrowRuntimeError(context, orig_temp_error.msg_num, orig_temp_error.except_text);
     }
@@ -233,6 +233,22 @@ namespace runtime
             return (this->*common_error_method_table_.at(method_name))(method_name, actual_args, context);
         else
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_METHOD_NOT_FOUND);
+    }
+
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому работа этих методов всегда заканчивается ошибкой.
+    bool CommonError::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        return false;
+    }
+
+    ObjectHolder CommonError::GetField(const std::string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
+    bool CommonError::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
     }
 
     std::string CommonError::GetFullText() const

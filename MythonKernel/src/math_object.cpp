@@ -279,8 +279,25 @@ namespace runtime
         }
     }
 
+    // Методы обращения к полям класса. Данный класс никаких полей не содержит, поэтому работа этих методов всегда
+    // заканчивается отрицательным результатом.
+    bool MathInstance::HasField(const string& field_name, FieldTypeAccess field_access) const
+    {
+        return false;
+    }
+
+    ObjectHolder MathInstance::GetField(const string& field_name, Context& context) const
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
+    bool MathInstance::SetField(const string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
     // Таблицы описания методов класса StringOpsInstance и конвенций их вызова.
-    const std::unordered_map<std::string_view, StringOpsInstance::StringOpsCallMethod> StringOpsInstance::string_ops_method_table_
+    const unordered_map<string_view, StringOpsInstance::StringOpsCallMethod> StringOpsInstance::string_ops_method_table_
     {
         {"size"sv, &StringOpsInstance::MethodSize},
         {"Size"sv, &StringOpsInstance::MethodSize},
@@ -310,8 +327,6 @@ namespace runtime
         {"EndsWith"sv, &StringOpsInstance::MethodEndsWith},
         {"contains"sv, &StringOpsInstance::MethodContains},
         {"Contains"sv, &StringOpsInstance::MethodContains},
-        {"not_found"sv, &StringOpsInstance::MethodNotFound},
-        {"NotFound"sv, &StringOpsInstance::MethodNotFound},
         {"insert"sv, &StringOpsInstance::MethodInsert},
         {"Insert"sv, &StringOpsInstance::MethodInsert},
         {"erase"sv, &StringOpsInstance::MethodErase},
@@ -336,14 +351,14 @@ namespace runtime
         {"ToString"sv, &StringOpsInstance::MethodToString}
     };
     
-    const std::unordered_map<std::string_view, std::pair<size_t, size_t>> StringOpsInstance::string_ops_method_argument_count_
+    const unordered_map<string_view, pair<size_t, size_t>> StringOpsInstance::string_ops_method_argument_count_
     {
         {"size"sv, {1, 1}},
         {"Size"sv, {1, 1}},
         {"length"sv, {1, 1}},
         {"Length"sv, {1, 1}},
-        {"concat"sv, {1, (std::numeric_limits<size_t>::max)()}},
-        {"Concat"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"concat"sv, {1, (numeric_limits<size_t>::max)()}},
+        {"Concat"sv, {1, (numeric_limits<size_t>::max)()}},
         {"append"sv, {2, 4}},
         {"Append"sv, {2, 4}},
         {"substr"sv, {1, 3}},
@@ -366,8 +381,6 @@ namespace runtime
         {"EndsWith"sv, {2, 2}},
         {"contains"sv, {2, 2}},
         {"Contains"sv, {2, 2}},
-        {"not_found"sv, {0, 0}},
-        {"NotFound"sv, {0, 0}},
         {"insert"sv, {3, 4}},
         {"Insert"sv, {3, 4}},
         {"erase"sv, {1, 3}},
@@ -380,8 +393,8 @@ namespace runtime
         {"Reverse"sv, {1, 1}},
         {"asc"sv, {1, 2}},
         {"Asc"sv, {1, 2}},
-        {"chr"sv, {1, (std::numeric_limits<size_t>::max)()}},
-        {"Chr"sv, {1, (std::numeric_limits<size_t>::max)()}},
+        {"chr"sv, {1, (numeric_limits<size_t>::max)()}},
+        {"Chr"sv, {1, (numeric_limits<size_t>::max)()}},
         {"to_number"sv, {1, 3}},
         {"ToNumber"sv, {1, 3}},
         {"to_number_length"sv, {0, 0}},
@@ -390,6 +403,13 @@ namespace runtime
         {"ToNumberError"sv, {0, 0}},
         {"to_string"sv, {1, 3}},
         {"ToString"sv, {1, 3}}
+    };
+
+    const unordered_map<string_view, StringOpsInstance::StringOpsFieldProc> StringOpsInstance::string_ops_fields_table_
+    {
+        {"NOT_FOUND"sv, &StringOpsInstance::FieldNotFound},
+        {"NotFound"sv, &StringOpsInstance::FieldNotFound},
+        {"not_found"sv, &StringOpsInstance::FieldNotFound}
     };
 
     // Вспомогательная функция-член извлечения пары фактических параметров подстроки - начального её байтового индекса и байтовой длины.
@@ -1026,15 +1046,6 @@ namespace runtime
                         arg_needle_mean = arg_str_needle->MeaningPart();
             return ObjectHolder::Own(runtime::Bool(arg_haystack_mean.find(arg_needle_mean) != string::npos));
         }
-    }
-    
-    // not_found() - возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске (если найти искомый образец не удалось).
-    ObjectHolder StringOpsInstance::MethodNotFound(const std::string& method, const std::vector<ObjectHolder>& actual_args, Context& context)
-    {
-        CheckMethodParams(context, "NotFound"s, MethodParamCheckMode::PARAM_CHECK_QUANTITY_EQUAL,
-                          MethodParamType::PARAM_TYPE_ANY, 0, actual_args);
-
-        return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
     }
 
     // insert(arg_str, arg_pos, arg_str_ins, arg_count) - вставка строки arg_str_ins в количестве arg_count экземпляров в строку arg_str
@@ -1894,5 +1905,42 @@ namespace runtime
         {
             return false;
         }
+    }
+
+    // Методы обращения к полям объектов класса StringOpsInstance.
+    bool StringOpsInstance::HasField(const std::string& field_name, FieldTypeAccess field_access) const
+    {
+        if (string_ops_fields_table_.contains(field_name))
+            return field_access & FieldTypeAccess::FIELD_ACCESS_WRITE;  // Все поля класса предназначены только для чтения.
+        else // Поля с запрошенным именем не существует.
+            return false;
+    }
+    
+    ObjectHolder StringOpsInstance::GetField(const std::string& field_name, Context& context) const
+    {
+        auto string_ops_fields_it = string_ops_fields_table_.find(field_name);
+        if (string_ops_fields_it != string_ops_fields_table_.end())
+            return (const_cast<StringOpsInstance*>(this)->*string_ops_fields_it->second)(false, field_name, context);
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+    
+    bool StringOpsInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    {
+        // Все поля класса у нас константные, только для чтения.
+        if (string_ops_fields_table_.contains(field_name))
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_READ_ONLY);
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
+    }
+
+    // Поле not_found - возвращает константу, которой поисковые методы (...find...) сигнализируют о неудачном поиске
+    // (если найти искомый образец не удалось).    
+    ObjectHolder StringOpsInstance::FieldNotFound(bool is_set_field, const std::string& field_name, Context& context)
+    {
+        if (!is_set_field)
+            return ObjectHolder::Own(runtime::Number(static_cast<int>(std::string::npos)));
+        else
+            ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_READ_ONLY);
     }
 } //namespace runtime

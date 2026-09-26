@@ -118,6 +118,19 @@
     PARAM_TYPE_NUMERIC_STRING_LOGICAL_NONE = PARAM_TYPE_NUMERIC | PARAM_TYPE_STRING | PARAM_TYPE_LOGICAL | PARAM_TYPE_NONE
 };
 
+// Перечисление, указывающее тип запроса к специальному методу класса втыкалы, выполняющему доступ к полям объектов класса.
+#ifdef __cplusplus
+    enum FieldRequestType : uint32_t
+#else
+    enum FieldRequestType
+#endif
+    {
+        PLUG_FIELD_REQUEST_UNKNOWN = 0,     // Зарезервированный невалидный тип запроса к полю класса.
+        PLUG_HAS_FIELD_REQUEST = 1,         // Проверка наличия поля в классе, а также возможности определённого способа доступа к нему.
+        PLUG_GET_FIELD_REQUEST = 2,         // Чтение поля класса.
+        PLUG_SET_FIELD_REQUEST = 3          // Запись в поле класса.
+    };
+
 #ifdef __cplusplus
     enum ThrowMessageNumber : uint32_t
 #else
@@ -152,6 +165,7 @@
     THRM_AMBIGUOUS_OVERLOAD,                // Неоднозначная перегрузка метода.
     THRM_ABSTRACT_METHOD_CALL,              // Попытка вызова "абстрактного" метода или функции (то есть метода без определения тела).
     THRM_FIELD_NOT_FOUND,                   // Обращение к несуществующему или недоступному полю.
+    THRM_FIELD_READ_ONLY,                   // Запись в поле не допускается (поле предназначено только для чтения).
     THRM_POINTER_RET_TO_VAL_DENIED,         // Ссылка на временное значение недопустима.
     THRM_POINTER_RET_TOL_LOCAL_VAR_DENIED,  // Ссылка на локальную переменную метода невозможна.
     THRM_INDIRECT_ASSIGN_ERROR,             // Ошибка косвенного присваивания.
@@ -247,6 +261,8 @@ typedef void(*PluginCallMethodFunc)(const char* method_name, uintptr_t plugin_me
 #define  PLUGIN_EQUAL_CMP_METHOD "__eq__"
 #define  PLUGIN_LESS_CMP_METHOD "__lt__"
 #define  PLUGIN_STR_FUNCTION_METHOD "__str__"
+#define  PLUGIN_FIELD_ACCESS_METHOD "__field__"
+#define  PLUGIN_FIELD_ACCESS_ARG_COUNT 3
 
 // Функциональные типы (тип указателей на функции), соответствующие вспомогательным функциям, экспортируемым ядром Муфлона для нужд подключаемых
 // к нему втыкал.
