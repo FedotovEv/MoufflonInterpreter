@@ -736,6 +736,15 @@ namespace runtime
 
         // Добавление нового или замена существующего метода класса на метод, описанный аргументом method.
         bool AddMethod(Method&& method);
+        // Функция-член составления списка предков (только непосредственных или всех) данного класса.
+        std::vector<std::string> GetParentList(bool is_all_parents = false) const;
+        // Обмен внутренним состоянием с некоторым другим классом other.
+        void Swap(Class& other);
+        // Возвращает признак неопределённого класса (то есть только объявленного, но не имеющего ещё определения).
+        bool IsEmpty() const
+        {
+            return virtual_method_table_.empty();
+        }
 
     private:
         int my_id_;             // Присвоенный классу числовой идент типа.
@@ -780,10 +789,14 @@ namespace runtime
 
         // Информирующие функции-члены.
         std::string GetName() const;
+        std::string GetSignature() const;
         size_t GetArgCount() const;
         bool IsCoroutine() const;
         bool IsAbstract() const;
         const Method* GetBodyMethod() const;
+        // Модифицирующие методы.
+        std::unique_ptr<Executable> ExchangeMethodBody(std::unique_ptr<Executable>&& new_method_body);
+        void SwapMethodBody(FreeFunction& other_function);
 
     private:
         Method method_func_;

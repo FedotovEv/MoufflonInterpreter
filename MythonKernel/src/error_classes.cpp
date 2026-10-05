@@ -76,7 +76,7 @@ namespace runtime
             [[fallthrough]];
         case ThrowMessageNumber::THRM_CLASS:
             [[fallthrough]];
-        case ThrowMessageNumber::THRM_ALREADY_EXISTS:
+        case ThrowMessageNumber::THRM_ALREADY_DEFINED:
             [[fallthrough]];
         case ThrowMessageNumber::THRM_VARIABLE_NOT_FOUND:
             [[fallthrough]];

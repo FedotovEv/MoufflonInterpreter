@@ -976,7 +976,33 @@ print add_result, sub_result, sqr_result_2, sqr_result_3
             RunMythonProgram(input, ostr);
             ASSERT_EQUAL(ostr.str(), "5 1 4 9\n"s);
         }
-        
+
+        { // Объявления и последующие определения свободных функций.
+            istringstream input(R"--(
+# Объявления (декларации) функций.
+def free_func_add(arg_a, arg_b)
+def free_func_sub(arg_a, arg_b)
+
+# Повторное объявление - это допускается.
+def free_func_add(arg_a, arg_b)
+
+# Их определения.
+def free_func_add(arg_a, arg_b):
+  return arg_a + arg_b
+
+def free_func_sub(arg_a, arg_b):
+  return arg_a - arg_b
+
+# Вызовы функций и протоколирование результатов их работы.
+add_result = free_func_add(2, 3)
+sub_result = free_func_sub(3, 2)
+print add_result, sub_result
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            ASSERT_EQUAL(ostr.str(), "5 1\n"s);
+        }
+
         { // Свободная функция как сопрограмма.
             istringstream input(R"--(
 def free_func_coro(arg_a):
@@ -1865,6 +1891,33 @@ z1_3 = OneClass(4)
 
             ASSERT_EQUAL(ostr.str(), etalon_string);
         }
+
+        { // Проверка каскадного вызова конструкторов и деструкторов для объектов, хранящихся в полях иных объектов.
+            istringstream cascade_ctor_dtor(R"--(
+class InternalClass:
+  def __init__(a):
+    print "Int ctor"
+    self.var = a
+
+  def __destroy__():
+    print "Int dtor", self.var
+
+class ExternalClass:
+  def __init__(a):
+    print "Ext ctor"
+    self.var = InternalClass(a)
+
+  def __destroy__():
+    print "Ext dtor :", self.var.var
+
+z1 = ExternalClass(3)
+z1 = 2 # Здесь должны быть вызваны все деструкторы классов InternalClass и ExternalClass.
+print z1
+)--");
+            ostringstream ostr;
+            RunMythonProgram(cascade_ctor_dtor, ostr);
+            cout << "Cascade ctor/dtor\n" << ostr.str() << endl;
+        }
     }
 
     void TestFunctorClassFunction()
@@ -2400,6 +2453,7 @@ print a, b, c, ret_v                    # Окончательное состо�
 
     void TestAbstractClasses()
     {  // Работа с "абстрактными" классами и объектами этих классов.
+        string call_error_code = to_string(static_cast<int>(ThrowMessageNumber::THRM_ABSTRACT_METHOD_CALL));
         string abstracts_defines(R"--(
 class TestAbstractClass:
   def Method_1(x, y):
@@ -2469,7 +2523,7 @@ try:
 except SyntaxError as ex_err:
   print "M4Error =", ex_err.GetErrorCode()
 
-# Далее следуют опыты с обращением к абстрактным и конретным свободным функциям.
+# Далее следуют опыты с обращением к абстрактным и конкретным свободным функциям.
 try:
   rsl_5 = FirstFunction(1)
   print rsl_5
@@ -2493,7 +2547,10 @@ except SyntaxError as ex_err:
             ostringstream ostr;
             RunMythonProgram(abstract_program, ostr);
             // cout << ostr.str() << endl;
-            ASSERT_EQUAL(ostr.str(), "3\nM2Error = 22\n9\nM4Error = 22\nFFError = 22\n6\nTFError = 22\n");
+            string valid_run_message =
+                "3\nM2Error = " + call_error_code + "\n9\nM4Error = " + call_error_code + "\nFFError = " +
+                call_error_code + "\n6\nTFError = " + call_error_code + "\n";
+            ASSERT_EQUAL(ostr.str(), valid_run_message);
         }
 
         // Далее частично доопределяем некоторые абстрактные методы и функции из исходного текста abstracts_defines.
@@ -2517,7 +2574,8 @@ class TestAbstractClass:
             // cout << ostr.str() << endl;
             // Ошибки по вызову ранее бывших абстрактными метода Method_2() и свободной функции FirstFunction() должны исчезнуть (они
             // теперь полностью определены), а ошибки при вызовах по-прежнему абстрактных Method_4() и ThirdFunction() пока сохраняются.
-            ASSERT_EQUAL(ostr.str(), "3\n7\n9\nM4Error = 22\n3\n6\nTFError = 22\n");
+            string valid_run_message = "3\n7\n9\nM4Error = " + call_error_code + "\n3\n6\nTFError = " + call_error_code + "\n";
+            ASSERT_EQUAL(ostr.str(), valid_run_message);
         }
 
         // Ну а теперь определим класс TestAbstractClass и все свободные функции программы abstracts_defines полностью.

@@ -15,19 +15,19 @@
 
 using namespace std;
 
-extern const std::vector<std::pair<char, char>> empty_upcase_table;
-extern const std::string empty_collate;
+extern const vector<pair<char, char>> empty_upcase_table;
+extern const string empty_collate;
 
 namespace runtime
 {
     // Вспомогательная функция подготовки и частичного заполнения таблицы символов, которая будет применяться при исполнении
     // различных подпрограмм - методов или свободных функций.
-    Closure FormateMethodClosure(const std::vector<ObjectHolder>& actual_args, Context& context, const Method* method)
+    Closure FormateMethodClosure(const vector<ObjectHolder>& actual_args, Context& context, const Method* method)
     {
         if (method->formal_params.size() != actual_args.size())
         { // Проверка соответствия количества формальных и фактических аргументов для вызываемой процедуры.
-            std::string err_mess = "Метод/Функция " + method->name + ": требуется " + std::to_string(method->formal_params.size()) +
-                                   " параметров, передано " + std::to_string(actual_args.size());
+            string err_mess = "Метод/Функция " + method->name + ": требуется " + to_string(method->formal_params.size()) +
+                              " параметров, передано " + to_string(actual_args.size());
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_INVALID_PARAMS_COUNT, err_mess);
         }
 
@@ -40,7 +40,7 @@ namespace runtime
         // Далее создаём в этой таблице указатели на требуемые глобальные переменные.
         if (Closure* global_closure = context.GetGlobalClosure(); global_closure && method->global_vars.size())
         {
-            for (const std::string& global_var_name : method->global_vars)
+            for (const string& global_var_name : method->global_vars)
                 // Создаём объект-ссылку на глобальную переменную с именем global_var_name.
                 method_closure[global_var_name] =
                     ObjectHolder::Own(PointerObject(&(*global_closure)[global_var_name], global_var_name));
@@ -201,7 +201,7 @@ namespace runtime
         return encoding == UTF_8_ENCODING;
     }
 
-    std::string RuntimeError::ExtractMessage(const runtime::ObjectHolder& error_object)
+    string RuntimeError::ExtractMessage(const runtime::ObjectHolder& error_object)
     {
         if (const runtime::CommonClassInstance* error_class_ptr = error_object.TryAs<runtime::CommonClassInstance>())
         {
@@ -211,7 +211,7 @@ namespace runtime
         return {};
     }
 
-    ObjectHolder::ObjectHolder(std::shared_ptr<Object> data) : data_(std::move(data))
+    ObjectHolder::ObjectHolder(shared_ptr<Object> data) : data_(move(data))
     {}
 
     // Общее правило работы со ссылками: ссылки на контейнер-источник из other.references_ всегда привязаны к своему оригиналу
@@ -260,7 +260,7 @@ namespace runtime
     ObjectHolder ObjectHolder::Share(Object& object)
     {
         // Возвращаем невладеющий shared_ptr (его удалитель ничего не делает).
-        return ObjectHolder(std::shared_ptr<Object>(&object, EmptyDeleter));
+        return ObjectHolder(shared_ptr<Object>(&object, EmptyDeleter));
     }
 
     ObjectHolder ObjectHolder::None()
@@ -340,12 +340,12 @@ namespace runtime
         return IsOwning(data_);
     }
 
-    bool ObjectHolder::IsOwning(const std::shared_ptr<Object>& test_ptr) const noexcept
+    bool ObjectHolder::IsOwning(const shared_ptr<Object>& test_ptr) const noexcept
     {
         if (!test_ptr)
             return false;
 
-        if (auto data_del_p = std::get_deleter<void(*)(Object*)>(test_ptr))
+        if (auto data_del_p = get_deleter<void(*)(Object*)>(test_ptr))
             return *data_del_p != EmptyDeleter;
         else
             return true;
@@ -575,14 +575,14 @@ namespace runtime
     FreeFunction::FreeFunction(Method method_func) : method_func_(move(method_func))
     {}
 
-    void FreeFunction::Print(std::ostream& os, Context& context)
+    void FreeFunction::Print(ostream& os, Context& context)
     {
         os << "FreeFunction " << method_func_.name;
         if (method_func_.is_coroutine)
             os << " - coro";
     }
     
-    ObjectHolder FreeFunction::Call(const std::vector<ObjectHolder>& actual_args, Context& context)
+    ObjectHolder FreeFunction::Call(const vector<ObjectHolder>& actual_args, Context& context)
     {
         // Создаём для вызова свободной функции специальную версию таблицы символов.
         // У свободной функции не будет доступа ни к каким переменным, кроме:
@@ -607,9 +607,14 @@ namespace runtime
         return method_func_.body->Execute(closure, context);
     }
 
-    std::string FreeFunction::GetName() const
+    string FreeFunction::GetName() const
     {
         return method_func_.name;
+    }
+
+    string FreeFunction::GetSignature() const
+    {
+        return MangleMethodFunctionName({}, method_func_.name, method_func_.formal_params.size());
     }
 
     size_t FreeFunction::GetArgCount() const
@@ -632,7 +637,17 @@ namespace runtime
         return &method_func_;
     }
 
-    void ClassInstance::Print(std::ostream& os, Context& context)
+    unique_ptr<Executable> FreeFunction::ExchangeMethodBody(unique_ptr<Executable>&& new_method_body)
+    {
+        return exchange(method_func_.body, move(new_method_body));
+    }
+
+    void FreeFunction::SwapMethodBody(FreeFunction& other_function)
+    {
+        swap(method_func_.body, other_function.method_func_.body);
+    }
+
+    void ClassInstance::Print(ostream& os, Context& context)
     {
         if (HasMethod(STR_FUNCTION_METHOD, 0))
             Call(STR_FUNCTION_METHOD, {}, context)->Print(os, context);
@@ -640,7 +655,7 @@ namespace runtime
             os << this;
     }
 
-    bool ClassInstance::HasMethod(const std::string& method_name, size_t argument_count, const std::string& parent_name) const
+    bool ClassInstance::HasMethod(const string& method_name, size_t argument_count, const string& parent_name) const
     {
         if (const Method* method_ptr = my_class_.GetMethod(method_name, static_cast<int>(argument_count), parent_name))
             if (method_ptr->formal_params.size() == argument_count)
@@ -651,12 +666,12 @@ namespace runtime
             return false;
     }
 
-    bool ClassInstance::HasField(const std::string& field_name, FieldTypeAccess /* field_access */) const
+    bool ClassInstance::HasField(const string& field_name, FieldTypeAccess /* field_access */) const
     {
         return closure_.contains(field_name);
     }
 
-    ObjectHolder ClassInstance::GetField(const std::string& field_name, Context& context) const
+    ObjectHolder ClassInstance::GetField(const string& field_name, Context& context) const
     {
         if (auto closure_it = closure_.find(field_name); closure_it != closure_.end())
             return closure_it->second;
@@ -664,7 +679,7 @@ namespace runtime
             ThrowRuntimeError(context, ThrowMessageNumber::THRM_FIELD_NOT_FOUND);
     }
     
-    bool ClassInstance::SetField(const std::string& field_name, const ObjectHolder& field_value, Context& context)
+    bool ClassInstance::SetField(const string& field_name, const ObjectHolder& field_value, Context& context)
     {
         bool already_exists = closure_.contains(field_name);
         closure_[field_name] = field_value;
@@ -684,9 +699,9 @@ namespace runtime
     ClassInstance::ClassInstance(const Class& cls) : my_class_(cls)
     {}
 
-    ObjectHolder ClassInstance::Call(const std::string& method_name,
-                                     const std::vector<ObjectHolder>& actual_args,
-                                     Context& context, const std::string& parent_name)
+    ObjectHolder ClassInstance::Call(const string& method_name,
+                                     const vector<ObjectHolder>& actual_args,
+                                     Context& context, const string& parent_name)
     {
         Class::GetMethodRet get_method = my_class_.GetMethod(method_name, static_cast<int>(actual_args.size()), parent_name);
         if (!get_method || get_method.method->formal_params.size() != actual_args.size())
@@ -710,12 +725,12 @@ namespace runtime
         }
     }
 
-    [[nodiscard]] std::string ClassInstance::GetClassName() const
+    [[nodiscard]] string ClassInstance::GetClassName() const
     {
         return my_class_.GetName();
     }
 
-    [[nodiscard]] bool ClassInstance::IsSuccessorOf(const std::string& test_my_parent) const
+    [[nodiscard]] bool ClassInstance::IsSuccessorOf(const string& test_my_parent) const
     {
         return my_class_.IsSuccessorOf(test_my_parent);
     }
@@ -725,7 +740,7 @@ namespace runtime
         return my_class_.IsSuccessorOf(test_my_parent);
     }
 
-    Class::Class(std::string name, std::vector<Method> methods, std::vector<const Class*> parents) :
+    Class::Class(string name, vector<Method> methods, vector<const Class*> parents) :
         my_name_(move(name)), my_id_(parse::TypeIdentificator::GetNewTypeId())
     {
         // Заполняем вектор ссылок на предков.
@@ -745,7 +760,7 @@ namespace runtime
         }
     }
 
-    Class::GetMethodRet Class::GetMethod(const std::string& name, int args_count, const std::string& parent_name) const
+    Class::GetMethodRet Class::GetMethod(const string& name, int args_count, const string& parent_name) const
     {
         GetMethodRet found_method;
         bool is_parent_class_found = false;
@@ -785,17 +800,17 @@ namespace runtime
             return ThrowMessageNumber::THRM_METHOD_NOT_FOUND;
     }
 
-    std::vector<std::pair<std::string, size_t>> Class::GetMethodsDesc() const
+    vector<pair<string, size_t>> Class::GetMethodsDesc() const
     {
         // Так как обход родственного дерева производится от потомков к предкам, то методы потомков перекрывают соответствующие им методы
         // предков (с совпадающими сигнатурами).
-        std::vector<std::pair<std::string, size_t>> result;
+        vector<pair<string, size_t>> result;
         TraverseParents([&result](const Class& scan_parent) -> bool
             {
                 for (auto& method_table_pair : scan_parent.virtual_method_table_)
                 {
-                    std::pair<std::string, size_t> method_def_pair{method_table_pair.second.name, method_table_pair.second.formal_params.size()};
-                    if (std::find(result.begin(), result.end(), method_def_pair) == result.end())
+                    pair<string, size_t> method_def_pair{method_table_pair.second.name, method_table_pair.second.formal_params.size()};
+                    if (find(result.begin(), result.end(), method_def_pair) == result.end())
                         // Ранее метода с такой сигнатурой ещё не встречалось.
                         result.emplace_back(move(method_def_pair));
                 }
@@ -804,7 +819,7 @@ namespace runtime
         return result;
     }
 
-    [[nodiscard]] const std::string& Class::GetName() const
+    [[nodiscard]] const string& Class::GetName() const
     {
         return my_name_;
     }
@@ -814,7 +829,7 @@ namespace runtime
         os << "Class " << my_name_;
     }
 
-    bool Class::IsSuccessorOf(const std::string& test_my_parent) const
+    bool Class::IsSuccessorOf(const string& test_my_parent) const
     {
         return TraverseParents([&test_my_parent](const Class& scan_parent) -> bool
             {
@@ -830,13 +845,13 @@ namespace runtime
             });
     }
 
-    bool Class::TraverseParents(std::function<bool(const Class&)> handle_parent_func) const
+    bool Class::TraverseParents(function<bool(const Class&)> handle_parent_func) const
     { // Фунция выполняет обход дерева предков "в ширину". При этом "верхние" узлы (соответствующие потомкам) обходятся ранее,
       // чем узлы "нижние" (соответствующие предкам). Таким образом, потомки имеют приоритет перед предками и посещаются первыми
       // (ранее своих предков). На одном уровне родства обход производится в порядке следования в массиве parents_.
-        std::queue<ParentRefType> nodes_queue;
+        queue<ParentRefType> nodes_queue;
         // Начинаем обход дерева с нас самих. Собственный объект будет корнем дерева предков.
-        nodes_queue.push(std::cref(*this));
+        nodes_queue.push(cref(*this));
 
         while (!nodes_queue.empty())
         {
@@ -874,13 +889,42 @@ namespace runtime
         }
     }
 
+    // Функция-член составления списка предков (только непосредственных или всех) данного класса.
+    vector<string> Class::GetParentList(bool is_all_parents) const
+    {
+        vector<string> parent_list;
+        if (!is_all_parents)
+        { // Получение только непосредственных предков.
+            for (const Class& parent_class : parents_)
+                parent_list.push_back(parent_class.GetName());
+        }
+        else
+        {
+            TraverseParents([&parent_list](const Class& parent_class) -> bool
+                {
+                    parent_list.push_back(parent_class.GetName());
+                    return false;
+                });
+        }
+        return parent_list;
+    }
+    
+    // Обмен внутренним состоянием с некоторым другим классом other.
+    void Class::Swap(Class& other)
+    {
+        swap(my_id_, other.my_id_);
+        swap(my_name_, other.my_name_);
+        swap(parents_, other.parents_);
+        swap(virtual_method_table_, other.virtual_method_table_);
+    }
+
     optional<Number> Number::Inverse() const
     {
         double dbl_value;
-        if (std::holds_alternative<int>(value_))
-            dbl_value = static_cast<double>(std::get<int>(value_));
-        else if (std::holds_alternative<double>(value_))
-            dbl_value = std::get<double>(value_);
+        if (holds_alternative<int>(value_))
+            dbl_value = static_cast<double>(get<int>(value_));
+        else if (holds_alternative<double>(value_))
+            dbl_value = get<double>(value_);
         else
             return {};
 
@@ -892,35 +936,35 @@ namespace runtime
 
     Number Number::Negate() const
     {
-        if (std::holds_alternative<int>(value_))
-            return -std::get<int>(value_);
-        else if (std::holds_alternative<double>(value_))
-            return -std::get<double>(value_);
+        if (holds_alternative<int>(value_))
+            return -get<int>(value_);
+        else if (holds_alternative<double>(value_))
+            return -get<double>(value_);
         else
             return Number(0);
     }
 
     const void* Number::GetPtr() const
     {
-        if (std::holds_alternative<int>(value_))
-            return &std::get<int>(value_);
-        else if (std::holds_alternative<double>(value_))
-            return &std::get<double>(value_);
+        if (holds_alternative<int>(value_))
+            return &get<int>(value_);
+        else if (holds_alternative<double>(value_))
+            return &get<double>(value_);
         else
             return nullptr;
     }
 
     size_t Number::SizeOf() const
     {
-        if (std::holds_alternative<int>(value_))
+        if (holds_alternative<int>(value_))
             return sizeof(int);
-        else if (std::holds_alternative<double>(value_))
+        else if (holds_alternative<double>(value_))
             return sizeof(double);
         else
             return 0;
     }
 
-    void Number::Print(std::ostream& os, [[maybe_unused]] Context& context)
+    void Number::Print(ostream& os, [[maybe_unused]] Context& context)
     {
         if (IsInt())
             os << GetIntValue();
@@ -928,29 +972,22 @@ namespace runtime
             os << GetDoubleValue();
     }
 
-    void Bool::Print(std::ostream& os, [[maybe_unused]] Context& context)
+    void Bool::Print(ostream& os, [[maybe_unused]] Context& context)
     {
         os << (GetValue() ? "True"sv : "False"sv);
     }
     
-    Method::Method
-        (std::string p_name, std::vector<std::string> p_formal_params, std::unique_ptr<Executable> p_body,
-         bool p_is_coroutine, std::vector<std::string> p_global_vars) :
-        name(move(p_name)),
-        formal_params(move(p_formal_params)),
-        body(move(p_body)),
-        is_coroutine(p_is_coroutine),
-        global_vars(move(p_global_vars))
+    Method::Method(string p_name, vector<string> p_formal_params, unique_ptr<Executable> p_body, bool p_is_coroutine,
+                   vector<string> p_global_vars) :
+        name(move(p_name)), formal_params(move(p_formal_params)), body(move(p_body)),
+        is_coroutine(p_is_coroutine), global_vars(move(p_global_vars))
     {
         TuneBodyReference();
     }
 
     Method::Method(Method&& other) noexcept :
-        name(move(other.name)),
-        formal_params(move(other.formal_params)),
-        body(move(other.body)),
-        is_coroutine(other.is_coroutine),
-        global_vars(move(other.global_vars))
+        name(move(other.name)), formal_params(move(other.formal_params)), body(move(other.body)),
+        is_coroutine(other.is_coroutine), global_vars(move(other.global_vars))
     {
         TuneBodyReference();
     }
@@ -986,7 +1023,7 @@ namespace runtime
     // Функция-член переопределяет свойства данного метода на соответствующие значения из метода other, содержимое же его
     // тела изменяет на new_body. Флаг is_same_sign_only включает режим контроля совпадения сигнатур нашего метода и
     // метода-источника новых свойств.
-    bool Method::RedefineProperties(const Method& other, std::unique_ptr<Executable>&& new_body, bool is_same_sign_only)
+    bool Method::RedefineProperties(const Method& other, unique_ptr<Executable>&& new_body, bool is_same_sign_only)
     {
         if (is_same_sign_only)
         {
@@ -1004,17 +1041,17 @@ namespace runtime
 
     WorkflowPosition::WorkPosType WorkflowPosition::GetType() const
     {
-        if (std::holds_alternative<MethodWorkflowPosData>(pos_data_))
+        if (holds_alternative<MethodWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_METHOD;
-        else if (std::holds_alternative<CompoundWorkflowPosData>(pos_data_))
+        else if (holds_alternative<CompoundWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_COMPOUND;
-        else if (std::holds_alternative<IfElseWorkflowPosData>(pos_data_))
+        else if (holds_alternative<IfElseWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_IF_ELSE;
-        else if (std::holds_alternative<WhileWorkflowPosData>(pos_data_))
+        else if (holds_alternative<WhileWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_WHILE;
-        else if (std::holds_alternative<CoYieldWorkflowPosData>(pos_data_))
+        else if (holds_alternative<CoYieldWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_CO_YIELD;
-        else if (std::holds_alternative<TryExceptWorkflowPosData>(pos_data_))
+        else if (holds_alternative<TryExceptWorkflowPosData>(pos_data_))
             return WorkPosType::WORK_POS_TRY_EXCEPT;
 
         return WorkPosType::WORK_POS_UNKNOWN;
@@ -1031,7 +1068,7 @@ namespace runtime
     {
         while (!workflow_data_.empty())
         {
-            WorkflowPosition top_workflow_pos = std::move(workflow_data_.back());
+            WorkflowPosition top_workflow_pos = move(workflow_data_.back());
             workflow_data_.pop_back();
             if (top_workflow_pos.GetType() == find_pos_type ||
                 find_pos_type == WorkflowPosition::WorkPosType::WORK_POS_UNKNOWN)
@@ -1049,7 +1086,7 @@ namespace runtime
         if (current_workflow_index_ >= 0 && current_workflow_index_ < static_cast<int>(workflow_data_.size()))
         {
             decltype(workflow_data_)::iterator workflow_begin_it = workflow_data_.begin();
-            std::advance(workflow_begin_it, current_workflow_index_);
+            advance(workflow_begin_it, current_workflow_index_);
             return &(*workflow_begin_it);
         }
         else
@@ -1094,7 +1131,7 @@ namespace runtime
             current_workflow_index_ = static_cast<int>(workflow_data_.size());
     }
 
-    void WorkflowStackSaver::Print(std::ostream& os, [[maybe_unused]] Context& context)
+    void WorkflowStackSaver::Print(ostream& os, [[maybe_unused]] Context& context)
     {
         if (Current())
             os << "Поток исполнения в " << static_cast<int>(Current()->GetType());
@@ -1245,7 +1282,7 @@ namespace runtime
     LinkageValue SimpleContext::GetOption(OptionType ask_option)
     {
         #ifndef MYTHON_UNITHREAD
-            std::lock_guard lg(opt_mutex_);
+            lock_guard lg(opt_mutex_);
         #endif
 
         if (opt_data_.contains(ask_option))
@@ -1257,7 +1294,7 @@ namespace runtime
     bool SimpleContext::SetOption(OptionType set_option, const LinkageValue& option_value)
     {
         #ifndef MYTHON_UNITHREAD
-            std::lock_guard lg(opt_mutex_);
+            lock_guard lg(opt_mutex_);
         #endif
 
         bool result = opt_data_.contains(set_option);
@@ -1265,7 +1302,7 @@ namespace runtime
         return result;
     }
 
-    std::string CommandGenusToString(CommandGenus cmd_genus)
+    string CommandGenusToString(CommandGenus cmd_genus)
     {
         switch (cmd_genus)
         {
@@ -1293,17 +1330,17 @@ namespace runtime
         };
     }
 
-    std::ostream& operator<<(std::ostream& ostr, CommandGenus cmd_genus)
+    ostream& operator<<(ostream& ostr, CommandGenus cmd_genus)
     {
         static constexpr int COMMAND_GENUS_WIDTH = 20;
 
-        std::string cmd_genus_str = CommandGenusToString(cmd_genus);
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        std::wstring wide_cmd_genus_str = converter.from_bytes(cmd_genus_str);
+        string cmd_genus_str = CommandGenusToString(cmd_genus);
+        wstring_convert<codecvt_utf8<wchar_t>> converter;
+        wstring wide_cmd_genus_str = converter.from_bytes(cmd_genus_str);
 
         int symb_delta = COMMAND_GENUS_WIDTH - static_cast<int>(wide_cmd_genus_str.size());
         if (symb_delta > 0)
-            wide_cmd_genus_str += std::wstring(symb_delta, ' ');
+            wide_cmd_genus_str += wstring(symb_delta, ' ');
         else if (symb_delta < 0)
             wide_cmd_genus_str = wide_cmd_genus_str.substr(0, COMMAND_GENUS_WIDTH);
 

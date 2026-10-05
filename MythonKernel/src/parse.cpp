@@ -266,7 +266,7 @@ namespace
             return result;
         }
 
-        // Эта функция-член синтаксического анализатора разбирает и компонует определение свободной функции
+        // Эта функция-член синтаксического анализатора разбирает и компонует обяъвления и определения свободных функций
         // (то есть def-блока вне определения какого-либо класса).
         // FreeFunction -> def id(Params) : Suite
         unique_ptr<ast::Statement> ParseFreeFunction()
@@ -276,13 +276,32 @@ namespace
             runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
             runtime::FreeFunction new_free_func = runtime::FreeFunction(ParseMethodDef());
 
-            std::string new_func_name = new_free_func.GetName();
-            auto [it, inserted] = declared_free_functions_.insert({new_func_name, runtime::ObjectHolder::Own(move(new_free_func))});
-            if (!inserted)
-                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + new_func_name + " %2",
-                                              {ThrowMessageNumber::THRM_FUNCTION, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
-
-            return exec_factory_.Create(ast::FreeFunctionDefinition(it->second), def_desc);
+            std::string new_func_name = new_free_func.GetSignature();
+            if (auto declared_function_it = declared_free_functions_.find(new_func_name);
+                declared_function_it != declared_free_functions_.end())
+            { // Это повторная декларация уже ранее декларированной в том или ином виде свободной функции.
+                runtime::FreeFunction* redef_function = declared_function_it->second.TryAs<runtime::FreeFunction>();
+                if (!new_free_func.IsAbstract())
+                { // Данная декларация - полное определение функции.
+                    // Повторное определение функции не допускается, так что проверим, была ли она ранее полностью определена.
+                    if (!redef_function->IsAbstract())
+                        // Это переопределение ранее определённой (неабстрактной) свободной функции - ошибка.
+                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + new_func_name + " %2",
+                            {ThrowMessageNumber::THRM_FUNCTION, ThrowMessageNumber::THRM_ALREADY_DEFINED}));
+                    // Имеет место определение функции, которая была ранее только объявлена. Заменяем её тело на тело нового
+                    // определения.
+                    redef_function->SwapMethodBody(new_free_func);
+                }
+                // Если это только объявление, то повторное объявление функции допускается, но никаких действий от нас не требует.
+                // Так как узел АСД класса ast::FreeFunctionDefinition для этой функции уже ранее был создан, то вернём вместо него
+                // нефункциональную пустышку.
+                return exec_factory_.Create(runtime::PsevdoExecutable(), def_desc);
+            }
+            else
+            { // Это первая декларация свободной функции, которая ранее никогда нигде не декларировалась.
+                return exec_factory_.Create(ast::FreeFunctionDefinition
+                    (declared_free_functions_[new_func_name] = move(runtime::ObjectHolder::Own(move(new_free_func)))), def_desc);
+            }
         }
 
         // Methods -> [def id(Params) : Suite]*
@@ -326,7 +345,8 @@ namespace
             lexer_.NextToken();
             // Следующий жетон может быть либо двоеточием (в этом случае мы имеем дело с определением метода, содержащим его следующее
             // далее тело), либо концом строки (в этом случае это есть только опережающее объявление, а определение метода будет
-            // расположено в другом двоичном модуле). Любые иные жетоны являются недопустимыми и ошибочными.
+            // расположено в последующем исходном тексте программы либо в другом двоичном модуле). Любые иные жетоны являются недопустимыми
+            // и ошибочными.
             if (lexer_.CurrentToken() == ':')
             { // Это вариант полного определения метода. Считываем и сохраняем его тело в формируемую структуру описания метода.
                 lexer_.NextToken();
@@ -376,7 +396,9 @@ namespace
             lexer_.NextToken();
 
             const runtime::Class* base_class = nullptr;
-            std::vector<const runtime::Class*> base_classes;
+            vector<const runtime::Class*> base_classes;
+            vector<string> base_classes_list;
+
             if (lexer_.CurrentToken() == '(')
             { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
                 std::vector<std::string> parent_list_name = ParseIdList(true);
@@ -392,27 +414,62 @@ namespace
                             {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
                         
                     base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
+                    base_classes_list.push_back(next_parent_name);
                 }
             }
 
-            lexer_.Expect<ITokenType::Char>(':');
-            lexer_.ExpectNext<ITokenType::Newline>();
-            lexer_.ExpectNext<ITokenType::Indent>();
-            lexer_.ExpectNext<ITokenType::Def>();
-            vector<runtime::Method> methods = ParseMethods();
+            // Следующий жетон может быть либо двоеточием (в этом случае мы имеем дело с полным определением класса, содержащим расположенную
+            // далее последовательность его методов), либо концом строки (в этом случае это есть только опережающее объявление, а определение
+            // класса будет размещаться далее по тексту исходника либо в другом двоичном модуле). Любые иные жетоны являются недопустимыми и
+            // ошибочными.
+            runtime::ObjectHolder new_def_class_holder;
+            runtime::Class* declared_class = nullptr;
+            auto declared_class_it = declared_classes_.find(class_name);
+            // Выполним операцию, требуемую для всех прочих вариантов развития событий - сверку совпадения имён классов-предков, если класс
+            // ранее уже был декларирован тем или иным способом.
+            if (declared_class_it != declared_classes_.end())
+            { // Декларация этого класса уже встречалась ранее. 
+                declared_class = declared_class_it->second.TryAs<runtime::Class>();
+                if (declared_class->GetParentList() != base_classes_list) // Список предков различается - это ошибка.
+                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_AMBIGUOUS_CLASS_DEFINITION);
+            }
 
-            lexer_.Expect<ITokenType::Dedent>();
-            lexer_.NextToken();
+            if (lexer_.CurrentToken() == ':')
+            { // Это вариант полного определения класса. Считываем и сохраняем его методы в формируемую структуру описания класса.
+                lexer_.ExpectNext<ITokenType::Newline>();
+                lexer_.ExpectNext<ITokenType::Indent>();
+                lexer_.ExpectNext<ITokenType::Def>();
+                vector<runtime::Method> methods = ParseMethods();
 
-            runtime::ObjectHolder class_object_holder;
-            class_object_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
+                lexer_.Expect<ITokenType::Dedent>();
+                lexer_.NextToken();
+                new_def_class_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
 
-            auto [it, inserted] = declared_classes_.insert({class_name, move(class_object_holder)});
-            if (!inserted)
-                exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + class_name + " %2"s,
-                    {ThrowMessageNumber::THRM_CLASS, ThrowMessageNumber::THRM_ALREADY_EXISTS}));
-
-            return exec_factory_.Create(ast::ClassDefinition(it->second), class_desc);
+                // Далее проверим, не был ли такой класс уже продекларирован ранее.
+                if (declared_class)
+                { // Декларация этого класса уже встречалась ранее. В этом случае допустимой является только такая операция, при которой ранее
+                  // этот класс был только объявлен, но не определён. Иначе имеем нарушение правила единственности определения.
+                    // Проверим наличие предыдущего определения класса.
+                    if (!declared_class->IsEmpty()) // Класс был ранее определён - двойное определение, ошибка.
+                        exec_factory_.ThrowParseError(ThrowMessages::ConstructThrowText("%1 "s + class_name + " %2"s,
+                            {ThrowMessageNumber::THRM_CLASS, ThrowMessageNumber::THRM_ALREADY_DEFINED}));                   
+                    // Класс ранее был только объявлен, но не определён. Выполняем его определение.
+                    declared_class->Swap(*new_def_class_holder.TryAs<runtime::Class>());
+                }
+            }
+            else
+            { // Это предварительное объявление класса. Далее ожидается конец строки. Если это так, содержимое класса (набор его методов) пока
+              // оставляем пустым. Многократные объявления допускаются и не являются ошибкой.
+                lexer_.Expect<ITokenType::Newline>();
+                lexer_.NextToken();
+                new_def_class_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, {}, std::move(base_classes)));
+            }            
+            if (declared_class)
+                // Ранее декларация данного класса уже имела место быть. Объект ast::ClassDefinition уже существует, повторно его создавать
+                // не следует, так что возвращаем холостую инструкцию.
+                return exec_factory_.Create(runtime::PsevdoExecutable(), class_desc);
+            else // Это первая декларация такого класса. Принимаем её без дополнительных условий.
+                return exec_factory_.Create(ast::ClassDefinition(declared_classes_[move(class_name)] = move(new_def_class_holder)), class_desc);
         }
 
         // Функция выделения "именного терма" - комбинации (последовательности) имён, разделённых точками.
@@ -457,7 +514,8 @@ namespace
 
             if (id_list.empty())
             { // Это попытка вызова свободной функции, а не метода класса.
-                if (auto func_it = declared_free_functions_.find(last_name); func_it != declared_free_functions_.end())
+                string function_signature = MangleMethodFunctionName({}, last_name, args.size());
+                if (auto func_it = declared_free_functions_.find(function_signature); func_it != declared_free_functions_.end())
                 { // Такая свободная функция программно определяемого типа однозначно существует - оформляем её вызов путём создания
                   // соответствующего узла АСД.
                     return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction*>(&(*func_it->second)), std::move(args)));
@@ -785,17 +843,14 @@ namespace
                     return exec_factory_.Create(ast::IsSameTarget(std::move(args[0]), std::move(args[1])));
                 }
 
-                if (auto func_it = declared_free_functions_.find(method_name); func_it != declared_free_functions_.end())
+                string function_signature = MangleMethodFunctionName({}, method_name, args.size());
+                if (auto func_it = declared_free_functions_.find(function_signature); func_it != declared_free_functions_.end())
                     // Разбираем случай вызова свободной функции общего, т.е. программно определяемого типа.
                     return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction*>(&(*func_it->second)), std::move(args)));
 
                 // Наконец, если случай не относится ни к одному из рассмотренных выше, это может быть вызов свободной функции, которая пока не определена
                 // (но может быть определена позже), или вызов объекта функционального класса.
                 return exec_factory_.Create(ast::FreeFunctionCall(method_name, std::move(args)));
-                /*
-                exec_factory_.ThrowParseError
-                    (ThrowMessages::ConstructThrowText("%1 - "s + method_name + "()"s, {ThrowMessageNumber::THRM_METHOD_NOT_FOUND}));
-                */
             }
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
         }

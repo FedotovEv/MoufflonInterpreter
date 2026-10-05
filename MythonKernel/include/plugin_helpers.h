@@ -163,6 +163,7 @@
     THRM_FREE_FUNCTION_NOT_FOUND,           // Попытка вызова неизвестной свободной функции.
     THRM_QUALIFIER_NOT_ANCESTOR,            // Уточнитель метода не является предком этого класса.
     THRM_AMBIGUOUS_OVERLOAD,                // Неоднозначная перегрузка метода.
+    THRM_AMBIGUOUS_CLASS_DEFINITION,        // Неоднозначность в объявлении класса.
     THRM_ABSTRACT_METHOD_CALL,              // Попытка вызова "абстрактного" метода или функции (то есть метода без определения тела).
     THRM_FIELD_NOT_FOUND,                   // Обращение к несуществующему или недоступному полю.
     THRM_FIELD_READ_ONLY,                   // Запись в поле не допускается (поле предназначено только для чтения).
@@ -223,7 +224,7 @@
     THRM_NOT_FOUND_FOR_CLASS,       // "не найден для класса"
     THRM_CLASS,                     // "Класс"
     THRM_FUNCTION,                  // "Функция"
-    THRM_ALREADY_EXISTS,            // "уже сущестует"
+    THRM_ALREADY_DEFINED,           // "уже определён(а)"
     THRM_USE_MULTIPLE_TIMES,        // "используется многократно"
     THRM_METHOD,                    // "Метод"
     THRM_ARGUMENTS,                 // "аргументов"
