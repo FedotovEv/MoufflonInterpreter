@@ -105,6 +105,7 @@ struct InternalObjectCreator
     std::function<FuncInternalObjectCreator> creator;
 };
 
+std::string GenerateUniqueName(const std::string& name_base, const runtime::Closure& closure);
 std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer);
 std::unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer, parse::ParseContext& parse_context);
 

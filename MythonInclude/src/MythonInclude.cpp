@@ -36,9 +36,10 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(std::string include_arg) override
+    void IncludeSwitchTo(const std::string& include_arg) override
     {
-        if (!include_arg.size())
+        std::string include_file = include_arg;
+        if (!include_file.size())
         { // Инициализирующий вызов IncludeSwitchTo()
             eof_bit_ = false;
             last_read_symb_ = std::char_traits<char>::eof();
@@ -53,7 +54,7 @@ public:
             current_file_position_ = 0;
             include_stack_.clear();
             // Устанавливаем start_file_name_ в качестве стартового модуля проекта.
-            include_arg = start_file_name_;
+            include_file = start_file_name_;
         }
 
         if (current_file_name_.size())
@@ -63,7 +64,7 @@ public:
             CloseFile();
         }
 
-        OpenFile(include_arg);
+        OpenFile(include_file);
         if (!filename_to_module_id_.count(current_file_name_))
             filename_to_module_id_[current_file_name_] = ++last_file_number_;
         command_desc_ptr_->module_id = filename_to_module_id_[current_file_name_];

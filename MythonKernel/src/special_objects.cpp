@@ -929,6 +929,16 @@ namespace runtime
         if (!is_awaiting_)
             return ret_value_;
 
+        if (last_awaitable_instance_ && last_awaitable_instance_->HasMethod(AWAITABLE_IS_AWAIT_METHOD, 2))
+        { // Предыдущая приостановка выполнена по co_await со ждуном-аргументом. Поэтому теперь следует запросить этого же ждуна
+          // о возможности возобновления сопрограммы.
+            ObjectHolder is_awaiting_holder = last_awaitable_instance_->Call
+                (AWAITABLE_IS_AWAIT_METHOD, {ObjectHolder::Share(*this), last_await_suspend_value_}, context);
+            if (IsTrue(is_awaiting_holder, &context))
+                // Сопрограмма всё ещё находится в состоянии ожидания и её возобновление не допускается.
+                return is_awaiting_holder;
+        }
+
         is_started_ = true;
         is_awaiting_ = false;
         // Обновим указатель на сам объект сопрограммы (то есть на this), так как между вызовами наш объект мог переместиться в памяти.

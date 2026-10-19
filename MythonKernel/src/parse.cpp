@@ -213,13 +213,55 @@ namespace
             program_root->AppendInternalClassId(TYPE_TRAITS_CLASS_NAME, internal_classes_[TYPE_TRAITS_CLASS_NAME].my_id);
 
             // Создаём предопределённые "прототипы" - встроенные классы с возможностью дальнейшего наследования и модификации.
-            // Класс Awaitable - "ждун". По умолчанию оба его метода просто возвращают None.
-            std::vector<runtime::Method> methods;
-            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, {"coro_instance"s},
-                std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
-            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, {"coro_instance"s, "suspend_value"s},
-                std::make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
-            declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, std::move(methods), {}));
+            // Класс Awaitable - "ждун". По умолчанию все три его обязательных метода просто возвращают None.
+            vector<runtime::Method> methods;
+            methods.push_back(runtime::Method(AWAITABLE_SUSPEND_METHOD, {AWAITABLE_CORO_INSTANCE_ARG},
+                make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            methods.push_back(runtime::Method(AWAITABLE_RESUME_METHOD, {AWAITABLE_CORO_INSTANCE_ARG, AWAITABLE_SUSPEND_VALUE_ARG},
+                make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            methods.push_back(runtime::Method(AWAITABLE_IS_AWAIT_METHOD, {AWAITABLE_CORO_INSTANCE_ARG, AWAITABLE_SUSPEND_VALUE_ARG},
+                make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})));
+            declared_classes_[AWAITABLE_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(AWAITABLE_CLASS_NAME, move(methods), {}));
+
+            // Класс "Monad" - базовый класс, который будут наследовать все монадические классы исполняемой программы.
+            methods.clear();
+            // Конструктор по умолчанию, устанавливающий в хранилище монады пустое значение None.
+            methods.push_back(runtime::Method(INIT_METHOD, {},
+                make_unique<ast::FieldAssignment>
+                    (ast::FieldAssignment // Присваивание полю "self.value" значение None.
+                        (ast::VariableValue{SELF_FIELD_NAME} /* Извлекаем "self" */, MONAD_CONTAINER_FIELD /* Поле "value" */,
+                         make_unique<runtime::PsevdoExecutable>(runtime::PsevdoExecutable{})   // Генератор None.
+                        )
+                    )));
+            // Конструктор, принимающий начальное значение.
+            methods.push_back(runtime::Method(INIT_METHOD, {MONAD_CONTAINER_INIT_VALUE},
+                make_unique<ast::FieldAssignment>
+                    (ast::FieldAssignment    // Присваивание полю "self.value" значение формального параметра "init_value".
+                        (ast::VariableValue{SELF_FIELD_NAME} /* Извлекаем "self" */, MONAD_CONTAINER_FIELD /* Поле "value" */,
+                         make_unique<ast::VariableValue>(ast::VariableValue{MONAD_CONTAINER_INIT_VALUE})  // Извлекаем "init_value".
+                        )
+                    )));
+            // Метод извлечения значения из контейнера.
+            methods.push_back(runtime::Method(MONAD_GET_METHOD, {},
+                make_unique<ast::VariableValue>(ast::VariableValue{{SELF_FIELD_NAME, MONAD_CONTAINER_FIELD}} /* Извлекаем "self.value" */)));
+            // Метод установки нового значения в контейнер монады.
+            methods.push_back(runtime::Method(MONAD_SET_METHOD, {MONAD_CONTAINER_INIT_VALUE},
+                make_unique<ast::FieldAssignment>
+                    (ast::FieldAssignment   // Присваивание полю "self.value" значение формального параметра "init_value".
+                        (ast::VariableValue{SELF_FIELD_NAME} /* Извлекаем "self" */, MONAD_CONTAINER_FIELD /* Поле "value" */,
+                         make_unique<ast::VariableValue>(ast::VariableValue{MONAD_CONTAINER_INIT_VALUE})  // Извлекаем "init_value". 
+                        )
+                    )));
+            // Привязывающий метод монады. По умолчанию возвращает результат следующего вызова: transit_func(self.value).
+            vector<unique_ptr<ast::Statement>> trans_func_args;    // Инструкции, вычисляющие фактические аргументы функтора перехода.
+            // Единственный аргумент функтора перехода - текущее значение монады self.value. Так что извлекаем его.
+            trans_func_args.push_back(make_unique<ast::VariableValue>(ast::VariableValue{{SELF_FIELD_NAME, MONAD_CONTAINER_FIELD}}));                
+            methods.push_back(runtime::Method(MONAD_BIND_METHOD, {MONAD_BIND_METHOD_ARG},
+                // Тело метода связи монады. Состоит из одной инструкции - вызова функтора перехода с передачей ему единственного
+                // аргумента - текущего значения монады.
+                make_unique<ast::FreeFunctionCall>(ast::FreeFunctionCall(MONAD_BIND_METHOD_ARG, move(trans_func_args)))
+            ));
+            declared_classes_[MONAD_CLASS_NAME] = runtime::ObjectHolder::Own(runtime::Class(MONAD_CLASS_NAME, move(methods), {}));
         }
 
         // Program -> eps
@@ -235,7 +277,7 @@ namespace
             result->SetCommandDesc({.module_string_number = -1});   // Головной узел не имеет определённого положения в исходнике.
             // Укажем фабрике узлов АСД программы местонахождение его корня.
             exec_factory_.SetProgramRoot(result.get());
-            // 
+            // Конструируем предопределённые сущности (классы и объекты), которые будут доступны программе с момента начала её исполнения.
             FormatePredefinedEntities();
             // Далее создаём особый узел класса ClassDefinition для каждого из предопределённых классов-прототипов, находящихся к данному моменту
             // в словаре declared_classes_. Каждый такой класс будет доступен с самого начала исполнения программы для всего её последующего кода.
@@ -327,6 +369,21 @@ namespace
             return parsed_list;
         }
 
+        // Функция разбора формальных параметров метода и конструирования на основе полученного их списка "черновика"
+        // дескриптора этого метода.
+        runtime::Method ParseMethodParamList()
+        {
+            runtime::ProgramCommandDescriptor def_desc = lexer_.GetCurrentCommandDesc();
+            runtime::Method parsed_method;
+            lexer_.Expect<ITokenType::Char>('(');  // Открывающая скобка, начинающая список формальных параметров метода (функции).
+
+            parsed_method.formal_params = ParseIdList();
+
+            lexer_.Expect<ITokenType::Char>(')');
+            lexer_.NextToken();
+            return parsed_method;
+        }
+
         // Функция выделяет и разбирает описание метода или свободной функции.
         runtime::Method ParseMethodDef()
         {
@@ -363,8 +420,7 @@ namespace
         }
 
         // Функция-член разбора списка идентификаторов, в котором они разделены запятыми.
-        // Установка флага is_unique требует уникальности каждого элемента списка. В противном случае выбрасывается исключение 
-
+        // Установка флага is_unique требует уникальности каждого элемента списка. В противном случае выбрасывается исключение.
         // При сброшенном флаге-аргументе is_unique дубликаты в выходном списке допускаются.
         std::vector<std::string> ParseIdList(bool is_unique)
         {
@@ -397,16 +453,17 @@ namespace
 
             const runtime::Class* base_class = nullptr;
             vector<const runtime::Class*> base_classes;
-            vector<string> base_classes_list;
+            vector<string> parent_list_name;
 
             if (lexer_.CurrentToken() == '(')
             { // Класс имеет каких-то предков. Мы в данный момент находимся внутри их списка.
-                std::vector<std::string> parent_list_name = ParseIdList(true);
+                parent_list_name = ParseIdList(true);
                 lexer_.Expect<ITokenType::Char>(')');
                 lexer_.NextToken();
 
-                // Класс с неколькими предками (использует множественное наследование).
-                for (const std::string& next_parent_name : parent_list_name)
+                // Проверяем корректность списка предков (все его члены должны уже существовать), а затем строим на его основе список
+                // указателей на дескрипторы родительских классов.
+                for (const string& next_parent_name : parent_list_name)
                 {
                     auto it = declared_classes_.find(next_parent_name);
                     if (it == declared_classes_.end())
@@ -414,7 +471,7 @@ namespace
                             {ThrowMessageNumber::THRM_BASE_CLASS, ThrowMessageNumber::THRM_NOT_FOUND_FOR_CLASS}));
                         
                     base_classes.push_back(static_cast<const runtime::Class*>(it->second.Get()));
-                    base_classes_list.push_back(next_parent_name);
+                    //base_classes_list.push_back(next_parent_name);
                 }
             }
 
@@ -430,7 +487,7 @@ namespace
             if (declared_class_it != declared_classes_.end())
             { // Декларация этого класса уже встречалась ранее. 
                 declared_class = declared_class_it->second.TryAs<runtime::Class>();
-                if (declared_class->GetParentList() != base_classes_list) // Список предков различается - это ошибка.
+                if (declared_class->GetParentList() != parent_list_name) // Список предков различается - это ошибка.
                     exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_AMBIGUOUS_CLASS_DEFINITION);
             }
 
@@ -443,7 +500,7 @@ namespace
 
                 lexer_.Expect<ITokenType::Dedent>();
                 lexer_.NextToken();
-                new_def_class_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, std::move(methods), std::move(base_classes)));
+                new_def_class_holder = runtime::ObjectHolder::Own(runtime::Class(class_name, move(methods), move(base_classes)));
 
                 // Далее проверим, не был ли такой класс уже продекларирован ранее.
                 if (declared_class)
@@ -556,7 +613,7 @@ namespace
             }
         }
 
-        // Далее следуют функции, образующие синтаксический анализатор арифметических выражений
+        // Далее следуют функции, образующие синтаксический анализатор арифметических выражений.
         // Expr -> BitwiseOperand ['&'/'|'/'^' BitwiseOperand]*
         unique_ptr<ast::Statement> ParseExpression()
         { // Эта функция разбирает арифметическое выражение на операции самого низкого приоритета -
@@ -745,7 +802,52 @@ namespace
             return ParseDottedIdsInMultExpr();
         }
 
-        std::unique_ptr<ast::Statement> ParseDottedIdsInMultExpr()
+        // Функция конструирует сплотку из двух инструкций, производящих декларирование и инстанцирование некоторого анонимного класса.
+        unique_ptr<ast::Statement> CreateAnonymousClassInstnace(bool is_lambda, vector<unique_ptr<ast::Statement>>&& args)
+        {
+            runtime::ProgramCommandDescriptor class_desc = lexer_.GetCurrentCommandDesc();
+            //
+            runtime::Method proc_method;
+            string class_name;
+            vector<const runtime::Class*> base_classes;
+            if (is_lambda)
+            {
+                proc_method = ParseMethodParamList();
+                proc_method.name = FUNCTOR_CALL_METHOD;
+                class_name = GenerateUniqueName(FUNCTOR_ANONYMOUS_BASENAME, declared_classes_);
+            }
+            else
+            {
+                proc_method.name = MONAD_BIND_METHOD;
+                proc_method.formal_params = {MONAD_BIND_METHOD_ARG};  // Единственный формальный параметр метода связи - функтор перехода.
+                class_name = GenerateUniqueName(MONAD_ANONYMOUS_BASENAME, declared_classes_);
+                // Монады наследуются от их общего предшественника MONAD_CLASS_NAME.
+                base_classes = {declared_classes_[MONAD_CLASS_NAME].TryAs<runtime::Class>()};
+            }
+            exec_factory_.SetCurrentMethod(&proc_method);
+            proc_method.body = ParseColonSepSuite(class_desc);
+            exec_factory_.SetCurrentMethod();
+            // Дескриптор главного метода импровизированного класса полностью сформирован. Далее можно конструировать сам класс.
+            // Создание объекта дескриптора безымянного класса.
+            vector<runtime::Method> methods;
+            methods.push_back(move(proc_method));
+            runtime::ObjectHolder new_def_class_holder =
+                runtime::ObjectHolder::Own(runtime::Class(class_name, move(methods), move(base_classes)));
+            // Размещение этого дескриптора в массиве-накопителе существующих в программе классов.
+            runtime::ObjectHolder class_holder = (declared_classes_[move(class_name)] = move(new_def_class_holder));
+            unique_ptr<ast::Statement> new_instance_statement;
+            if (is_lambda)  // Лямбда не имеет конструктора и инстанцируется без параметров.
+                new_instance_statement = exec_factory_.Create(ast::NewInstance(static_cast<const runtime::Class&>(*class_holder), {}));
+            else // Конструктору монады передаётся единственный аргумент - начальное её значение.
+                new_instance_statement = exec_factory_.Create(ast::NewInstance(static_cast<const runtime::Class&>(*class_holder), move(args)));
+            // Создание сплотки из двух исполняемых инструкций, обеспечивающих корректное определение и инстанцирование объекта
+            // анонимного класса. Первая такая инструкция - (псевдо)исполняемый псевдооператор определения класса, а вторая - 
+            // собственно, его инстанцирование - конструирование единственного экземпляра этого анонимного класса.
+            return exec_factory_.Create(ast::Compound
+                (ast::Compound::compound_return, exec_factory_.Create(ast::ClassDefinition(class_holder), class_desc), move(new_instance_statement)));
+        }
+
+        unique_ptr<ast::Statement> ParseDottedIdsInMultExpr()
         {
             vector<string> names = ParseDottedIds();
 
@@ -755,24 +857,38 @@ namespace
                 auto method_name = names.back();
                 names.pop_back();
 
-                if (names.empty() && (method_name == "is_visible"sv || method_name == "IsVisible"sv))
-                { // Вызов встроенной свободной функции IsVisible() (или, в другом написании имени, is_visible()). Единственный аргумент такой
-                  // функции - не выражение, а имя простой переменной либо поля объекта. Поэтому она рассматривается особым порядком в первую очередь.
-                    lexer_.NextToken();
-                    vector<string> test_var_names = ParseDottedIds();   // Аргумент функции - имя проверяемой переменной или поля объекта.
-                    lexer_.Expect<ITokenType::Char>(')');
-                    lexer_.NextToken(); // Проверяем наличие закрывающей скобки списка аргументов (он у нас дрлжен быть только один), а затем пропускаем её.
-                    
-                    auto last_var_name = test_var_names.back();
-                    test_var_names.pop_back();
-                    
-                    if (test_var_names.empty())
-                        // Аргумент функции - имя простой (глобальной или локальной) переменной.
-                        return exec_factory_.Create(ast::IsVisibleVariable(std::move(last_var_name)));
-                    else
-                        // Аргумент функции - имя поля объекта класса.
-                        return exec_factory_.Create(ast::IsVisibleField    // Это проверка видимости поля last_var_name объекта с (составным) именем test_var_names.
-                            (exec_factory_.CreateTemp(ast::VariableValue{std::move(test_var_names)}), std::move(last_var_name)));
+                // Сначала рассмотрим возможные обращения к "псевдофункциям", то есть языковым конструкциям, выглядящим, как вызовы функций,
+                // но на самом деле таковыми не являющиеся. Семантика аргументов (списков предложений в скобках, находящихся за именем псевдофункции)
+                // таких конструкций отличается от той, которую такие предложения имеют при вызове подлинных функций. Там аргументы - это значения
+                // соответствующих выражений. В случае же псевдофункций такие предложения - лишь имена простых переменных или полей объекта и вычислять
+                // их не требуется. Поэтому случай псевдофункций рассматривается особым порядком в первую очередь.
+                if (names.empty())
+                {
+                    if (method_name == "is_visible"sv || method_name == "IsVisible"sv)
+                    { // Вызов встроенной свободной функции IsVisible() (или, в другом написании имени, is_visible()). Единственный аргумент такой
+                      // функции - не выражение, а имя простой переменной либо поля объекта. 
+                        lexer_.NextToken();
+                        vector<string> test_var_names = ParseDottedIds();   // Аргумент функции - имя проверяемой переменной или поля объекта.
+                        lexer_.Expect<ITokenType::Char>(')');
+                        lexer_.NextToken(); // Проверяем наличие закрывающей скобки списка аргументов (он у нас должен быть только один), а затем пропускаем её.
+
+                        auto last_var_name = test_var_names.back();
+                        test_var_names.pop_back();
+
+                        if (test_var_names.empty())
+                            // Аргумент функции - имя простой (глобальной или локальной) переменной.
+                            return exec_factory_.Create(ast::IsVisibleVariable(std::move(last_var_name)));
+                        else
+                            // Аргумент функции - имя поля объекта класса. Это проверка видимости поля last_var_name объекта с (составным)
+                            // именем test_var_names.
+                            return exec_factory_.Create(ast::IsVisibleField    
+                                (exec_factory_.CreateTemp(ast::VariableValue{std::move(test_var_names)}), std::move(last_var_name)));
+                    }
+
+                    if (method_name == FUNCTOR_ANONYMOUS_KEYWORD)
+                        // Создание экземпляра импровизированного безымянного класса типа функтора. Аргументы такой конструкции - список имён
+                        // формальных аргументов метода-исполнителя функционального класса.
+                        return CreateAnonymousClassInstnace(true, {});
                 }
 
                 vector<unique_ptr<ast::Statement>> args;
@@ -790,6 +906,11 @@ namespace
                          std::move(args)));
                 }
 
+                if (method_name == MONAD_ANONYMOUS_KEYWORD)
+                    // Создание экземпляра импровизированного безымянного класса типа монады. Единственный аргумент такой конструкции - начальное
+                    // значение монады (её внутреннего хранилища).
+                    return CreateAnonymousClassInstnace(false, move(args));
+
                 // Далее анализируются конструкции, эквивалентные вызову именно свободных функций (выглядящие как таковые). Именной терм таких
                 // функций однокомпонентный (не содержит внутри точек).
                 try
@@ -797,7 +918,7 @@ namespace
                     if (auto int_class_it = internal_classes_.find(method_name); int_class_it != internal_classes_.end())
                     { // Проверка совпадения имени вызываемой свободной функции к одному из имён внутренних классов. В этом случае
                       // имеет место операция создания такого класса (вызов его производящей функции).
-                        unique_ptr<ast::Statement> internal_class_ptr = (int_class_it->second.creator)(std::move(args));
+                        unique_ptr<ast::Statement> internal_class_ptr = (int_class_it->second.creator)(move(args));
                         exec_factory_.AddCommandDesc(internal_class_ptr.get());
                         return internal_class_ptr;
                     }
@@ -806,7 +927,7 @@ namespace
                     { // А тут выполним проверку имени вызываемой свободной функции на принадлежность к множеству имён классов втыкал,
                       // подключённых к данному моменту к интерпретатору. Если имя принадлежит этому множеству, то происходит операция
                       // создания класса соответствующей втыкалы.
-                        unique_ptr<ast::Statement> plugin_class_ptr = ast::CreateNewPluginInstance(method_name, plug_it->second, std::move(args));
+                        unique_ptr<ast::Statement> plugin_class_ptr = ast::CreateNewPluginInstance(method_name, plug_it->second, move(args));
                         exec_factory_.AddCommandDesc(plugin_class_ptr.get());
                         return plugin_class_ptr;
                     }
@@ -821,7 +942,7 @@ namespace
                 { // Обработка случая, при котором имя функции совпадает с одним из ранее объявленных программно определённых классов, хранящихся
                   // в declared_classes_. В этом случае выполняемая операция - это создание (инстанцирование) такого класса.
                     return exec_factory_.Create(ast::NewInstance
-                        (static_cast<const runtime::Class&>(*it->second), std::move(args)));
+                        (static_cast<const runtime::Class&>(*it->second), move(args)));
                 }
             
                 if (method_name == "str"sv)
@@ -848,8 +969,8 @@ namespace
                     // Разбираем случай вызова свободной функции общего, т.е. программно определяемого типа.
                     return exec_factory_.Create(ast::FreeFunctionCall(static_cast<runtime::FreeFunction*>(&(*func_it->second)), std::move(args)));
 
-                // Наконец, если случай не относится ни к одному из рассмотренных выше, это может быть вызов свободной функции, которая пока не определена
-                // (но может быть определена позже), или вызов объекта функционального класса.
+                // Наконец, если случай не относится ни к одному из рассмотренных выше, это может быть вызов свободной функции, которая пока
+                // не определена (но может быть определена позже), или вызов объекта функционального класса.
                 return exec_factory_.Create(ast::FreeFunctionCall(method_name, std::move(args)));
             }
             return exec_factory_.Create(ast::VariableValue(std::move(names)));
@@ -1506,30 +1627,33 @@ namespace
         //               | pass
         //               | del DottedIds
         //               | AssignmentOrCall
-        std::optional<unique_ptr<ast::Statement>> ParseSimpleStatement()
+        std::optional<unique_ptr<ast::Statement>> ParseSimpleStatement(bool is_parse_directives = true)
         {
             const auto& tok = lexer_.CurrentToken();
 
-            if (tok.Is<ITokenType::Import>())
-            {
-                lexer_.NextToken();
-                vector<parse::Token> args;
-                if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
-                    args = ParseTokenList();
-                ProcessImportLibrary(move(args), parse_context_);
-                return nullopt;
-            }
+            if (is_parse_directives)
+            { // Директивы управления трансляцией import и include распознаются только при установленном флажке is_parse_directives.
+                if (tok.Is<ITokenType::Import>())
+                {
+                    lexer_.NextToken();
+                    vector<parse::Token> args;
+                    if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
+                        args = ParseTokenList();
+                    ProcessImportLibrary(move(args), parse_context_);
+                    return nullopt;
+                }
 
-            if (tok.Is<ITokenType::Include>())
-            {
-                lexer_.NextToken();
-                vector<parse::Token> args;
-                if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
-                    args = ParseTokenList();
-                if (args.size() != 1 || !args[0].Is<ITokenType::String>())
-                    exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS);
-                lexer_.IncludeSwitchTo(args[0].As<ITokenType::String>().value);
-                return nullopt;
+                if (tok.Is<ITokenType::Include>())
+                {
+                    lexer_.NextToken();
+                    vector<parse::Token> args;
+                    if (!lexer_.CurrentToken().Is<ITokenType::Newline>())
+                        args = ParseTokenList();
+                    if (args.size() != 1 || !args[0].Is<ITokenType::String>())
+                        exec_factory_.ThrowParseError(ThrowMessageNumber::THRM_INCLUDE_INVALID_PARAMS);
+                    lexer_.IncludeSwitchTo(args[0].As<ITokenType::String>().value);
+                    return nullopt;
+                }
             }
 
             if (tok.Is<ITokenType::Global>())
@@ -1646,6 +1770,30 @@ namespace
             return ParseAssignmentOrCall();
         }
 
+        // Разбор набора (последовательности) простых команд, разделённых двоеточием.
+        unique_ptr<ast::Statement> ParseColonSepSuite(const runtime::ProgramCommandDescriptor& class_desc)
+        {
+            auto result = exec_factory_.Create(ast::Compound(), class_desc);
+            while (lexer_.CurrentToken() == ':')
+            {
+                lexer_.NextToken();
+                result->AddStatement(ParseSimpleStatement(false).value());
+            }
+
+            if (result->size() == 1)
+            { // Если тело разобранного метода содержит только один оператор, то извлекаем его из сплотки и используем как целостное
+              // тело метода самостоятельно, без компаундной обёртки.
+                unique_ptr<ast::Statement> one_instruction = result->ExtractStatement(0);
+                if (one_instruction->GetCommandGenus() == runtime::CommandGenus::CMD_GENUS_RETURN_FROM_METHOD)
+                    // Это оператор возврата, для корректной работы его нужно заключить в ast::MethodBody.
+                    return exec_factory_.Create(ast::MethodBody(move(one_instruction), class_desc), class_desc);
+                else // Иначе можно использовать его в теле метода непосредственно, безо всяких оболочек вовсе.
+                    return one_instruction;
+            }
+            else // Во всех прочих случаях строим тело метода обычным способом - оболочка ast::MethodBody, внутри которой сплотка ast::Compound.
+                return exec_factory_.Create(ast::MethodBody(move(result), class_desc), class_desc);
+        }
+
         // Функция разбора списка жетонов, состоящего из лексем, соответствующих значениям различных допустимых поддерживаемых
         // типов (численного, строкового, логического или пустого).
         vector<parse::Token> ParseTokenList()
@@ -1723,6 +1871,18 @@ LoadLibraryDefine parse::TrivialParseContext::GetLoadLibraryDesc(const string& l
 }
 
 int parse::TypeIdentificator::current_type_id = CLASS_AREA_IDENTS;
+
+string GenerateUniqueName(const string& name_base, const runtime::Closure& closure)
+{
+    string name_result;
+    do
+    {
+        name_result = name_base + GenerateUUID();
+    }
+    while (closure.contains(name_result));
+
+    return name_result;
+}
 
 // Определение перегрузок функции синтаксического анализа исходного текста МУФЛОН-программы.
 unique_ptr<runtime::Executable> ParseProgram(parse::Lexer& lexer)

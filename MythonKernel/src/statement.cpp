@@ -285,7 +285,7 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                 else
                     return {};
             };
-        // Лямбда высылки звонков по причине срабатывания каких-либо бряков на данной строке исходника.
+        // Лямбда высылки звонков по причине срабатывания каких-либо местных (локализованных) бряков на данной строке исходника.
         auto send_break_callbacks = [&](runtime::Executable* use_exec_obj_ptr = nullptr) -> void
             {
                 if (dbg_context->GetRowCallbackFlags() & DebugContext::CallbackCategoryFlag::CALLBACK_CAT_BREAKS_PROCESSED)
@@ -301,6 +301,23 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
                         break;  // Используется такой режим обработки бряков, при котором звонком сопровождается только первая сработавшая точка останова.
                 }
                 dbg_context->SetRowCallbackFlag(DebugContext::CallbackCategoryFlag::CALLBACK_CAT_BREAKS_PROCESSED);
+            };
+        // Лямбда возбуждения звонков при срабатывании каких-либо нелокальных бряков в предстоящем операторе.
+        auto send_unlocal_break_callbacks = [&](runtime::Executable* use_exec_obj_ptr) -> void
+            {
+                for (size_t triggered_unloc_break : dbg_context->GetTriggeredUnlocalBreaks())
+                { // Нелокальный бряк с индексом triggered_unloc_break должен сработать и вызвать отладочный звонок.
+                    // Дополним таблицу символов closure переменной с индексом сработавшего бряка.
+                    closure.emplace(BREAKPOINT_INFO_FIELD_NAME, ObjectHolder::Own(runtime::Number(static_cast<int>(triggered_unloc_break))));
+                    // Делаем отладочный звонок, если для него назначен обработчик-приёмник.
+                    if (dbg_context->GetDebugCallback())
+                    {
+                        dbg_context->SetDebugMode(dbg_context->GetDebugCallback()
+                            (runtime::DebugCallbackReason::DEBUG_CALLBACK_UNLOC_BREAK, use_exec_obj_ptr, closure, context));
+                    }
+                    // Очищаем таблицу символов от лишней вспомогательной записи.
+                    closure.erase(BREAKPOINT_INFO_FIELD_NAME);
+                }
             };
 
         // Подготовительная часть закончена, приступаем к обработке поступившей команды.
@@ -362,8 +379,13 @@ void PrepareExecute(runtime::Executable* exec_obj_ptr, runtime::Closure& closure
             dbg_context->PushCallStackEntry(new_stack_rec);
         }
 
-        // При переходе на новую строку исходника проверим наличие здесь (на этой новой строке) сработавших точек останова (бряков).
         // Модель стека вызовов к этому моменту уже будет иметь законченный вид, соответствующий исполняемой процедуре МУФЛОН-программы.
+        // Первым актом проверим срабатывание бряков на обращение "к памяти" (на обращение к переменным программы) для оператора exec_obj_ptr,
+        // исполнение которого произойдёт как раз после завершения работы этой функции.
+        dbg_context->FindUnLocalBreakpoints(exec_obj_ptr, closure);
+        send_unlocal_break_callbacks(exec_obj_ptr);
+
+        // Далее при переходе на новую строку исходника проверим наличие здесь (на этой новой строке) сработавших локальных точек останова (бряков).
         if (is_new_source_line)
             dbg_context->FindLocalBreakpoints(current_command, exec_obj_ptr, closure);
 
@@ -895,13 +917,13 @@ namespace ast
         return result;
     }
 
-    FreeFunctionCall::FreeFunctionCall(runtime::FreeFunction* free_function, std::vector<std::unique_ptr<Statement>> args) :
+    FreeFunctionCall::FreeFunctionCall(runtime::FreeFunction* free_function, vector<unique_ptr<Statement>> args) :
         free_function_(free_function), args_(move(args))
     {
         SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
     }
 
-    FreeFunctionCall::FreeFunctionCall(std::string free_function_name, std::vector<std::unique_ptr<Statement>> args) :
+    FreeFunctionCall::FreeFunctionCall(string free_function_name, vector<unique_ptr<Statement>> args) :
         free_function_name_(move(free_function_name)), args_(move(args))
     {
         SetCommandGenus(runtime::CommandGenus::CMD_GENUS_CALL_METHOD);
@@ -1171,6 +1193,7 @@ namespace ast
 
     // Поддерживается вычитание:
     //  число - число.
+    //  объект1 / сущность2, если объект1 - есть прямовычитаемый класс, для которого определён метод прямого вычитания __sub__(rhs).
     //  объект1 - сущность2, если объект1 - есть некоторый складываемый класс (с методом __add__(rhs)), а сущность2, в свою очередь,
     // есть негатируемая сущность (поддерживающая операцию смены знака) - либо класс, имеющий метод __neg__(), либо любое число.
     // Если ни один из этих вариантов не подходит, выбрасывается исключение runtime_error.
@@ -1181,30 +1204,33 @@ namespace ast
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
         runtime::Number* real_lhs_number_ptr = real_lhs.TryAs<runtime::Number>();
         runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
+        runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
+        runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
 
         if (real_lhs_number_ptr && real_rhs_number_ptr)
         { // Оба аргумента - числа. Имеем первый вариант комбинации операндов.
             runtime::Number result = (*real_lhs_number_ptr) - (*real_rhs_number_ptr);
             return ObjectHolder::Own<runtime::Number>(move(result));
         }
-        else if (runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
-                 lhs_class_ptr && lhs_class_ptr->HasMethod(ADD_METHOD, 1))
-        { // Левый аргумент операции - объект1 - есть складываемый класс.
-            if (real_rhs_number_ptr)
-            { // Второй аргумент операции - сущность2 - число. Его можно негатировать, а затем произвести сложение.
-                return lhs_class_ptr->Call(ADD_METHOD, {ObjectHolder::Own(real_rhs_number_ptr->Negate())}, context);
-            }
-            else if (runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
-                     real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(NEGATE_METHOD, 0))
-            { // Второй аргумент операции - сущность2 - негатируемый класс. Для него также можно сменить знак.
-                return lhs_class_ptr->Call(ADD_METHOD, {real_rhs_class_ptr->Call(NEGATE_METHOD, {}, context)}, context);
-            }
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION);
-        }
-        else
+        else if (lhs_class_ptr)
         {
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION);
+            if (lhs_class_ptr->HasMethod(DIRECT_SUBTRACT_METHOD, 1))
+            { // Левый аргумент операции - объект1 - есть прямовычитаемый класс (у него существует метод прямого вычитания).
+                return lhs_class_ptr->Call(DIRECT_SUBTRACT_METHOD, {move(real_rhs)}, context);
+            }
+            else if (lhs_class_ptr->HasMethod(ADD_METHOD, 1))
+            { // Левый аргумент операции - объект1 - есть складываемый класс.
+                if (real_rhs_number_ptr)
+                { // Второй аргумент операции - сущность2 - число. Его можно негатировать, а затем произвести сложение.
+                    return lhs_class_ptr->Call(ADD_METHOD, {ObjectHolder::Own(real_rhs_number_ptr->Negate())}, context);
+                }
+                else if (real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(NEGATE_METHOD, 0))
+                { // Второй аргумент операции - сущность2 - негатируемый класс. Для него также можно сменить знак.
+                    return lhs_class_ptr->Call(ADD_METHOD, {real_rhs_class_ptr->Call(NEGATE_METHOD, {}, context)}, context);
+                }
+            }
         }
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_SUBTRACTION);
     }
 
     // Поддерживается умножение:
@@ -1237,6 +1263,7 @@ namespace ast
 
     // Поддерживается деление:
     //  число / число.
+    //  объект1 / сущность2, если объект1 - есть прямоделимый класс, для которого определён метод прямого деления __div__(rhs).
     //  объект1 / сущность2, если объект1 - есть некоторый умножаемый класс (с методом __mult__(rhs)), а сущность2, в свою очередь,
     // есть обращаемая сущность (поддерживающая операцию обращения) - либо класс, имеющий метод __inv__(), либо любое число.
     // Если ни один из этих вариантов не подходит, выбрасывается исключение runtime_error.
@@ -1247,6 +1274,8 @@ namespace ast
         runtime::ObjectHolder real_rhs(rhs_->Execute(closure, context));
         runtime::Number* real_lhs_number_ptr = real_lhs.TryAs<runtime::Number>();
         runtime::Number* real_rhs_number_ptr = real_rhs.TryAs<runtime::Number>();
+        runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
+        runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
 
         if (real_lhs_number_ptr && real_rhs_number_ptr)
         {  // Оба аргумента - числа.
@@ -1255,28 +1284,29 @@ namespace ast
             runtime::Number result = ((*real_lhs_number_ptr) / (*real_rhs_number_ptr));
             return ObjectHolder::Own<runtime::Number>(move(result));
         }
-        else if (runtime::CommonClassInstance* lhs_class_ptr = real_lhs.TryAs<runtime::CommonClassInstance>();
-                 lhs_class_ptr && lhs_class_ptr->HasMethod(MULTIPLICATE_METHOD, 1))
-        { // Левый аргумент операции - объект1 - есть умножаемый класс.
-            if (real_rhs_number_ptr)
-            { // Второй аргумент операции - сущность2 - число. Его можно обратить.
-                if (optional<runtime::Number> inv_rhs_number = real_rhs_number_ptr->Inverse(); inv_rhs_number)
-                    // Правый численный аргумент успешно обратился. Теперь можно произвести умножение.
-                    return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {ObjectHolder::Own(move(*inv_rhs_number))}, context);
-                else
-                    ThrowRuntimeError(this, ThrowMessageNumber::THRM_DIVISION_BY_ZERO);
-            }
-            else if (runtime::CommonClassInstance* real_rhs_class_ptr = real_rhs.TryAs<runtime::CommonClassInstance>();
-                     real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(INVERSE_METHOD, 0))
-            { // Второй аргумент операции - сущность2 - обращаемый класс. Его также можно обратить.
-                return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {real_rhs_class_ptr->Call(INVERSE_METHOD, {}, context)}, context);
-            }
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION);
-        }
-        else
+        else if (lhs_class_ptr)
         {
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION);
+            if (lhs_class_ptr->HasMethod(DIRECT_DIVIDE_METHOD, 1))
+            { // Левый аргумент операции - объект1 - есть прямоделимый класс (у него существует метод прямого деления).
+                return lhs_class_ptr->Call(DIRECT_DIVIDE_METHOD, {move(real_rhs)}, context);
+            }
+            else if (lhs_class_ptr->HasMethod(MULTIPLICATE_METHOD, 1))
+            { // Левый аргумент операции - объект1 - есть умножаемый класс.
+                if (real_rhs_number_ptr)
+                { // Второй аргумент операции - сущность2 - число. Его можно обратить.
+                    if (optional<runtime::Number> inv_rhs_number = real_rhs_number_ptr->Inverse(); inv_rhs_number)
+                        // Правый численный аргумент успешно обратился. Теперь можно произвести умножение.
+                        return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {ObjectHolder::Own(move(*inv_rhs_number))}, context);
+                    else
+                        ThrowRuntimeError(this, ThrowMessageNumber::THRM_DIVISION_BY_ZERO);
+                }
+                else if (real_rhs_class_ptr && real_rhs_class_ptr->HasMethod(INVERSE_METHOD, 0))
+                { // Второй аргумент операции - сущность2 - обращаемый класс. Его также можно обратить.
+                    return lhs_class_ptr->Call(MULTIPLICATE_METHOD, {real_rhs_class_ptr->Call(INVERSE_METHOD, {}, context)}, context);
+                }
+            }
         }
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_IMPOSSIBLE_DIVISION);
     }
 
     ObjectHolder ModuloDiv::Execute(Closure& closure, Context& context)
@@ -1332,7 +1362,8 @@ namespace ast
         }
 
         // Выполним элементы сплотки от точки comp_body_current_it до ее конца.
-        for (; comp_body_current_it != comp_body_.end(); ++comp_body_current_it)
+        ObjectHolder result_saver;
+        while (comp_body_current_it != comp_body_.end())
         {
             if (workflow_current)
                 // При исполнении в составе сопрограммы будем указывать ее дескриптору конкретный индекс оператора (одного из
@@ -1340,22 +1371,56 @@ namespace ast
                 workflow_compound->index = static_cast<int>(comp_body_current_it - comp_body_.begin());
 
             auto& cur_statement_ptr = *comp_body_current_it;
-            cur_statement_ptr->Execute(closure, context);
+            ++comp_body_current_it;
+            if (is_return_result_ && comp_body_current_it == comp_body_.end())
+                result_saver = cur_statement_ptr->Execute(closure, context);
+            else
+                cur_statement_ptr->Execute(closure, context);
         }
 
         if (workflow_current)
             // Исполнение сплотки в составе сопрограммы завершилось, удаляем из стека состояний её запись.
             coro_status_instance->PopBack();
-        return {};
+        if (is_return_result_)
+            return result_saver;
+        else
+            return {};
     }
 
-    void Compound::AddStatement(std::unique_ptr<Statement> stmt)
+    void Compound::AddStatement(unique_ptr<Statement> stmt)
     { // Добавляет очередную инструкцию в конец составной инструкции.
         if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(stmt.get()))
             last_body_command_desc_ = compound_stmt_ptr->GetLastCommandDesc();
         else
             last_body_command_desc_ = stmt->GetCommandDesc();
         comp_body_.push_back(std::move(stmt));
+    }
+
+    unique_ptr<Statement> Compound::ExtractStatement(size_t statement_index)
+    {
+        if (statement_index >= comp_body_.size())
+            return make_unique<runtime::PsevdoExecutable>();
+
+        // Если извлекается последний элемент сплотки, обновим также поле программных координат её завершения.
+        if (statement_index == comp_body_.size() - 1)
+        {
+            if (comp_body_.size() == 1)
+            { // После извлечения "хвостового" оператора сплотка будет пустой.
+                last_body_command_desc_ = {};
+            }
+            else
+            { // Переустановим last_body_command_desc_ на координаты предпоследнего оператора сплотки.
+                std::unique_ptr<Statement>& prelast_stmt = comp_body_[statement_index - 1];
+                if (Compound* compound_stmt_ptr = dynamic_cast<Compound*>(prelast_stmt.get()))
+                    last_body_command_desc_ = compound_stmt_ptr->GetLastCommandDesc();
+                else
+                    last_body_command_desc_ = prelast_stmt->GetCommandDesc();
+            }
+        }
+
+        unique_ptr<Statement> result = move(comp_body_[statement_index]);
+        comp_body_.erase(comp_body_.begin() + statement_index);
+        return result;
     }
 
     ProgramCompound::~ProgramCompound()
@@ -1620,7 +1685,7 @@ namespace ast
             {  // Ждуна удалось успешно получить. Запросим его "стопорящий" метод о необходимости приостановки сопрограммы.
                 await_suspend_result = awaitable_instance->Call(AWAITABLE_SUSPEND_METHOD, {coro_coords.coro_status_holder}, context);
                 coro_coords.coro_status_instance->SetLastAwaitSuspendValue(await_suspend_result);
-                if (runtime::IsTrue(await_suspend_result))
+                if (runtime::IsTrue(await_suspend_result, &context))
                 { // Если возвращённый "стопором" результат приводится к истине, приостанавливаем выполнение сопрограммы.
                     coro_coords.coro_status_instance->SuspendCoroutine(runtime::CoroutineSuspendType::SUSPEND_POINT_CO_AWAIT);
                     throw ReturnResult(move(await_suspend_result));
@@ -2174,7 +2239,8 @@ namespace ast
         {
             string str_result;
             if (real_rhs.TryAs<runtime::String>())
-            {
+            { // Побитовый сдвиг влево всех символов строки lhs на количество бит, определяемых соответствующим
+              // по порядку символом строки rhs.
                 const string& rhs_str = real_rhs.TryAs<runtime::String>()->GetValue();
                 size_t i = 0;
                 for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
@@ -2186,7 +2252,7 @@ namespace ast
                 }
             }
             else if (real_rhs.TryAs<runtime::Number>())
-            {
+            {  // Побитовый сдвиг влево всех символов строки lhs на одну и ту же величину rhs.
                 unsigned char shift_cnt = real_rhs.TryAs<runtime::Number>()->GetIntValue();
                 for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
                     str_result += c << shift_cnt;
@@ -2197,10 +2263,21 @@ namespace ast
             }
             return ObjectHolder::Own<runtime::String>(move(str_result));
         }
-        else
-        {
-            ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
+        else if (runtime::CommonClassInstance* lhs_monad = IsMonad(real_lhs))
+        { // lhs - монада (имеет метод связи __bind__(rhs)).            
+            if (ObjectHolder bind_result = lhs_monad->Call(MONAD_BIND_METHOD, {move(real_rhs)}, context); IsMonad(bind_result))
+            {  // Функция перехода вернула готовую монаду. Возвращаем её сразу в полученном виде как результат операции (аналог and_then()).
+                return bind_result;
+            }
+            else if (runtime::ClassInstance* lhs_monad_class = dynamic_cast<runtime::ClassInstance*>(lhs_monad))
+            { // Функция перехода возвратила значение какой-то иной категории. Воспринимаем его как новое значение монады, которую
+              // нужно породить самостоятельно (аналог transform()).
+                ObjectHolder new_monad = ObjectHolder::Own(runtime::ClassInstance(lhs_monad_class->GetBaseClass()));
+                new_monad.TryAs<runtime::ClassInstance>()->Call(INIT_METHOD, {bind_result}, context);
+                return new_monad;
+            }
         }
+        ThrowRuntimeError(this, ThrowMessageNumber::THRM_SHIFT_INVALID_PARAMS);
     }
 
     ObjectHolder ShiftRight::Execute(Closure& closure, Context& context)
@@ -2218,7 +2295,8 @@ namespace ast
         {
             string str_result;
             if (real_rhs.TryAs<runtime::String>())
-            {
+            { // Побитовый сдвиг вправо всех символов строки lhs на количество бит, определяемых соответствующим
+              // по порядку символом строки rhs.
                 const string& rhs_str = real_rhs.TryAs<runtime::String>()->GetValue();
                 size_t i = 0;
                 for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
@@ -2230,7 +2308,7 @@ namespace ast
                 }
             }
             else if (real_rhs.TryAs<runtime::Number>())
-            {
+            { // Побитовый сдвиг вправо всех символов строки lhs на одну и ту же величину rhs.
                 unsigned char shift_cnt = real_rhs.TryAs<runtime::Number>()->GetIntValue();
                 for (unsigned char c : real_lhs.TryAs<runtime::String>()->GetValue())
                     str_result += c >> shift_cnt;

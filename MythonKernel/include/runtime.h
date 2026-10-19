@@ -24,6 +24,7 @@ namespace ast
     class CoYield;
     class ClassDefinition;
     class FreeFunctionDefinition;
+    class ShiftLeft;
 }
 
 namespace runtime
@@ -164,7 +165,7 @@ namespace runtime
             // исходника. В этом режиме все незаблокированные другими опциями неисполняемые звонки передаются
             // внешнему отладчику безо всяких ограничений, а вот исполнимый звонок (звонок для какого-либо
             // исполнимого узла строки) в таком случае совершается всегда только один.
-            // Следующая ниже группа опций управляет обработкой точек останова. Все назначенные ими ограничения накладывается как дополнительные
+            // Следующая ниже группа опций управляет обработкой точек останова. Все назначенные ими ограничения накладываются как дополнительные
             // (сужающие) дополнительно к ограничениям, введённым определёнными выше опциями.
             CONTEXT_OPT_ONCE_BREAKPOINT_CALL,   // Совершать звонок только от первой точки останова, сработавшей на данной исходной строке.
             CONTEXT_OPT_BREAK_SKIP_DECLARATIVE, // Пропускать при обработке точек останова декларативные узлы АСД (не совершать отладочных звонков
@@ -359,8 +360,13 @@ namespace runtime
     };
 
     // Проверяет, содержится ли в object значение, приводимое к True.
-    // Для отличных от нуля чисел, True и непустых строк возвращается true. В остальных случаях - false.
-    bool IsTrue(const ObjectHolder& object);
+    // Для отличных от нуля чисел, True и непустых строк возвращается true.
+    // Если в функцию передан указатель на контекст исполнения, для программно-определяемых (пользовательских) объектов также
+    // проверяется возможность преобразования их к логическому типу. Если такая конверсия возможна, возвращается её результат.
+    // В остальных случаях - false.
+    bool IsTrue(const ObjectHolder& object, Context* context = nullptr);
+    // Функция определяет, принадлежит ли аргумент object к монадическому типажу.
+    CommonClassInstance* IsMonad(const ObjectHolder& object, Context* context = nullptr);
 
     // Универсальный интерфейс общего исполняемого объекта языка МУФЛОН. Именно из таких объектов (их различных частных
     // разновидностей) строится и состоит абстрактное синтаксическое дерево (АСД) разобранной МУФЛОН-программы.
@@ -372,7 +378,12 @@ namespace runtime
         // Выполняет действие над объектами внутри closure, используя context.
         // Возвращает результирующее значение либо None.
         virtual ObjectHolder Execute(Closure& closure, Context& context) = 0;
-        ProgramCommandDescriptor GetCommandDesc()
+        // Функция-член, возвращающая набор имён переменных, к которым производит доступ данная инструкция языка.
+        virtual std::vector<std::pair<std::string, BreakpointEventType>> GetVarAccess(BreakpointEventType access_type)
+        {
+            return {};
+        }
+        ProgramCommandDescriptor GetCommandDesc() const
         {
             return command_desc_;
         }
@@ -382,7 +393,7 @@ namespace runtime
             command_desc_ = command_desc;
         }
 
-        CommandGenus GetCommandGenus()
+        CommandGenus GetCommandGenus() const
         {
             return command_genus_;
         }
@@ -856,6 +867,7 @@ namespace runtime
     {
         friend class CoroutineInstance;
         friend class TypeTraitsInstance;
+        friend class ast::ShiftLeft;
 
     public:
         explicit ClassInstance(const Class& cls);

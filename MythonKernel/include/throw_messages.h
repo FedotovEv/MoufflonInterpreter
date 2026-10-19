@@ -24,3 +24,5 @@ namespace runtime
         static const std::unordered_map<ThrowMessageNumber, std::string> throw_messages_;
     };
 } // namespace runtime
+
+std::string GenerateUUID(size_t uuid_length = 0);

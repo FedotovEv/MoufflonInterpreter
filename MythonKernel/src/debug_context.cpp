@@ -656,6 +656,34 @@ namespace runtime
         return triggered_breakpoints_.size();
     }
 
+    // Поиск нелокальных точек останова, которые должны сработать при исполнении инструкции exec_statement.
+    size_t DebugContext::FindUnLocalBreakpoints(Executable* exec_statement, Closure& closure)
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(breakpoints_mutex_);
+        #endif
+
+        triggered_unlocal_breakpoints_.clear();
+
+        size_t break_index = 0;
+        for (; break_index < breakpoints_.size(); ++break_index)
+        {
+            BreakpointDesc& break_desc = breakpoints_[break_index];
+            if (!break_desc.IsValid() || !break_desc.IsUnlocal() || !break_desc.is_enabled)
+                continue;
+
+            const UnlocalBreakpointDesc& unlcl_break = get<UnlocalBreakpointDesc>(break_desc.var_desc);
+            if (unlcl_break.event_category == BreakpointEventCategory::BREAK_EVENT_CAT_UNKNOWN)
+                continue;
+
+
+        }
+
+        return triggered_unlocal_breakpoints_.size();
+    }
+
+    // Составление списка индексов локальных бряков, срабатывание которых должно произойти в программной точке,
+    // указанной как аргумент при вызове функции FindLocalBreakpoints().
     std::vector<size_t> DebugContext::GetTriggredBreakpoints() const
     {
         #ifndef MYTHON_UNITHREAD
@@ -665,6 +693,8 @@ namespace runtime
         return triggered_breakpoints_;
     }
 
+    // Получение количества сработавших локальных точек останова в их текущем списке, сформированном при последнем
+    // вызове FindLocalBreakpoints()..
     size_t DebugContext::GetTriggredBreakpointsCount() const
     {
         #ifndef MYTHON_UNITHREAD
@@ -672,6 +702,27 @@ namespace runtime
         #endif
 
         return triggered_breakpoints_.size();
+    }
+
+    // Возврат списка сработавших нелокальных бряков по результатам последней проверки путём вызова функции FindUnLocalBreakpoints().
+    std::vector<size_t> DebugContext::GetTriggeredUnlocalBreaks() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(breakpoints_mutex_);
+        #endif
+
+        return triggered_unlocal_breakpoints_;
+    }
+    
+    // Количество сработавших распределённых (нелокальных) точек останова в текущем списке, составленном при
+    // последнем вызове FindUnLocalBreakpoints().
+    size_t DebugContext::GetTriggeredUnlocalBreaksCount() const
+    {
+        #ifndef MYTHON_UNITHREAD
+            std::lock_guard lg(breakpoints_mutex_);
+        #endif
+
+        return triggered_unlocal_breakpoints_.size();
     }
 
     // Запоминание указателя на первую инструкцию (узла АСД любого типа) в очередной строке исходника.

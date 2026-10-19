@@ -360,7 +360,8 @@ namespace runtime
             object_ptr_->AddPointer(this);
     }
 
-    bool IsTrue(const ObjectHolder& object)
+    // Функция определения принадлежности аргумента object к группе истинных значений (значений, оцениваемых как логическая "ИСТИНА").
+    bool IsTrue(const ObjectHolder& object, Context* context)
     {
         if (Number* number_ptr = object.TryAs<Number>())
         {
@@ -377,7 +378,31 @@ namespace runtime
         if (Bool* bool_ptr = object.TryAs<Bool>())
             return bool_ptr->GetValue();
 
+        if (context)
+        {
+            if (CommonClassInstance* common_class_ptr = object.TryAs<CommonClassInstance>())
+            {
+                if (common_class_ptr->HasMethod(IS_TRUE_METHOD, 0))
+                {
+                    if (Bool* true_object_ptr = common_class_ptr->Call(IS_TRUE_METHOD, {}, *context).TryAs<Bool>())
+                        return true_object_ptr->GetValue();
+                }
+            }
+        }
+
         return false;
+    }
+
+    // Функция определяет, принадлежит ли аргумент object к монадическому типажу (имеет метод __bind__() с одним аргументом).
+    CommonClassInstance* IsMonad(const ObjectHolder& object, Context* context)
+    {
+        if (runtime::CommonClassInstance* test_class_ptr = object.TryAs<runtime::CommonClassInstance>())
+            if (test_class_ptr && test_class_ptr->HasMethod(MONAD_BIND_METHOD, 1))
+                return test_class_ptr;
+            else
+                return nullptr;
+        else
+            return nullptr;
     }
 
     Number operator+(const Number& first_op, const Number& second_op)
@@ -920,14 +945,7 @@ namespace runtime
 
     optional<Number> Number::Inverse() const
     {
-        double dbl_value;
-        if (holds_alternative<int>(value_))
-            dbl_value = static_cast<double>(get<int>(value_));
-        else if (holds_alternative<double>(value_))
-            dbl_value = get<double>(value_);
-        else
-            return {};
-
+        double dbl_value = GetDoubleValue();
         if (fabs(dbl_value) < ZERO_TOLERANCE)
             return {};
 

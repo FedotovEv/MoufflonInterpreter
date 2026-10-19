@@ -45,6 +45,12 @@
     <ClCompile Include="..\MythonKernel\src\throw_messages.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="..\MythonKernel\src\encodings.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MythonKernel\src\debug_context.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\MythonKernel\include\declares.h">

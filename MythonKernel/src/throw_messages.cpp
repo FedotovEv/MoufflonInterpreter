@@ -1,4 +1,6 @@
 #include "throw_messages.h"
+#include <cassert>
+#include <random>
 
 using namespace std;
 
@@ -162,3 +164,24 @@ namespace runtime
         return result;
     }
 } // namespace runtime
+
+string GenerateUUID(size_t uuid_length)
+{
+    static constexpr int IID_DEFAULT_LENGTH = 16;
+    static constexpr int IID_MAX_LENGTH = 256;
+    static constexpr char IID_ALPHABET[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    static random_device m_random_dev;
+    static minstd_rand m_work_random_engine = minstd_rand(m_random_dev());
+    static uniform_int_distribution<size_t> m_uniform_distrib{0, size(IID_ALPHABET) - 2};
+
+    if (!uuid_length)
+        uuid_length = IID_DEFAULT_LENGTH;
+    assert(uuid_length <= IID_MAX_LENGTH);
+
+    string uuid_result(uuid_length, 0);
+    for (size_t i = 0; i < uuid_length; i++)
+        uuid_result[i] = IID_ALPHABET[m_uniform_distrib(m_work_random_engine)];
+
+    return uuid_result;
+}

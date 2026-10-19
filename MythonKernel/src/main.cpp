@@ -1416,7 +1416,7 @@ print "Всего", i
     }
 
     void TestAwaitables()
-    { // Проверка работоспособности механизма ждунов (ожидоспособных объектов), а также их функционирования в составе сопрограмм.
+    { // Проверка работоспособности механизма ждунов (стопусловных объектов), а также их функционирования в составе сопрограмм.
         { // Наличие встроенного класса Awaitable, возможности его инстанцирования.
             string simple_awaitable_example(R"--(
 dummy_awaitable = Awaitable()  # Ждун по умолчанию.
@@ -1470,6 +1470,9 @@ class MyAwaitable(Awaitable):
   def AwaitResume(coro_instance, suspend_result):
     return suspend_result + 2
 
+  def IsAwaiting(coro_instance, suspend_result):
+    return 0 # Возвращаемое значение, воспринимаемое как False. Такой метод обеспечивает постоянное возобновление сопрограммы.
+
 class TestClass:
   def __init__(use_await_p):
     self.use_awaitable = use_await_p
@@ -1511,7 +1514,6 @@ coro_instance.resume()
             RunMythonProgram(istr, ostr);
             ASSERT_EQUAL(ostr.str(), "2\n3\n5\n6\n8\n9\n11\n12\n");
         }
-
     }
 
     void TestTypeTraits()
@@ -1890,33 +1892,6 @@ z1_3 = OneClass(4)
                 "end:create_z1_2\nend:create_z1_3\nDestructor : 3\nDestructor : 4\n"s;  // Операции третьей группы  - уничтожение объектов по завершении программы.
 
             ASSERT_EQUAL(ostr.str(), etalon_string);
-        }
-
-        { // Проверка каскадного вызова конструкторов и деструкторов для объектов, хранящихся в полях иных объектов.
-            istringstream cascade_ctor_dtor(R"--(
-class InternalClass:
-  def __init__(a):
-    print "Int ctor"
-    self.var = a
-
-  def __destroy__():
-    print "Int dtor", self.var
-
-class ExternalClass:
-  def __init__(a):
-    print "Ext ctor"
-    self.var = InternalClass(a)
-
-  def __destroy__():
-    print "Ext dtor :", self.var.var
-
-z1 = ExternalClass(3)
-z1 = 2 # Здесь должны быть вызваны все деструкторы классов InternalClass и ExternalClass.
-print z1
-)--");
-            ostringstream ostr;
-            RunMythonProgram(cascade_ctor_dtor, ostr);
-            cout << "Cascade ctor/dtor\n" << ostr.str() << endl;
         }
     }
 
@@ -2600,14 +2575,86 @@ class TestAbstractClass:
         }
     }
 
+    void TestLambdasMonadas()
+    { // Лямбды и монады в языке Муфлон.
+        { // Тесты функционирования поименованных объектов-лямбд (функциональных объектов) и объектов-монад.
+            istringstream input(R"--(
+class MonadClass(Monad):     # Явно созданный (поименованный) монадический класс.
+  def __bind__(func_obj):    # Функция монадической связи. Принимает функтор, которому передаётся текущее значение контейнера монады.
+    print "Bind:", self.value
+    return func_obj(self.value)
+
+class MonadFunctorClass:     # Функциональный класс, возвращающий монаду.
+  def __run__(val):          # Исполнительный метод функтора, принимающий значение монады и возвращающий новую с другим содержимым.
+    print "Monad:", val
+    return MonadClass(val + 2)
+
+monad_var_1 = MonadClass(1)
+print monad_var_1.GetValue()       # Исходная монада с внутренним значением контейнера, равным 1.
+func_monad = MonadFunctorClass()   # Готовый экземпляр монадического функтора.
+
+# Цепочечная монадическая операция.
+# Пять последовательных сдвиговых операций приводит к монотонному увеличению внутреннего значения монады по 2 на шаг.
+monad_var_2 = monad_var_1 << MonadFunctorClass() << MonadFunctorClass() << func_monad << MonadFunctorClass() << func_monad
+print monad_var_2.GetValue()
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "1\nBind: 1\nMonad: 1\nBind: 3\nMonad: 3\nBind: 5\nMonad: 5\nBind: 7\nMonad: 7\nBind: 9\nMonad: 9\n11\n");
+        }
+
+        {  // Работа с импровизированными анонимными объектами - функциональными и монадическими.
+            istringstream input(R"--(
+lv1 = lambda(x, y): return x + y
+lv2 = lambda(x, y): z = x + y: return z * 2
+# Вызываем созданные выше импровизированные функторы.
+print lv1(1, 2), lv2(1, 2)  # Вывод в консоль "3 6"
+
+# Эксперименты с безымянными монадами.
+# Порождаем класс перехода, предоставляющий готовые целевые монады.
+class MonadTransitCooked:
+  def __init__(a):
+    self.gen_param = a
+
+  def __run__(old_value):
+    # Будет возвращена новая монада стандартного встроенного класса Monad со значением, равным
+    # сумме старого значения монады-аргумента и аргумента конструктора данного переходного функтора.
+    return Monad(old_value + self.gen_param)
+
+# monad_1 - импровизированная монада анонимного класса, используемая далее как исходная для преобразующих цепей.
+monad_1 = monad(1): print "Monad:", self.value: return transit_func(self.value)
+# Прямой вызов связывающего метода монады. На консоль будут выведены строки "Monad: 1" и "2".
+monad_2 = monad_1.__bind__(MonadTransitCooked(1))
+print monad_2.GetValue()
+
+# Цепочечные монадические операции, для которых функтор перехода предоставляет готовую монаду.
+# На консоль будут выведены строки "Monad: 1" (результат работы связывающей функции monad_1) и "7" (от print monad_3.GetValue()).
+monad_3 = monad_1 << MonadTransitCooked(1) << MonadTransitCooked(2) << MonadTransitCooked(3)
+print monad_3.GetValue()
+
+# Цепочечные монадические операции с внутренним конструированием монады по значению функтора перехода.
+# monad_transit_raw - функтор перехода, который только рассчитывает значения для новых монад, но не строит их самостоятельно.
+monad_transit_raw = lambda(old_value): return old_value * 3
+# В консоль попадут строки "Monad: 1", "Monad: 3", "Monad: 9", а также конечное значение результирующей монады цепи (монады monad_4), равное "27".
+monad_4 = monad_1 << monad_transit_raw << monad_transit_raw << monad_transit_raw
+print monad_4.GetValue()
+)--");
+            ostringstream ostr;
+            RunMythonProgram(input, ostr);
+            // cout << ostr.str() << endl;
+            ASSERT_EQUAL(ostr.str(), "3 6\nMonad: 1\n2\nMonad: 1\n7\nMonad: 1\nMonad: 3\nMonad: 9\n27\n");
+        }
+    }
+
     void TestAll()
     {
         cout << "Запуск тестов"s << endl;
         cout << endl << "Категория тестов элементарных операций интерпретатора,\nграмматического разбора и синтаксического анализа программ"s << endl;
         TestRunner tr;
 
-        //RUN_TEST(tr, TestAbstractClasses);
-        //return;
+        // RUN_TEST(tr, TestClassDestructor);
+        // return;
 
         parse::RunOpenLexerTests(tr);
         runtime::RunObjectHolderTests(tr);
@@ -2647,6 +2694,7 @@ class TestAbstractClass:
         RUN_TEST(tr, TestDebugExecution);
         RUN_TEST(tr, TestGlobalVariables);
         RUN_TEST(tr, TestAbstractClasses);
+        RUN_TEST(tr, TestLambdasMonadas);
     }
 }  // namespace
 

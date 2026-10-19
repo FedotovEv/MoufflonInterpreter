@@ -29,17 +29,29 @@
 
 #define ZERO_TOLERANCE 0.000000001
 
+// Имена метода-конструктора и метода-деструктора.
 const std::string INIT_METHOD = "__init__";
 const std::string DESTROY_METHOD = "__destroy__";
+// Имена арифметических методов класса, обеспечивающих выполнение для него основных арифметических операций.
 const std::string ADD_METHOD = "__add__";
+const std::string DIRECT_SUBTRACT_METHOD = "__sub__";
 const std::string MULTIPLICATE_METHOD = "__mult__";
+const std::string DIRECT_DIVIDE_METHOD = "__div__";
 const std::string NEGATE_METHOD = "__neg__";
 const std::string INVERSE_METHOD = "__inv__";
-const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
+// Имена методов сравнительных действий, позволяющих реализовать операции сравнения для программно-определяемых классов.
 const std::string EQUAL_CMP_METHOD = "__eq__";
 const std::string LESS_CMP_METHOD = "__lt__";
+// Исполнитель функции str() для пользовательского класса. 
 const std::string STR_FUNCTION_METHOD = "__str__";
+// Преобразователь программно-определённого класса в логическое значение (реализация для него функции IsTrue()).
+const std::string IS_TRUE_METHOD = "__true__";
+// Имя "функционального" метода - метода-исполнителя функционального класса.
 const std::string FUNCTOR_CALL_METHOD = "__run__";
+const std::string FUNCTOR_ANONYMOUS_KEYWORD = "lambda";
+const std::string FUNCTOR_ANONYMOUS_BASENAME = "__lambda__";
+// -----
+const std::string EXTERNAL_LINK_CLASS_NAME = "__external";
 const std::string COROUTINE_STATUS_VAR = "__coro__";
 const std::string SELF_FIELD_NAME = "self";
 const std::string BREAKPOINT_INFO_FIELD_NAME = "__breakpoint__";
@@ -59,10 +71,23 @@ const std::string SYNTAX_ERROR_CLASS_NAME = "SyntaxError";
 const std::string MODULE_ERROR_CLASS_NAME = "ModuleError";
 const std::string LOGIC_ERROR_CLASS_NAME = "LogicError";
 const std::string REFERENCE_ERROR_CLASS_NAME = "ReferenceError";
-// Константы имени прототипа класса-ждуна и его стандартных специальных методов.
+// Константы имён прототипа класса-ждуна, его стандартных специальных методов, а также их формальных аргументов.
 const std::string AWAITABLE_CLASS_NAME = "Awaitable";
 const std::string AWAITABLE_SUSPEND_METHOD = "AwaitSuspend";
 const std::string AWAITABLE_RESUME_METHOD = "AwaitResume";
+const std::string AWAITABLE_IS_AWAIT_METHOD = "IsAwaiting";
+const std::string AWAITABLE_CORO_INSTANCE_ARG = "coro_instance";
+const std::string AWAITABLE_SUSPEND_VALUE_ARG = "suspend_value";
+// Имена базового монадического класса, его стандартного обязательного метода привязки, а также контейнерного поля.
+const std::string MONAD_ANONYMOUS_KEYWORD = "monad";
+const std::string MONAD_ANONYMOUS_BASENAME = "__monad__";
+const std::string MONAD_CLASS_NAME = "Monad";
+const std::string MONAD_BIND_METHOD = "__bind__";
+const std::string MONAD_BIND_METHOD_ARG = "transit_func";
+const std::string MONAD_GET_METHOD = "GetValue";
+const std::string MONAD_SET_METHOD = "SetValue";
+const std::string MONAD_CONTAINER_FIELD = "value";
+const std::string MONAD_CONTAINER_INIT_VALUE = "init_value";
 // Имя класса типового отпечатка (типовых характеристик, TypeTraits).
 const std::string TYPE_TRAITS_CLASS_NAME = "TypeTraits";
 // Префиксы строковых литералов с указанием некоторых особенностей.
@@ -236,6 +261,19 @@ namespace runtime
         SUSPEND_POINT_CO_YIELD,
         SUSPEND_POINT_CO_YIELD_REF,
         SUSPEND_POINT_CO_AWAIT
+    };
+
+    // Типы элементарных событий отладчика, связанных с обращением к памяти.
+    enum BreakpointEventType
+    {
+        BREAK_EVENT_TYPE_UNKNOWN = 0,       // Зарезервированное значение-заполнитель для неактивных или невалидных описаний точек останова.
+        BREAK_EVENT_TYPE_INSTANTIATE = 1,   // Создание (инстанцирование) объекта класса.
+        BREAK_EVENT_TYPE_DESTROY = 2,       // Разрушение объекта класса.
+        BREAK_EVENT_TYPE_CREATE_REF = 4,    // Создание ссылки (runtime::PointerObject) на какую-либо иную переменную или поле объекта.
+        BREAK_EVENT_TYPE_READ = 8,          // Чтение переменной либо поля объекта или класса.
+        BREAK_EVENT_TYPE_WRITE = 16,        // Перезапись существующей переменной либо поля объекта или класса.
+        BREAK_EVENT_TYPE_CREATE = 32,       // Создание новой переменной или поля объекта (или всех объектов некоторого класса).
+        BREAK_EVENT_TYPE_DELETE = 64        // Удаление переменной или поля объекта (или, возможно, класса).
     };
 } // namespace runtime
 
