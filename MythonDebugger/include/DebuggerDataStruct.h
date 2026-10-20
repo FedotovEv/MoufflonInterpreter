@@ -19,7 +19,7 @@
 using namespace std::literals;
 
 class LexerInputExImpl : public parse::LexerInputEx
-{ // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных
+{ // Класс диспетчера исходных модулей, хранящихся в виде строковых переменных.
 public:
     class iterator;
     friend class iterator;
@@ -117,7 +117,7 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(const std::string& include_arg) override;
+    void IncludeSwitchTo(const std::string& include_arg, parse::Lexer* lexer = nullptr) override;
 
     int get() override;
     int peek() override;

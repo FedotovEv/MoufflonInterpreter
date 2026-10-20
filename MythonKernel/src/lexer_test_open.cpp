@@ -46,14 +46,27 @@ namespace parse
 
         void TestNumbers()
         {
-            istringstream input("42 15 -53"s);
+            istringstream input("42 15 -53 0b11001100 0B111110000111000 0o1234567 0O76543210 0x1234ABCD 0X4321cdAB 123.123 123.321e4 456.12E3"s);
             Lexer lexer(input);
 
             ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::NumberInt{42}));
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{15}));
-            // Отрицательные числа формируются на этапе синтаксического анализа
+            // Отрицательные числа формируются на этапе синтаксического анализа.
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Char{'-'}));
             ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{53}));
+            // Двоичные числа.
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{204}));
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{31800}));
+            // Восьмеричные числа.
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{342391}));
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{16434824}));
+            // Шестнадцатеричные числа.
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{305441741}));
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberInt{1126288811}));
+            // Дробные числа.
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberDouble{123.123}));
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberDouble{123.321e4}));
+            ASSERT_EQUAL(lexer.NextToken(), Token(token_type::NumberDouble{456.12E3}));
         }
 
         void TestIds()

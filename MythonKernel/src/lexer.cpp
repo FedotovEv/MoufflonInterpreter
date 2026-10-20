@@ -203,11 +203,12 @@ namespace parse
         intptr_t int_param = 0;
     };
 
-    TokenDesc GetNumberString(LexerInputEx& input)
+    TokenDesc GetNumberString(LexerInputEx& input, Lexer* lexer)
     {
         string result_str;
         TokenTypeId result_token_id = TokenTypeId::TOKEN_NUMBER_INT;
-        bool is_continue_loop = true, is_exponent = false;
+        bool is_continue_loop = true, is_exponent = false, numeral_base_spec = false, numeral_base_in = false;
+        intptr_t numeral_base = 10; // Система счисления по умолчанию.
 
         while (input && is_continue_loop)
         {
@@ -216,6 +217,12 @@ namespace parse
             {
                 if (!isdigit(ch))
                 {
+                    if (isxdigit(ch) && numeral_base == 16)
+                    { // Это могут быть цифры в шестнадцатеричной системе счисления.
+                        result_str += ch;
+                        continue;
+                    }
+
                     switch (ch)
                     {
                     case '.':
@@ -225,6 +232,7 @@ namespace parse
                             is_continue_loop = false;
                         break;
                     case 'E':
+                        [[fallthrough]];
                     case 'e':
                         if (result_token_id == TokenTypeId::TOKEN_NUMBER_INT)
                         {
@@ -239,9 +247,40 @@ namespace parse
                                 is_continue_loop = false;
                         }
                         break;
+                    // Далее следует анализ возможного префикса указания системы счисления.
+                    case 'b':
+                        [[fallthrough]];
+                    case 'B':
+                        numeral_base = 2;
+                        numeral_base_in = true;
+                        break;
+                    case 'o':
+                        [[fallthrough]];
+                    case 'O':
+                        numeral_base = 8;
+                        numeral_base_in = true;
+                        break;
+                    case 'x':
+                        [[fallthrough]];
+                    case 'X':
+                        numeral_base = 16;
+                        numeral_base_in = true;
+                        break;
                     default:
                         is_continue_loop = false;
                         break;
+                    }
+
+                    if (numeral_base_in)
+                    {
+                        if (numeral_base_spec || result_str.size() != 1 || result_str[0] != '0' ||
+                            result_token_id != TokenTypeId::TOKEN_NUMBER_INT)
+                            // Нарушение правил пострения или указания префикса системы счисления.
+                            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_PREFIX_VALUE);
+
+                        numeral_base_spec = true;
+                        numeral_base_in = false;
+                        continue;
                     }
                 }
 
@@ -251,9 +290,39 @@ namespace parse
                     input.unget();
             }
         }
-        return {.body = move(result_str), .id = result_token_id};
+        if (numeral_base_spec && result_token_id != TokenTypeId::TOKEN_NUMBER_INT)
+            // Указан префикс системы счисления для дробного числа.
+            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_PREFIX_VALUE);
+
+        return {.body = move(result_str), .id = result_token_id, .int_param = numeral_base};
     }
     
+    // Оцифровка строкового представления целого числа из жетона int_token.
+    int TokenStoi(const TokenDesc& int_token, Lexer* lexer)
+    {
+        const char* body_c_str = int_token.body.c_str();
+        char* end_body;
+
+        int result = strtol(body_c_str, &end_body, static_cast<int>(int_token.int_param));
+        if (end_body - body_c_str != int_token.body.size())
+            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_TOKEN_VALUE);
+
+        return result;
+    }
+
+    // Оцифровка строкового представления дробного числа из жетона double_token.
+    double TokenStod(const TokenDesc& double_token, Lexer* lexer)
+    {
+        const char* body_c_str = double_token.body.c_str();
+        char* end_body;
+
+        double result = strtod(body_c_str, &end_body);
+        if (end_body - body_c_str != double_token.body.size())
+            throw LexerError(CommandDescToString(lexer->GetCurrentCommandDesc()) + Lexer::BAD_TOKEN_VALUE);
+
+        return result;
+    }
+
     string GetChardSequence(LexerInputEx& input)
     {
         string result;
@@ -369,7 +438,7 @@ namespace parse
         }
  
         if (isdigit(ch))
-            return GetNumberString(input);  // Это число, целое или с плавающей точкой.
+            return GetNumberString(input, lexer);  // Это число, целое или с плавающей точкой.
     
         if (special_symb.find(ch) != string::npos)
         {  // Это специальная символьная группа.
@@ -579,7 +648,7 @@ namespace parse
         return "{Unknown token type}";
     }
 
-    void SimpleLexerInputEx::IncludeSwitchTo(const std::string& include_arg)
+    void SimpleLexerInputEx::IncludeSwitchTo(const std::string& include_arg, Lexer* lexer)
     {
         if (!use_command_desc_ || id_policy_ == ModuleIdPolicy::MODULE_ID_NOT_CHANGE)
             return;
@@ -646,8 +715,10 @@ namespace parse
     }
 
     Lexer::Lexer(const Lexer& other) :
-        input_(other.input_), indent_amount_(other.indent_amount_), indent_sent_(other.indent_sent_), current_token_(other.current_token_),
-        current_command_desc_(other.current_command_desc_), is_input_need_delete_(other.is_input_need_delete_)
+        input_(other.input_), indent_amount_(other.indent_amount_), indent_sent_(other.indent_sent_),
+        current_token_(other.current_token_), current_command_desc_(other.current_command_desc_),
+        is_input_need_delete_(other.is_input_need_delete_),
+        source_encoding_(other.source_encoding_), string_prefix_(other.string_prefix_)
     {
         const_cast<Lexer&>(other).is_input_need_delete_ = false;
     }
@@ -749,10 +820,10 @@ namespace parse
                     current_token_ = token_type::Id{next_token.body};
                 break;
             case TokenTypeId::TOKEN_NUMBER_INT: // Лексема-целое число
-                current_token_ = token_type::NumberInt{stoi(next_token.body)};
+                current_token_ = token_type::NumberInt{TokenStoi(next_token, this)};
                 break;
-            case TokenTypeId::TOKEN_NUMBER_DOUBLE:
-                current_token_ = token_type::NumberDouble{stod(next_token.body)};
+            case TokenTypeId::TOKEN_NUMBER_DOUBLE: // Лексема - дробное число
+                current_token_ = token_type::NumberDouble{TokenStod(next_token, this)};
                 break;
             case TokenTypeId::TOKEN_CHAR: // Лексема - специальная символьная группа
                 if (special_tokens.count(next_token.body))

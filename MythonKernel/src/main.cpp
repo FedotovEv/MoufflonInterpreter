@@ -106,7 +106,7 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(const string& include_arg) override
+    void IncludeSwitchTo(const string& include_arg, parse::Lexer* lexer = nullptr) override
     {
         string use_include_arg = include_arg;
         if (!use_include_arg.size())

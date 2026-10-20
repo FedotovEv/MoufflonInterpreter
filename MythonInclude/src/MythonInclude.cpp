@@ -36,7 +36,7 @@ public:
         command_desc_ptr_ = command_desc_ptr;
     }
 
-    void IncludeSwitchTo(const std::string& include_arg) override
+    void IncludeSwitchTo(const std::string& include_arg, parse::Lexer* lexer = nullptr) override
     {
         std::string include_file = include_arg;
         if (!include_file.size())

@@ -141,7 +141,7 @@ bool LexerInputExImpl::RenameIncludeModule(const std::string& old_module_name, c
     return true;
 }
 
-void LexerInputExImpl::IncludeSwitchTo(const string& include_arg)
+void LexerInputExImpl::IncludeSwitchTo(const string& include_arg, parse::Lexer* lexer)
 {
     string use_include_arg = include_arg;
     if (!use_include_arg.size())

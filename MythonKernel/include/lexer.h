@@ -133,6 +133,7 @@ namespace parse
         using std::runtime_error::runtime_error;
     };
 
+    class Lexer;
     class LexerInputEx
     {
     public:
@@ -144,7 +145,7 @@ namespace parse
         // include, так и обратном - когда текущий модуль завершается) исходных модулей.
         virtual void SetCommandDescPtr(runtime::ProgramCommandDescriptor* command_desc_ptr) = 0;
         // Функция ниже вызывается при обработке директивы include. include_arg - параметр этой директивы.
-        virtual void IncludeSwitchTo(const std::string& include_arg) = 0;
+        virtual void IncludeSwitchTo(const std::string& include_arg, Lexer* lexer = nullptr) = 0;
         virtual int get() = 0;
         virtual int peek() = 0;
         virtual LexerInputEx& unget() = 0;
@@ -168,7 +169,7 @@ namespace parse
             input_stream_(input_stream), id_policy_(id_policy), id_const_(id_const)
         {}
 
-        void IncludeSwitchTo(const std::string& include_arg) override;
+        void IncludeSwitchTo(const std::string& include_arg, Lexer* lexer = nullptr) override;
 
         int GetIdConst(int new_id_const) const
         {
@@ -253,7 +254,7 @@ namespace parse
         static constexpr char BAD_TOKEN_TYPE[] = "Недопустимый тип жетона";
         static constexpr char BAD_TOKEN_VALUE[] = "Недопустимое значение жетона";
         static constexpr char TOKEN_AWAITING[] = " - ожидается - ";
-        static constexpr char BAD_PREFIX_VALUE[] = "Недопустимое значение префикса строки";
+        static constexpr char BAD_PREFIX_VALUE[] = "Недопустимое значение префикса строки или числа";
         static constexpr char BAD_ENC_NAME[] = "Неизвестное имя кодировки";
         static constexpr char WIDE_CHAR_IN_NARROW_STRING[] = "Определение широкого символа для узких строк";
         static constexpr char HEX_DIGIT_AWAIT[] = "Ожидается шестнадцатеричная цифра";
